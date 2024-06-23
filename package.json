@@ -1,0 +1,31 @@
+{
+  "name": "@gigadrive/network-cli",
+  "version": "0.0.1",
+  "module": "src/index.ts",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "eslint": "^9.5.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-standard-with-typescript": "^43.0.1",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-n": "^17.9.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "eslint-plugin-promise": "^6.2.0",
+    "prettier": "^3.3.2",
+    "prettier-plugin-organize-imports": "^3.2.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "bin": {
+    "network": "dist/giganet.js",
+    "gn": "dist/giganet.js",
+    "giganet": "dist/giganet.js"
+  },
+  "type": "module",
+  "dependencies": {
+    "@paralleldrive/cuid2": "^2.2.2",
+    "arg": "^5.0.2",
+    "commander": "^12.1.0"
+  }
+}
