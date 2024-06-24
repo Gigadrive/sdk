@@ -1,4 +1,6 @@
 import { Command } from 'commander';
+import { build } from './commands/build';
+import { install } from './commands/install';
 import { platform } from './commands/platform';
 
 let { isTTY } = process.stdout;
@@ -14,8 +16,12 @@ const main = async () => {
 
   const program = new Command();
 
-  // register commands
+  // register service commands
   platform(program);
+
+  // register general commands
+  build(program);
+  install(program);
 
   await program.parseAsync(process.argv);
 
