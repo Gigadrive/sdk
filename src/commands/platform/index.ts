@@ -1,9 +1,9 @@
 import type { Command } from 'commander';
-import { build } from '../build';
+import { deploy } from './deploy';
 
 export const platform = (program: Command) => {
   const platform = program.command('platform').description('Manage the platform');
 
   // register subcommands
-  build(platform);
+  deploy(platform);
 };
