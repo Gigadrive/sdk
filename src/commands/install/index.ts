@@ -26,17 +26,6 @@ export const install = (parent: Command) => {
         return;
       }
 
-      // Read package.json and check for build scripts
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-
-      const buildScript = packageJson.scripts?.build;
-
-      // If build script is not defined, return null
-      if (!buildScript) {
-        console.log('No build script found in package.json');
-        return;
-      }
-
       const packageManager = await getPackageManager({ cwd });
 
       if (!packageManager) {
