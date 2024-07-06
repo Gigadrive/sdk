@@ -1,3 +1,4 @@
+default: build
 build: build-bun build-windows-x64 build-linux-x64 build-linux-arm64 build-macos-arm64 build-macos-x64
 
 build-bun:
