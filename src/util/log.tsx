@@ -1,5 +1,6 @@
-import { Badge, Spinner } from '@inkjs/ui';
-import { Box, render, Text } from 'ink';
+import { Spinner } from '@inkjs/ui';
+import consola from 'consola';
+import { render, Text } from 'ink';
 
 let verbose: boolean = false;
 
@@ -14,30 +15,15 @@ export const log = (message: any) => {
 };
 
 export const error = (message: any) => {
-  render(
-    <Box gap={1}>
-      <Badge color="red">Error</Badge>
-      <Text color="red">{message}</Text>
-    </Box>
-  );
+  consola.error(message);
 };
 
 export const success = (message: any) => {
-  render(
-    <Box gap={1}>
-      <Badge color="green">Success</Badge>
-      <Text color="green">{message}</Text>
-    </Box>
-  );
+  consola.success(message);
 };
 
 export const warn = (message: any) => {
-  render(
-    <Box gap={1}>
-      <Badge color="yellowBright">Warn</Badge>
-      <Text color="yellowBright">{message}</Text>
-    </Box>
-  );
+  consola.warn(message);
 };
 
 export const debug = (message?: any, ...optionalParams: any[]) => {
@@ -45,7 +31,7 @@ export const debug = (message?: any, ...optionalParams: any[]) => {
     return;
   }
 
-  console.debug('[DEBUG]', message, ...optionalParams);
+  consola.debug('[DEBUG]', message, ...optionalParams);
 };
 
 export const spinner = (message: any) => {

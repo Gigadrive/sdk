@@ -1,7 +1,9 @@
+import { Alert } from '@inkjs/ui';
 import { $, sleep } from 'bun';
 import type { Command } from 'commander';
 import fs from 'fs';
-import { debug, isVerbose, spinner, success } from '../../../util/log';
+import { render } from 'ink';
+import { debug, isVerbose, spinner } from '../../../util/log';
 
 export const deploy = (parent: Command) => {
   parent
@@ -77,7 +79,7 @@ export const deploy = (parent: Command) => {
 
       await sleep(5000);
 
-      success(`Deploying to https://${deploymentId}.gigadrivedev.com`);
+      render(<Alert variant="success">Deploying to https://{deploymentId}.gigadrivedev.com</Alert>);
     });
 };
 
