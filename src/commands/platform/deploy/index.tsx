@@ -77,6 +77,16 @@ const LogDisplay = ({ deploymentId }: { deploymentId: string }) => {
     return <Alert variant="success">Deployed to https://{deploymentId}.gigadrivedev.com</Alert>;
   }
 
+  if (status === 'FAILED' || status === 'SUSPENDED') {
+    instance?.clear();
+
+    setTimeout(() => {
+      instance?.unmount();
+    }, 100);
+
+    return <Alert variant="error">The deployment failed. Please check the logs for more information.</Alert>;
+  }
+
   // show latest 5 logs
   return (
     <ThemeProvider theme={theme}>
