@@ -11,10 +11,10 @@ export const install = (parent: Command) => {
       // Set relevant environment variables
       const env = {
         ...process.env,
-        NODE_ENV: 'production',
+        //NODE_ENV: 'production',
         NEBULA: '1',
-        VERCEL: '1', // Vercel compatibility
-        NOW_BUILDER: '1',
+        //VERCEL: '1', // Vercel compatibility
+        //NOW_BUILDER: '1',
       };
 
       const cwd = process.cwd();
