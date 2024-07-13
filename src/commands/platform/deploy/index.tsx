@@ -15,7 +15,9 @@ export const deploy = (parent: Command) => {
     .command('deploy')
     .description('Deploy the current project')
     .action(async () => {
-      const deploymentId = await createDeployment();
+      const deploymentId = await createDeployment({
+        applicationId: 'test', // TODO
+      });
 
       debug(`Deployment ID: ${deploymentId}`);
 
@@ -183,16 +185,13 @@ const uploadArchive = async (deploymentId: string, setLogs: React.Dispatch<React
   await completeUpload(deploymentId, uploadId, finishedParts);
 };
 
-const createDeployment = async () => {
-  const res = await fetch('http://localhost:3000/deployment', {
+const createDeployment = async ({ applicationId }: { applicationId: string }) => {
+  const res = await fetch(`http://localhost:3000/${applicationId}/deployments`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      organizationId: '123',
-      applicationId: '123',
-    }),
+    body: JSON.stringify({}),
   });
 
   if (!res.ok) {
@@ -205,7 +204,7 @@ const createDeployment = async () => {
 };
 
 const startMultipartUpload = async (deploymentId: string) => {
-  const res = await fetch(`http://localhost:3000/deployment/${deploymentId}/pre-signed-url/start`, {
+  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/pre-signed-url/start`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -223,7 +222,7 @@ const startMultipartUpload = async (deploymentId: string) => {
 
 const getPresignedUrl = async (deploymentId: string, uploadId: string, partNumber: number) => {
   const res = await fetch(
-    `http://localhost:3000/deployment/${deploymentId}/pre-signed-url/part?uploadId=${uploadId}&partNumber=${partNumber}`,
+    `http://localhost:3000/deployments/${deploymentId}/pre-signed-url/part?uploadId=${uploadId}&partNumber=${partNumber}`,
     {
       method: 'GET',
       headers: {
@@ -246,7 +245,7 @@ const completeUpload = async (
   uploadId: string,
   parts: { partNumber: number; etag: string }[]
 ) => {
-  const res = await fetch(`http://localhost:3000/deployment/${deploymentId}/pre-signed-url/complete`, {
+  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/pre-signed-url/complete`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -291,7 +290,7 @@ const zipFolder = async (
 };
 
 const getDeploymentStatus = async (deploymentId: string) => {
-  const res = await fetch(`http://localhost:3000/deployment/${deploymentId}`, {
+  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -315,7 +314,7 @@ const getLogs = async (
     'createdAt[gt]'?: string;
   }
 ) => {
-  const res = await fetch(`http://localhost:3000/deployment/${deploymentId}/logs${objectToQueryString(options)}`, {
+  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/logs${objectToQueryString(options)}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
