@@ -42,12 +42,18 @@ const LogDisplay = ({ deploymentId }: { deploymentId: string }) => {
     const interval = setInterval(async () => {
       const newStatus = await getDeploymentStatus(deploymentId);
 
-      if (newStatus !== status) {
-        setStatus(newStatus);
+      if (newStatus === 'ACTIVE' || newStatus === 'FAILED') {
+        // delay final status update to show logs
+        setTimeout(() => {
+          setStatus(newStatus);
+        }, 2000);
+
+        clearInterval(interval);
+        return;
       }
 
-      if (newStatus === 'ACTIVE' || newStatus === 'FAILED') {
-        clearInterval(interval);
+      if (newStatus !== status) {
+        setStatus(newStatus);
       }
     }, 1000);
 

@@ -1,2 +1,2 @@
 #!/bin/bash
-bun run --cwd="$HOME/workspace/network/nebula/packages/php-example" $(pwd)/src/index.ts "$@"
+bun run --cwd="$HOME/workspace/network/nebula/packages/elysia-example" $(pwd)/src/index.ts "$@"
