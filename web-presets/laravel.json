@@ -1,7 +1,13 @@
 {
   "version": 3,
+  "regions": ["eu-central-1"],
   "build": {
-    "commands": ["composer install", "bun install", "bun run build"]
+    "commands": [
+      "composer install",
+      "composer require bref/laravel-bridge --update-with-dependencies",
+      "bun install",
+      "bun run build"
+    ]
   },
   "assets": "public",
   "populateAssetCache": true,
@@ -18,5 +24,16 @@
       "source": "/*",
       "destination": "public/index.php"
     }
-  ]
+  ],
+  "env": {
+    "APP_NAME": "Laravel",
+    "APP_ENV": "production",
+    "APP_KEY": "base64:1PhUGcMtdeeIl1mWgjUxcP1/pPw+aOn7zYBoAVr2v4g=",
+    "APP_DEBUG": "false",
+    "LOG_CHANNEL": "stderr",
+    "LOG_DEPRECATIONS_CHANNEL": "stderr",
+    "LOG_LEVEL": "debug",
+    "BROADCAST_DRIVER": "log",
+    "SESSION_DRIVER": "cookie"
+  }
 }
