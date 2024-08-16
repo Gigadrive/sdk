@@ -31,6 +31,8 @@ const LogDisplay = ({ deploymentId }: { deploymentId: string }) => {
 
   // start upload
   useEffect(() => {
+    addLog('Deployment ID: ' + deploymentId, 'INFO', setLogs);
+
     uploadArchive(deploymentId, setLogs).then(() => {
       addLog('Upload complete.', 'INFO', setLogs);
       addLog('The deployment pipeline is now being provisioned. This may take a few seconds.', 'INFO', setLogs);
