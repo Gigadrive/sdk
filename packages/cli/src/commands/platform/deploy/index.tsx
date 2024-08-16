@@ -1,12 +1,13 @@
 import { Alert, Spinner, ThemeProvider } from '@inkjs/ui';
-import { $ } from 'bun';
 import type { Command } from 'commander';
 import fs from 'fs';
 import { Box, render, Static, Text, type Instance } from 'ink';
 import { useEffect, useState } from 'react';
-import { debug, isVerbose } from '../../../util/log';
+import { formatFileSize } from '../../../util/format';
+import { debug } from '../../../util/log';
 import { theme } from '../../../util/theme';
 import { objectToQueryString } from '../../../util/url';
+import { createZipArchive } from '../../../util/zip';
 
 let instance: Instance | undefined;
 
@@ -141,7 +142,12 @@ const uploadArchive = async (deploymentId: string, setLogs: React.Dispatch<React
     fs.unlinkSync(archivePath);
   }
 
-  await zipFolder(process.cwd(), archivePath, { verbose: isVerbose() });
+  await createZipArchive(process.cwd(), archivePath);
+
+  const file = Bun.file(archivePath);
+  const fileSize = file.size;
+
+  addLog(`Archive created (${formatFileSize(fileSize)})`, 'INFO', setLogs);
 
   addLog('Uploading archive...', 'INFO', setLogs);
 
@@ -151,9 +157,7 @@ const uploadArchive = async (deploymentId: string, setLogs: React.Dispatch<React
 
   debug('Uploading archive...');
 
-  const file = Bun.file(archivePath);
   const fileChunkSize = 10 * 1024 * 1024; // 10 MB
-  const fileSize = file.size;
   const numChunks = Math.ceil(fileSize / fileChunkSize);
   const promises = [];
   let start, end, blob;
@@ -266,34 +270,6 @@ const completeUpload = async (
 
   if (!res.ok) {
     throw new Error('Failed to complete upload: ' + (await res.text()));
-  }
-};
-
-const zipFolder = async (
-  folderPath: string,
-  outPath: string,
-  options: {
-    verbose?: boolean;
-  } = {
-    verbose: false,
-  }
-): Promise<void> => {
-  // delete file if it exists
-  if (fs.existsSync(outPath)) {
-    fs.unlinkSync(outPath);
-  }
-
-  const shell = $`cd ${folderPath}; zip -r9 ${outPath} *`;
-
-  if (options.verbose) {
-    await shell;
-  } else {
-    await shell.quiet();
-  }
-
-  // if file does not exist, throw error
-  if (!fs.existsSync(outPath)) {
-    throw new Error(`Failed to create zip file at ${outPath}`);
   }
 };
 
