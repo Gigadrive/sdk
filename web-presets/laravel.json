@@ -1,0 +1,22 @@
+{
+  "version": 3,
+  "build": {
+    "commands": ["composer install", "bun install", "bun run build"]
+  },
+  "assets": "public",
+  "populateAssetCache": true,
+  "functions": {
+    "public/index.php": {
+      "memory": 256,
+      "maxDuration": 30,
+      "runtime": "php-83",
+      "excludeFiles": ["tests/*", ".ddev"]
+    }
+  },
+  "routes": [
+    {
+      "source": "/*",
+      "destination": "public/index.php"
+    }
+  ]
+}
