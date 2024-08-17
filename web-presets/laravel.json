@@ -1,6 +1,5 @@
 {
   "version": 3,
-  "regions": ["eu-central-1"],
   "build": {
     "commands": [
       "composer install",
@@ -16,7 +15,7 @@
       "memory": 256,
       "maxDuration": 30,
       "runtime": "php-83",
-      "excludeFiles": ["tests/*", ".ddev"]
+      "excludeFiles": ["tests/", "storage/", ".ddev", "node_modules/"]
     }
   },
   "routes": [
