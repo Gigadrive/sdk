@@ -1,0 +1,31 @@
+{
+  "version": 3,
+  "build": {
+    "commands": ["composer install --prefer-dist --optimize-autoloader --no-dev", "bun install", "bun run build"]
+  },
+  "assets": "public",
+  "populateAssetCache": true,
+  "functions": {
+    "public/index.php": {
+      "memory": 512,
+      "maxDuration": 30,
+      "runtime": "php-83",
+      "excludeFiles": ["tests/*", ".ddev", "var"],
+      "symlinks": {
+        "var": "/tmp"
+      }
+    }
+  },
+  "routes": [
+    {
+      "source": "/*",
+      "destination": "public/index.php"
+    }
+  ],
+  "env": {
+    "APP_ENV": "prod",
+    "APP_DEBUG": "false",
+    "APP_SECRET": "please_change_this_value_in_your_settings",
+    "MESSENGER_TRANSPORT_DSN": "doctrine://default?auto_setup=0"
+  }
+}
