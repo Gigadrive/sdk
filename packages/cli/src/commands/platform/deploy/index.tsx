@@ -142,7 +142,7 @@ const uploadArchive = async (deploymentId: string, setLogs: React.Dispatch<React
     fs.unlinkSync(archivePath);
   }
 
-  await createZipArchive(process.cwd(), archivePath);
+  await createZipArchive(process.cwd(), archivePath /*, { useIgnoreFiles: false, useManagedIgnore: false }*/);
 
   const file = Bun.file(archivePath);
   const fileSize = file.size;
