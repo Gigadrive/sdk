@@ -2,6 +2,7 @@ import { Alert, Spinner, ThemeProvider } from '@inkjs/ui';
 import type { Command } from 'commander';
 import fs from 'fs';
 import { Box, render, Static, Text, type Instance } from 'ink';
+import path from 'path';
 import { useEffect, useState } from 'react';
 import { formatFileSize } from '../../../util/format';
 import { debug } from '../../../util/log';
@@ -136,7 +137,7 @@ const addLog = (
 const uploadArchive = async (deploymentId: string, setLogs: React.Dispatch<React.SetStateAction<DeploymentLog[]>>) => {
   addLog('Creating archive...', 'INFO', setLogs);
 
-  const archivePath = '/tmp/project.zip';
+  const archivePath = path.join(process.env.TEMP || '/tmp', 'project.zip');
 
   if (fs.existsSync(archivePath)) {
     fs.unlinkSync(archivePath);
@@ -144,8 +145,8 @@ const uploadArchive = async (deploymentId: string, setLogs: React.Dispatch<React
 
   await createZipArchive(process.cwd(), archivePath /*, { useIgnoreFiles: false, useManagedIgnore: false }*/);
 
-  const file = Bun.file(archivePath);
-  const fileSize = file.size;
+  const fileStats = fs.statSync(archivePath);
+  const fileSize = fileStats.size;
 
   addLog(`Archive created (${formatFileSize(fileSize)})`, 'INFO', setLogs);
 
@@ -160,22 +161,27 @@ const uploadArchive = async (deploymentId: string, setLogs: React.Dispatch<React
   const fileChunkSize = 10 * 1024 * 1024; // 10 MB
   const numChunks = Math.ceil(fileSize / fileChunkSize);
   const promises = [];
-  let start, end, blob;
+  let start: number, end: number;
 
   for (let index = 1; index < numChunks + 1; index++) {
     start = (index - 1) * fileChunkSize;
     end = index * fileChunkSize;
-    blob = index < numChunks ? file.slice(start, end) : file.slice(start);
 
     const presignedUrl = await getPresignedUrl(deploymentId, uploadId, index);
     debug('Presigned URL for part', index, presignedUrl);
 
-    const promise = fetch(presignedUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': file.type,
-      },
-      body: blob,
+    const promise = new Promise<Response>((resolve, reject) => {
+      const readStream = fs.createReadStream(archivePath, { start, end: index < numChunks ? end - 1 : undefined });
+
+      fetch(presignedUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/zip',
+        },
+        body: readStream as unknown as BodyInit,
+      })
+        .then(resolve)
+        .catch(reject);
     });
 
     promises.push(promise);

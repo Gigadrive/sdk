@@ -1,0 +1,14 @@
+{
+  "name": "@gigadrive/network-config",
+  "version": "0.0.1",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "esbuild src/**/*.ts --outdir=dist --sourcemap --minify --target=node18 --platform=node"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "files": [
+    "dist"
+  ]
+}
