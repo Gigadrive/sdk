@@ -1,5 +1,6 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
+import { parseVercelBuildOutputV3 } from './build-output-v3/parse';
 import type { NormalizedConfig } from './normalized-config';
 import { parseRawConfig } from './parse-raw-config';
 import { parseConfigV4 } from './v4/parse';
@@ -47,7 +48,7 @@ export const parseConfig = async (filePath: string, projectFolder: string): Prom
   let parseResult: NormalizedConfig = await parserMap[version](parsed, projectFolder);
 
   // TODO: apply transformers
-  // parseResult = await parseVercelBuildOutputV3(parseResult, projectFolder);
+  parseResult = await parseVercelBuildOutputV3(parseResult, projectFolder);
 
   return parseResult;
 };
