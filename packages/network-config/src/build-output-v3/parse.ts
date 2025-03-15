@@ -28,7 +28,7 @@ export const parseVercelBuildOutputV3 = async (
   // read config file
   const config = await readConfigFile<Config>(path.join(projectFolder, configPath));
 
-  if (!config || config.version !== 3) {
+  if (!config || config.version < 3) {
     // TODO: Log error
     return parseResult;
   }
