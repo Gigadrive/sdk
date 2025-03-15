@@ -1,0 +1,29 @@
+version: 4
+regions:
+  - global
+build_commands:
+  - bun install
+functions:
+  src/*.ts:
+    memory: 128
+    max_duration: 15
+    runtime: bun-1
+    symlinks:
+      var/log: /tmp/logs
+  src/cron.ts:
+    schedule: rate(5 minutes)
+routes:
+  - source: /api/*
+    destination: src/api.ts
+    has:
+      - type: header
+        key: Authorization
+        value: Bearer test
+  - source: /*
+    destination: pages/$1.tsx?
+  - source: /docs/*
+    destination: "https://docs.example.com/$1"
+  - source: /*
+    destination: src/index.ts
+services:
+  redis: ~
