@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "esbuild src/**/*.ts --outdir=dist --sourcemap --minify --target=node18 --platform=node"
+    "build": "node build.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.0"

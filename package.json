@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "scripts": {
     "build": "turbo run build",
+    "build:no-cache": "turbo run build --force",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
