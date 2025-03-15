@@ -1,6 +1,10 @@
 {
   "name": "@gigadrive/build-utils",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gigadrive/sdk.git"
+  },
   "type": "module",
   "devDependencies": {
     "@types/adm-zip": "^0.5.5",
