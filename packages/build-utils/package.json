@@ -1,5 +1,6 @@
 {
   "name": "@gigadrive/build-utils",
+  "version": "0.0.1",
   "type": "module",
   "devDependencies": {
     "@types/adm-zip": "^0.5.5",
@@ -19,5 +20,8 @@
     "extract-zip": "^2.0.1",
     "minimatch": "^9.0.4",
     "p-limit": "^6.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

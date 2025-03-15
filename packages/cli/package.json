@@ -20,6 +20,9 @@
   "bin": {
     "gigadrive": "dist/gigadrive.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "dependencies": {
     "@inkjs/ui": "^2.0.0",

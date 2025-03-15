@@ -16,5 +16,8 @@
     "ajv-formats": "^3.0.1",
     "minimatch": "^9.0.4",
     "yaml": "^2.7.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
