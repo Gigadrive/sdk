@@ -15,6 +15,7 @@
     "ci:publish": "pnpm publish -r && node scripts/update-canary-tags.mjs && changeset tag"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.28.1",
     "@types/bun": "latest",
     "@vitest/coverage-istanbul": "3.0.8",
     "dotenv": "^16.4.7",
