@@ -10,7 +10,9 @@
     "clean": "turbo run clean",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "ci:version": "changeset version && pnpm install --no-frozen-lockfile",
+    "ci:publish": "pnpm publish -r && node scripts/update-canary-tags.mjs && changeset tag"
   },
   "devDependencies": {
     "@types/bun": "latest",
