@@ -9,7 +9,7 @@
   "devDependencies": {
     "@types/archiver": "^6.0.2",
     "@types/react": "^18.3.3",
-    "esbuild": "^0.20.1"
+    "esbuild": "^0.25.0"
   },
   "files": [
     "dist"
