@@ -1,0 +1,20 @@
+{
+  "name": "@gigadrive/network-config",
+  "version": "0.0.1",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "minimatch": "^9.0.4",
+    "yaml": "^2.7.0"
+  }
+}

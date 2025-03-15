@@ -1,18 +1,24 @@
 {
-  "name": "@gigadrive/network-cli",
+  "name": "gigadrive",
   "version": "0.0.1",
   "module": "src/index.ts",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "esbuild src/index.ts --bundle --outfile=dist/gigadrive.js --platform=node --target=node20 --format=esm --minify --sourcemap"
+  },
   "devDependencies": {
     "@types/archiver": "^6.0.2",
-    "@types/react": "^18.3.3"
+    "@types/react": "^18.3.3",
+    "esbuild": "^0.20.1"
   },
+  "files": [
+    "dist"
+  ],
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "bin": {
-    "network": "dist/giganet.js",
-    "gn": "dist/giganet.js",
-    "giganet": "dist/giganet.js"
+    "gigadrive": "dist/gigadrive.js"
   },
   "type": "module",
   "dependencies": {

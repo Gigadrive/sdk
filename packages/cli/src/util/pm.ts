@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { exec } from '../../../build-utils/src/exec';
 
 export type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
 
@@ -37,7 +38,7 @@ export const getPackageManager = async ({ cwd }: { cwd: string }): Promise<Packa
 
   // Check if bun is installed
   try {
-    await Bun.spawn(['bun', '--version'], { cwd });
+    await exec({ command: 'bun --version', cwd });
     return 'bun';
   } catch (e) {
     // If bun is not installed, return npm

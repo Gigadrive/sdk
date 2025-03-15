@@ -1,0 +1,23 @@
+{
+  "name": "@gigadrive/build-utils",
+  "type": "module",
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
+    "@types/archiver": "^6.0.2",
+    "@types/bun": "latest",
+    "@types/express": "^5.0.0",
+    "@types/fs-extra": "^11.0.4",
+    "adm-zip": "^0.5.16",
+    "express": "~4.20.0",
+    "fs-extra": "^11.2.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "extract-zip": "^2.0.1",
+    "minimatch": "^9.0.4",
+    "p-limit": "^6.1.0"
+  }
+}

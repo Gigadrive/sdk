@@ -1,5 +1,6 @@
 /dist
 bun.lockb
+.turbo
 
 # Based on https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore
 
