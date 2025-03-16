@@ -1,7 +1,7 @@
+import { getFilesForPattern } from '@gigadrive/build-utils/get-files-for-pattern';
 import fs from 'fs';
 import { minimatch } from 'minimatch';
 import type { ConfigV4, ConfigV4FunctionSettings } from '.';
-import { getFilesForPattern } from '../../../build-utils/src/get-files-for-pattern';
 import type {
   NormalizedConfig,
   NormalizedConfigEntrypoint,

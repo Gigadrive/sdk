@@ -20,6 +20,9 @@ importers:
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.1
       eslint:
         specifier: ^9.22.0
         version: 9.22.0
@@ -44,6 +47,9 @@ importers:
       glob:
         specifier: ^11.0.1
         version: 11.0.1
+      minimatch:
+        specifier: ^9.0.4
+        version: 9.0.5
       prettier:
         specifier: ^3.5.3
         version: 3.5.3
@@ -148,6 +154,9 @@ importers:
 
   packages/network-config:
     dependencies:
+      '@gigadrive/build-utils':
+        specifier: workspace:*
+        version: link:../build-utils
       ajv:
         specifier: ^8.17.1
         version: 8.17.1

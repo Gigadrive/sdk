@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 // Read package.json to get target and platform settings
-const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
+const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
 const buildScript = packageJson.scripts?.build || '';
 
 // Extract target and platform from the build script if available
