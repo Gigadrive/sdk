@@ -7,7 +7,7 @@
   },
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "esbuild src/**/*.ts --outdir=dist --sourcemap --minify --target=node18 --platform=node"
+    "build": "node ../../scripts/build.mjs && tsc"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

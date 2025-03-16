@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "node build.mjs"
+    "build": "node ../../scripts/build.mjs && tsc"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
@@ -15,7 +15,8 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "minimatch": "^9.0.4",
-    "yaml": "^2.7.0"
+    "yaml": "^2.7.0",
+    "@gigadrive/build-utils": "workspace:*"
   },
   "publishConfig": {
     "access": "public"
