@@ -1,0 +1,8 @@
+# .github/dependabot.yml
+version: 2
+updates:
+  # Enable version updates for npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"  # Root directory of the monorepo
+    schedule:
+      interval: "daily"
