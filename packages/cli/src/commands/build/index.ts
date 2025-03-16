@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
 import { exec } from '../../../../build-utils/src/exec';
-import { buildCommand, getPackageManager } from '../../util/pm';
+import { buildCommand, getPackageManager, installCommand } from '../../util/pm';
 
 export const build = (parent: Command) => {
   parent
@@ -44,6 +44,15 @@ export const build = (parent: Command) => {
         console.log('No package manager found');
         return;
       }
+
+      await exec({
+        command: installCommand(packageManager),
+        cwd,
+        env,
+        onOutput: (chunk) => {
+          console.log(chunk);
+        },
+      });
 
       await exec({
         command: buildCommand(packageManager),
