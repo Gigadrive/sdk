@@ -6,8 +6,3 @@ updates:
     directory: "/"  # Root directory of the monorepo
     schedule:
       interval: "daily"
-    # Configure the labels to add to PRs
-    labels:
-      - "dependencies"
-      - "npm"
-      - "dependabot"
