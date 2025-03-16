@@ -8,3 +8,6 @@ build-no-cache:
 
 clean:
 	pnpm clean
+
+changeset:
+	pnpm changeset
