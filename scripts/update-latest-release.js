@@ -17,6 +17,12 @@ module.exports = async ({ github, context }) => {
 
   const response = await github.rest.repos.listReleases({ owner, repo });
   const latestCliRelease = response.data.find(isCliRelease);
+
+  if (!latestCliRelease) {
+    console.log('No CLI release found');
+    return;
+  }
+
   console.log(`Promoting "${latestCliRelease.tag_name}" to latest release`);
 
   await github.rest.repos.updateRelease({
