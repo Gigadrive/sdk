@@ -5,6 +5,36 @@
     "type": "git",
     "url": "https://github.com/Gigadrive/sdk.git"
   },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "node ../../scripts/build.mjs && tsc"
+  },
+  "exports": {
+    "./download-file": {
+      "types": "./dist/download-file.d.ts",
+      "import": {
+        "production": "./dist/download-file.js",
+        "development": "./src/download-file.ts",
+        "default": "./dist/download-file.js"
+      }
+    },
+    "./exec": {
+      "types": "./dist/exec.d.ts",
+      "import": {
+        "production": "./dist/exec.js",
+        "development": "./src/exec.ts",
+        "default": "./dist/exec.js"
+      }
+    },
+    "./get-files-for-pattern": {
+      "types": "./dist/get-files-for-pattern.d.ts",
+      "import": {
+        "production": "./dist/get-files-for-pattern.js",
+        "development": "./src/get-files-for-pattern.ts",
+        "default": "./dist/get-files-for-pattern.js"
+      }
+    }
+  },
   "type": "module",
   "devDependencies": {
     "@types/adm-zip": "^0.5.5",
