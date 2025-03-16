@@ -110,7 +110,7 @@ importers:
     dependencies:
       '@inkjs/ui':
         specifier: ^2.0.0
-        version: 2.0.0(ink@5.2.0(@types/react@18.3.18)(react-devtools-core@5.3.2)(react@18.3.1))
+        version: 2.0.0(ink@5.2.0(@types/react@18.3.18)(react-devtools-core@6.1.1)(react@18.3.1))
       '@paralleldrive/cuid2':
         specifier: ^2.2.2
         version: 2.2.2
@@ -131,13 +131,13 @@ importers:
         version: 5.3.2
       ink:
         specifier: ^5.0.1
-        version: 5.2.0(@types/react@18.3.18)(react-devtools-core@5.3.2)(react@18.3.1)
+        version: 5.2.0(@types/react@18.3.18)(react-devtools-core@6.1.1)(react@18.3.1)
       react:
         specifier: ^18.3.1
         version: 18.3.1
       react-devtools-core:
-        specifier: ^5.3.1
-        version: 5.3.2
+        specifier: ^6.1.1
+        version: 6.1.1
       typescript:
         specifier: ^5.0.0
         version: 5.8.2
@@ -2381,8 +2381,8 @@ packages:
     resolution: {integrity: sha512-8zGqypfENjCIqGhgXToC8aB2r7YrBX+AQAfIPs/Mlk+BtPTztOvTS01NRW/3Eh60J+a48lt8qsCzirQ6loCVfA==}
     engines: {node: '>= 0.8'}
 
-  react-devtools-core@5.3.2:
-    resolution: {integrity: sha512-crr9HkVrDiJ0A4zot89oS0Cgv0Oa4OG1Em4jit3P3ZxZSKPMYyMjfwMqgcJna9o625g8oN87rBm8SWWrSTBZxg==}
+  react-devtools-core@6.1.1:
+    resolution: {integrity: sha512-TFo1MEnkqE6hzAbaztnyR5uLTMoz6wnEWwWBsCUzNt+sVXJycuRJdDqvL078M4/h65BI/YO5XWTaxZDWVsW0fw==}
 
   react-reconciler@0.29.2:
     resolution: {integrity: sha512-zZQqIiYgDCTP/f1N/mAR10nJGrPD2ZR+jDSEsKWJHYC7Cm2wodlwbR3upZRdC3cjIjSlTLNVyO7Iu0Yy7t2AYg==}
@@ -3392,13 +3392,13 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.2': {}
 
-  '@inkjs/ui@2.0.0(ink@5.2.0(@types/react@18.3.18)(react-devtools-core@5.3.2)(react@18.3.1))':
+  '@inkjs/ui@2.0.0(ink@5.2.0(@types/react@18.3.18)(react-devtools-core@6.1.1)(react@18.3.1))':
     dependencies:
       chalk: 5.4.1
       cli-spinners: 3.2.0
       deepmerge: 4.3.1
       figures: 6.1.0
-      ink: 5.2.0(@types/react@18.3.18)(react-devtools-core@5.3.2)(react@18.3.1)
+      ink: 5.2.0(@types/react@18.3.18)(react-devtools-core@6.1.1)(react@18.3.1)
 
   '@isaacs/cliui@8.0.2':
     dependencies:
@@ -4815,7 +4815,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  ink@5.2.0(@types/react@18.3.18)(react-devtools-core@5.3.2)(react@18.3.1):
+  ink@5.2.0(@types/react@18.3.18)(react-devtools-core@6.1.1)(react@18.3.1):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.1.3
       ansi-escapes: 7.0.0
@@ -4844,7 +4844,7 @@ snapshots:
       yoga-layout: 3.2.1
     optionalDependencies:
       '@types/react': 18.3.18
-      react-devtools-core: 5.3.2
+      react-devtools-core: 6.1.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -5388,7 +5388,7 @@ snapshots:
       iconv-lite: 0.4.24
       unpipe: 1.0.0
 
-  react-devtools-core@5.3.2:
+  react-devtools-core@6.1.1:
     dependencies:
       shell-quote: 1.8.2
       ws: 7.5.10
