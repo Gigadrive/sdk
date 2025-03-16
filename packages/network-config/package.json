@@ -1,6 +1,6 @@
 {
   "name": "@gigadrive/network-config",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "scripts": {
     "clean": "rm -rf dist",
     "build": "node ../../scripts/build.mjs && tsc && cp -r ./src/v4/schema.json ./dist/v4/schema.json"
