@@ -1,7 +1,7 @@
+import { exec } from '@gigadrive/build-utils/exec';
 import type { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
-import { exec } from '../../../../build-utils/src/exec';
 import { buildCommand, getPackageManager, installCommand } from '../../util/pm';
 
 export const build = (parent: Command) => {

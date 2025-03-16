@@ -6,7 +6,8 @@ import { parseVercelBuildOutputV3 } from './build-output-v3/parse';
 import type { NormalizedConfig } from './normalized-config';
 import { parseRawConfig } from './parse-raw-config';
 import { parseConfigV4 } from './v4/parse';
-import schemaV4 from './v4/schema.json';
+
+const schemaV4 = JSON.parse(fs.readFileSync(path.join(__dirname, './v4/schema.json'), 'utf8'));
 
 export const ALLOWED_CONFIG_NAMES = ['gigadrive.yaml', 'gigadrive.yml', 'nebula.yaml', 'nebula.yml', 'nebula.json'];
 

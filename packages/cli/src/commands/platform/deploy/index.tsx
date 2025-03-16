@@ -1,3 +1,5 @@
+import { findConfig, parseConfig } from '@gigadrive/network-config';
+import type { NormalizedConfig } from '@gigadrive/network-config/normalized-config';
 import { Alert, Spinner, ThemeProvider } from '@inkjs/ui';
 import type { Command } from 'commander';
 import fs from 'fs';
@@ -5,8 +7,6 @@ import { Box, render, Static, Text, type Instance } from 'ink';
 import os from 'os';
 import path from 'path';
 import { useEffect, useState } from 'react';
-import { findConfig, parseConfig } from '../../../../../network-config/src';
-import type { NormalizedConfig } from '../../../../../network-config/src/normalized-config';
 import { formatFileSize } from '../../../util/format';
 import { debug, error, warn } from '../../../util/log';
 import { theme } from '../../../util/theme';

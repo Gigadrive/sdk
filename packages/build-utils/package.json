@@ -25,6 +25,7 @@
     "@types/archiver": "^6.0.2",
     "@types/express": "^5.0.0",
     "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22",
     "adm-zip": "^0.5.16",
     "express": "~4.21.2",
     "fs-extra": "^11.2.0"
@@ -40,5 +41,8 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

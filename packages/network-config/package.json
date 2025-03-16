@@ -3,14 +3,34 @@
   "version": "1.0.0",
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "node ../../scripts/build.mjs && tsc"
+    "build": "node ../../scripts/build.mjs && tsc && cp -r ./src/v4/schema.json ./dist/v4/schema.json"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "@types/node": "^22"
   },
   "files": [
-    "dist"
+    "dist",
+    "**/*.json"
   ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": {
+        "production": "./dist/index.js",
+        "development": "./src/index.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": {
+        "production": "./dist/*.js",
+        "development": "./src/*.ts",
+        "default": "./dist/*.js"
+      }
+    }
+  },
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
