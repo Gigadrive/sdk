@@ -1,6 +1,6 @@
 {
   "name": "gigadrive",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "module": "src/index.ts",
   "scripts": {
     "clean": "rm -rf dist",
