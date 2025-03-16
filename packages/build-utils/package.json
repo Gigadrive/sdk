@@ -10,9 +10,27 @@
     "build": "node ../../scripts/build.mjs && tsc"
   },
   "exports": {
-    "./download-file": "./dist/download-file.js",
-    "./exec": "./dist/exec.js",
-    "./get-files-for-pattern": "./dist/get-files-for-pattern.js"
+    "./download-file": {
+      "types": "./dist/download-file.d.ts",
+      "import": {
+        "development": "./src/download-file.ts",
+        "default": "./dist/download-file.js"
+      }
+    },
+    "./exec": {
+      "types": "./dist/exec.d.ts",
+      "import": {
+        "development": "./src/exec.ts",
+        "default": "./dist/exec.js"
+      }
+    },
+    "./get-files-for-pattern": {
+      "types": "./dist/get-files-for-pattern.d.ts",
+      "import": {
+        "development": "./src/get-files-for-pattern.ts",
+        "default": "./dist/get-files-for-pattern.js"
+      }
+    }
   },
   "type": "module",
   "devDependencies": {
