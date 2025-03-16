@@ -1,10 +1,29 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
+import fs from 'fs';
+import path from 'path';
 import { parseVercelBuildOutputV3 } from './build-output-v3/parse';
 import type { NormalizedConfig } from './normalized-config';
 import { parseRawConfig } from './parse-raw-config';
 import { parseConfigV4 } from './v4/parse';
 import schemaV4 from './v4/schema.json';
+
+export const ALLOWED_CONFIG_NAMES = ['gigadrive.yaml', 'gigadrive.yml', 'nebula.yaml', 'nebula.yml', 'nebula.json'];
+
+/**
+ * Finds a config file in the project folder.
+ * @param projectFolder The folder to search for a config file in.
+ * @returns The path to the config file, or null if no config file is found.
+ */
+export const findConfig = (projectFolder: string): string | null => {
+  for (const name of ALLOWED_CONFIG_NAMES) {
+    const filePath = path.join(projectFolder, name);
+    if (fs.existsSync(filePath)) {
+      return filePath;
+    }
+  }
+  return null;
+};
 
 export const parseConfig = async (filePath: string, projectFolder: string): Promise<NormalizedConfig> => {
   const parsed = await parseRawConfig(filePath);
@@ -49,6 +68,19 @@ export const parseConfig = async (filePath: string, projectFolder: string): Prom
 
   // TODO: apply transformers
   parseResult = await parseVercelBuildOutputV3(parseResult, projectFolder);
+
+  // if the config does not resolve to any resources, warn the user
+  if (parseResult.entrypoints.length === 0 && (parseResult.assets?.paths?.length || 0) === 0) {
+    parseResult.warnings.push('The current project does not have any functions or assets to deploy.');
+  } else if (
+    parseResult.entrypoints.length === 0 &&
+    (parseResult.assets?.paths?.length || 0) === 0 &&
+    parseResult.routes.length === 0
+  ) {
+    parseResult.errors.push(
+      'The current project config does not resolve to any functions, assets or routes and can not be deployed.'
+    );
+  }
 
   return parseResult;
 };

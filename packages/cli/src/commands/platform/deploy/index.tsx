@@ -2,10 +2,13 @@ import { Alert, Spinner, ThemeProvider } from '@inkjs/ui';
 import type { Command } from 'commander';
 import fs from 'fs';
 import { Box, render, Static, Text, type Instance } from 'ink';
+import os from 'os';
 import path from 'path';
 import { useEffect, useState } from 'react';
+import { findConfig, parseConfig } from '../../../../../network-config/src';
+import type { NormalizedConfig } from '../../../../../network-config/src/normalized-config';
 import { formatFileSize } from '../../../util/format';
-import { debug } from '../../../util/log';
+import { debug, error, warn } from '../../../util/log';
 import { theme } from '../../../util/theme';
 import { objectToQueryString } from '../../../util/url';
 import { createZipArchive } from '../../../util/zip';
@@ -17,17 +20,39 @@ export const deploy = (parent: Command) => {
     .command('deploy')
     .description('Deploy the current project')
     .action(async () => {
+      const configPath = findConfig(process.cwd());
+
+      if (!configPath) {
+        throw new Error('The current project folder does not have a valid config file.');
+      }
+
+      const config = await parseConfig(configPath, process.cwd());
+
+      if (config.warnings.length > 0) {
+        config.warnings.forEach((message) => {
+          warn(message);
+        });
+      }
+
+      if (config.errors.length > 0) {
+        config.errors.forEach((message) => {
+          error(message);
+        });
+
+        throw new Error('The current project folder does not have a valid config file.');
+      }
+
       const deploymentId = await createDeployment({
         applicationId: 'test', // TODO
       });
 
       debug(`Deployment ID: ${deploymentId}`);
 
-      instance = render(<LogDisplay deploymentId={deploymentId} />);
+      instance = render(<LogDisplay deploymentId={deploymentId} config={config} />);
     });
 };
 
-const LogDisplay = ({ deploymentId }: { deploymentId: string }) => {
+const LogDisplay = ({ deploymentId, config }: { deploymentId: string; config: NormalizedConfig }) => {
   const [status, setStatus] = useState<DeploymentStatus>('PENDING');
   const [logs, setLogs] = useState<DeploymentLog[]>([]);
 
@@ -137,13 +162,13 @@ const addLog = (
 const uploadArchive = async (deploymentId: string, setLogs: React.Dispatch<React.SetStateAction<DeploymentLog[]>>) => {
   addLog('Creating archive...', 'INFO', setLogs);
 
-  const archivePath = path.join(process.env.TEMP || '/tmp', 'project.zip');
+  const archivePath = path.join(process.env.TEMP || os.tmpdir(), `project-${Date.now()}.zip`);
 
   if (fs.existsSync(archivePath)) {
     fs.unlinkSync(archivePath);
   }
 
-  await createZipArchive(process.cwd(), archivePath /*, { useIgnoreFiles: false, useManagedIgnore: false }*/);
+  await createZipArchive(process.cwd(), archivePath, { useIgnoreFiles: false, useManagedIgnore: false });
 
   const fileStats = fs.statSync(archivePath);
   const fileSize = fileStats.size;

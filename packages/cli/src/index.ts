@@ -1,6 +1,5 @@
 import { Command } from 'commander';
 import { build } from './commands/build';
-import { install } from './commands/install';
 import { platform } from './commands/platform';
 import { error, setVerbose } from './util/log';
 
@@ -27,7 +26,6 @@ const main = async () => {
 
   // register general commands
   build(program);
-  install(program);
 
   try {
     await program.parseAsync(process.argv);

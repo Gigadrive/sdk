@@ -1,7 +1,8 @@
 import type { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
-import { buildCommand, getPackageManager } from '../../util/pm';
+import { exec } from '../../../../build-utils/src/exec';
+import { buildCommand, getPackageManager, installCommand } from '../../util/pm';
 
 export const build = (parent: Command) => {
   parent
@@ -44,14 +45,22 @@ export const build = (parent: Command) => {
         return;
       }
 
-      const { stdout } = Bun.spawn([...buildCommand(packageManager).split(' ')], {
-        env,
+      await exec({
+        command: installCommand(packageManager),
         cwd,
+        env,
+        onOutput: (chunk) => {
+          console.log(chunk);
+        },
       });
 
-      // @ts-ignore
-      for await (const chunk of stdout) {
-        console.log(new TextDecoder().decode(chunk));
-      }
+      await exec({
+        command: buildCommand(packageManager),
+        cwd,
+        env,
+        onOutput: (chunk) => {
+          console.log(chunk);
+        },
+      });
     });
 };

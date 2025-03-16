@@ -3,7 +3,7 @@ import fs from 'fs';
 import ignore, { type Ignore } from 'ignore';
 import path from 'path';
 
-const ignoreFileNames = ['.gitignore', '.gigadriveignore', '.vercelignore', '.dockerignore', '.nowignore'];
+const ignoreFileNames = [/*'.gitignore', */ '.gigadriveignore', '.vercelignore', '.dockerignore', '.nowignore'];
 
 // Function to read and parse the ignore file
 function readIgnoreFile(ignorePath: string) {
