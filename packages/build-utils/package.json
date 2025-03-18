@@ -1,27 +1,38 @@
 {
   "name": "@gigadrive/build-utils",
   "version": "0.1.0",
-  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gigadrive/sdk.git"
   },
-  "scripts": {
-    "clean": "rm -rf dist",
-    "build": "node ../../scripts/build.mjs && tsc"
-  },
+  "license": "Apache-2.0",
+  "author": "Gigadrive <business@gigadrivegroup.com> (https://gigadrive.de)",
+  "type": "module",
   "exports": {
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": {
-        "production": "./dist/*.js",
-        "development": "./src/*.ts",
-        "default": "./dist/*.js"
-      }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
     }
   },
-  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "extract-zip": "^2.0.1",
+    "minimatch": "^10.0.1",
+    "p-limit": "^6.1.0"
+  },
   "devDependencies": {
+    "@local/tsup": "workspace:*",
     "@types/adm-zip": "^0.5.5",
     "@types/archiver": "^6.0.2",
     "@types/express": "^5.0.0",
@@ -34,16 +45,10 @@
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
-  "dependencies": {
-    "archiver": "^7.0.1",
-    "extract-zip": "^2.0.1",
-    "minimatch": "^10.0.1",
-    "p-limit": "^6.1.0"
+  "engines": {
+    "node": ">=18.0.0"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "files": [
-    "dist"
-  ]
+  }
 }

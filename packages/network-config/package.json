@@ -1,49 +1,43 @@
 {
   "name": "@gigadrive/network-config",
   "version": "1.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gigadrive/sdk.git"
+  },
   "license": "Apache-2.0",
-  "scripts": {
-    "clean": "rm -rf dist",
-    "build": "node ../../scripts/build.mjs && tsc && cp -r ./src/v4/schema.json ./dist/v4/schema.json"
+  "author": "Gigadrive <business@gigadrivegroup.com> (https://gigadrive.de)",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
   },
-  "devDependencies": {
-    "esbuild": "^0.25.0",
-    "@types/node": "^22"
-  },
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
   "files": [
     "dist",
     "**/*.json"
   ],
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": {
-        "production": "./dist/index.js",
-        "development": "./src/index.ts",
-        "default": "./dist/index.js"
-      }
-    },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": {
-        "production": "./dist/*.js",
-        "development": "./src/*.ts",
-        "default": "./dist/*.js"
-      }
-    }
+  "scripts": {
+    "build": "tsup && mkdir -p dist/v4 && cp -r ./src/v4/schema.json ./dist/v4/schema.json",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@gigadrive/build-utils": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "minimatch": "^10.0.1",
-    "yaml": "^2.7.0",
-    "@gigadrive/build-utils": "workspace:*"
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@local/tsup": "workspace:*",
+    "@types/node": "^22",
+    "esbuild": "^0.25.0"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Gigadrive/sdk.git"
   }
 }

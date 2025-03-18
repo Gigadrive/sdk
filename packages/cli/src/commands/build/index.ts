@@ -1,4 +1,4 @@
-import { exec } from '@gigadrive/build-utils/exec';
+import { exec } from '@gigadrive/build-utils';
 import type { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';

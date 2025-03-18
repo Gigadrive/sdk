@@ -1,4 +1,4 @@
-import { getFilesForPattern } from '@gigadrive/build-utils/get-files-for-pattern';
+import { getFilesForPattern } from '@gigadrive/build-utils';
 import fs from 'fs';
 import { minimatch } from 'minimatch';
 import type { ConfigV4, ConfigV4FunctionSettings } from '.';
