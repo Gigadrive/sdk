@@ -33,7 +33,6 @@
     "yaml": "^2.7.0"
   },
   "devDependencies": {
-    "@local/tsup": "workspace:*",
     "@types/node": "^22",
     "esbuild": "^0.25.0"
   },

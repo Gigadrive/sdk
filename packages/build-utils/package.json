@@ -32,7 +32,6 @@
     "p-limit": "^6.1.0"
   },
   "devDependencies": {
-    "@local/tsup": "workspace:*",
     "@types/adm-zip": "^0.5.5",
     "@types/archiver": "^6.0.2",
     "@types/express": "^5.0.0",
