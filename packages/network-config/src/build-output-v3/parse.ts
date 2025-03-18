@@ -1,4 +1,4 @@
-import { getFilesForPattern } from '@gigadrive/build-utils/get-files-for-pattern';
+import { getFilesForPattern } from '@gigadrive/build-utils';
 import fs from 'fs';
 import path from 'path';
 import { type Config, type Route, type ServerlessFunctionConfig } from '.';

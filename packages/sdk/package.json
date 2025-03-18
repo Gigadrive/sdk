@@ -5,18 +5,31 @@
     "type": "git",
     "url": "https://github.com/Gigadrive/sdk.git"
   },
-  "scripts": {
-    "clean": "rm -rf dist",
-    "build": "node ../../scripts/build.mjs && tsc"
+  "license": "Apache-2.0",
+  "author": "Gigadrive <business@gigadrivegroup.com> (https://gigadrive.de)",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
   },
-  "devDependencies": {
-    "esbuild": "^0.25.0"
-  },
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@local/tsup": "workspace:*",
+    "esbuild": "^0.25.0"
+  },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=18.0.0"
   },
   "publishConfig": {
     "access": "public"
