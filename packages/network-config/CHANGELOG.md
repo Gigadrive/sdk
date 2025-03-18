@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 2.0.1
+
+### Patch Changes
+
+- fix index barrel file ([`75c09ee`](https://github.com/Gigadrive/sdk/commit/75c09ee52836b7798b5235f215924661735ef7f2))
+
 ## 2.0.0
 
 ### Major Changes
