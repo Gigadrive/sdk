@@ -3,7 +3,8 @@
   "version": "0.1.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Gigadrive/sdk.git"
+    "url": "https://github.com/Gigadrive/sdk.git",
+    "directory": "packages/sdk"
   },
   "license": "Apache-2.0",
   "author": "Gigadrive <business@gigadrivegroup.com> (https://gigadrive.de)",

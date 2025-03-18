@@ -1,10 +1,10 @@
 {
-  "name": "@gigadrive/network-config",
-  "version": "2.0.1",
+  "name": "@gigadrive/commons",
+  "version": "0.0.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gigadrive/sdk.git",
-    "directory": "packages/network-config"
+    "directory": "packages/commons"
   },
   "license": "Apache-2.0",
   "author": "Gigadrive <business@gigadrivegroup.com> (https://gigadrive.de)",
@@ -23,19 +23,11 @@
     "**/*.json"
   ],
   "scripts": {
-    "build": "tsup && mkdir -p dist/v4 && cp -r ./src/v4/schema.json ./dist/v4/schema.json",
+    "build": "tsup",
     "clean": "rm -rf dist"
   },
-  "dependencies": {
-    "@gigadrive/build-utils": "workspace:*",
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
-    "minimatch": "^10.0.1",
-    "yaml": "^2.7.0"
-  },
   "devDependencies": {
-    "@types/node": "^22",
-    "esbuild": "^0.25.0"
+    "@types/node": "^22"
   },
   "publishConfig": {
     "access": "public"
