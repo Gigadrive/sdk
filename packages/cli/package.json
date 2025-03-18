@@ -2,6 +2,7 @@
   "name": "gigadrive",
   "version": "0.0.2",
   "module": "src/index.ts",
+  "license": "Apache-2.0",
   "scripts": {
     "clean": "rm -rf dist",
     "build": "esbuild src/index.ts --bundle --outfile=dist/gigadrive.js --platform=node --target=node20 --format=esm --minify --sourcemap"
