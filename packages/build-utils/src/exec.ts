@@ -59,7 +59,6 @@ export async function exec({
 
     const childProcess = spawn(spawnCommand, spawnArgs, {
       cwd,
-      shell: true,
       env,
     });
 
