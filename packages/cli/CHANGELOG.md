@@ -1,5 +1,15 @@
 # gigadrive
 
+## 0.0.3
+
+### Patch Changes
+
+- fixed exports and typings ([#19](https://github.com/Gigadrive/sdk/pull/19))
+
+- Updated dependencies [[`04703f1`](https://github.com/Gigadrive/sdk/commit/04703f1a9a3adb76994b25c08b840f8cbde4cb84)]:
+  - @gigadrive/network-config@2.0.0
+  - @gigadrive/build-utils@1.0.0
+
 ## 0.0.2
 
 ### Patch Changes
