@@ -7,7 +7,7 @@ import { Readable, type ReadableOptions } from 'stream';
  * to buffer data in memory until it is consumed by readers. It allows writing
  * data to an internal buffer and controls when the stream ends.
  */
-export default class BufferedReadableStream extends Readable {
+export class BufferedReadableStream extends Readable {
   /**
    * Internal buffer to store data until it's read
    */

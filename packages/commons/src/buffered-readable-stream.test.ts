@@ -1,6 +1,6 @@
 import { Readable } from 'stream';
 import { describe, expect, it } from 'vitest';
-import BufferedReadableStream from './buffered-readable-stream';
+import { BufferedReadableStream } from './buffered-readable-stream';
 
 describe('BufferedReadableStream', () => {
   it('should be an instance of Readable', () => {
