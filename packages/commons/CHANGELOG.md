@@ -1,5 +1,11 @@
 # @gigadrive/commons
 
+## 1.0.2
+
+### Patch Changes
+
+- fix export for BufferedReadableStream ([`148bf89`](https://github.com/Gigadrive/sdk/commit/148bf895f24649412f2ca93a183ab26c200e74c7))
+
 ## 1.0.1
 
 ### Patch Changes
