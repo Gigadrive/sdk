@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 2.0.2
+
+### Patch Changes
+
+- added new commons functions, fixed schema and CLI issues ([#28](https://github.com/Gigadrive/sdk/pull/28))
+
 ## 2.0.1
 
 ### Patch Changes
