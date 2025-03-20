@@ -14,11 +14,15 @@
     "ci:publish": "pnpm publish -r && node scripts/update-canary-tags.mjs && changeset tag",
     "ci:version": "changeset version && pnpm install --no-frozen-lockfile",
     "clean": "turbo run clean",
+    "cli": "pnpm --filter gigadrive exec gigadrive --",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "sdk-monorepo": "link:"
   },
   "devDependencies": {
     "@changesets/cli": "^2.28.1",
@@ -45,5 +49,10 @@
     "vite": "^6.2.2",
     "vitest": "^3.0.9"
   },
-  "packageManager": "pnpm@10.6.4"
+  "packageManager": "pnpm@10.6.4",
+  "pnpm": {
+    "overrides": {
+      "sdk-monorepo": "link:"
+    }
+  }
 }

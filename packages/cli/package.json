@@ -11,13 +11,14 @@
   "type": "module",
   "module": "src/index.ts",
   "bin": {
-    "gigadrive": "dist/gigadrive.js"
+    "gigadrive": "dist/index.mjs",
+    "gn": "dist/index.mjs"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --outfile=dist/gigadrive.js --platform=node --target=node20 --format=esm --minify --sourcemap",
+    "build": "tsup",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -37,9 +38,7 @@
   "devDependencies": {
     "@types/archiver": "^6.0.2",
     "@types/react": "^18.3.3",
-    "esbuild": "^0.25.0"
-  },
-  "peerDependencies": {
+    "esbuild": "^0.25.0",
     "typescript": "^5.0.0"
   },
   "publishConfig": {
