@@ -127,8 +127,8 @@ export async function createZipArchive(
   const output = fs.createWriteStream(outputFile);
   const archive = archiver('zip', { zlib: { level: 9 } });
 
-  return new Promise((resolve, reject) => {
-    output.on('close', resolve);
+  return new Promise<void>((resolve, reject) => {
+    output.on('close', () => resolve());
     archive.on('error', reject);
 
     archive.pipe(output);

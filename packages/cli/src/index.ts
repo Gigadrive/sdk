@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { build } from './commands/build';
 import { platform } from './commands/platform';
-import { error, setVerbose } from './util/log';
+import { error, log, setVerbose } from './util/log';
 
 let { isTTY } = process.stdout;
 //process.stdin.resume();
@@ -15,11 +15,22 @@ const main = async () => {
 
   let exitCode = 0;
 
-  const program = new Command().hook('preAction', (thisCommand) => {
-    setVerbose(thisCommand.opts().verbose as boolean);
-  });
+  const program = new Command();
 
   program.option('-v, --verbose', 'Enable verbose logging');
+
+  program.hook('preSubcommand', (thisCommand, actionCommand) => {
+    setVerbose(thisCommand.opts().verbose as boolean);
+    console.log('preSubcommand hook', thisCommand.opts().verbose);
+
+    if (thisCommand.opts().verbose) {
+      log('Using verbose mode');
+    }
+  });
+
+  program.hook('preAction', (thisCommand) => {
+    setVerbose(thisCommand.opts().verbose as boolean);
+  });
 
   // register service commands
   platform(program);

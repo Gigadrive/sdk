@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
+import path from 'path';
 import { defineConfig } from 'vite';
 import type { UserConfig as VitestUserConfig } from 'vitest/config';
 import { configDefaults } from 'vitest/config';
@@ -21,7 +22,7 @@ export default defineConfig({
       include: ['apps/**/*.ts', 'packages/**/*.ts', 'services/**/*.ts', 'tests/**/*.ts'],
     },
     env: {
-      ...config({ path: __dirname + '/.env' }).parsed,
+      ...config({ path: path.join(__dirname, '.env') }).parsed,
     },
     exclude: [...configDefaults.exclude, 'examples/**', '**/node_modules/**'],
   },
