@@ -14,7 +14,6 @@
     "ci:publish": "pnpm publish -r && node scripts/update-canary-tags.mjs && changeset tag",
     "ci:version": "changeset version && pnpm install --no-frozen-lockfile",
     "clean": "turbo run clean",
-    "cli": "pnpm --filter gigadrive exec gigadrive --",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "vitest run",
