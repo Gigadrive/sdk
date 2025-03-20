@@ -1,26 +1,10 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { parseVercelBuildOutputV3 } from './build-output-v3/parse';
 import type { NormalizedConfig } from './normalized-config';
 import { parseRawConfig } from './parse-raw-config';
 import { parseConfigV4 } from './v4/parse';
-
-// Helper function to get directory path that works in both ESM and CJS
-const getDirname = (importMetaUrl: string): string => {
-  if (typeof __dirname !== 'undefined') {
-    return __dirname;
-  }
-
-  const __filename = fileURLToPath(importMetaUrl);
-  return path.dirname(__filename);
-};
-
-const __dirname: string = getDirname(import.meta.url);
-
-const schemaV4 = JSON.parse(fs.readFileSync(path.join(__dirname, './v4/schema.json'), 'utf8'));
+import schemaV4 from './v4/schema.json';
 
 export const parseConfig = async (filePath: string, projectFolder: string): Promise<NormalizedConfig> => {
   const parsed = await parseRawConfig(filePath);
