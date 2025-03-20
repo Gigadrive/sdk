@@ -4,16 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  sdk-monorepo: 'link:'
-
 importers:
 
   .:
-    dependencies:
-      sdk-monorepo:
-        specifier: 'link:'
-        version: 'link:'
     devDependencies:
       '@changesets/cli':
         specifier: ^2.28.1
