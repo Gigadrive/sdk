@@ -1,5 +1,11 @@
 # @gigadrive/commons
 
+## 1.1.0
+
+### Minor Changes
+
+- added new commons functions, fixed schema and CLI issues ([#28](https://github.com/Gigadrive/sdk/pull/28))
+
 ## 1.0.2
 
 ### Patch Changes

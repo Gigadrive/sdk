@@ -1,5 +1,17 @@
 # gigadrive
 
+## 1.0.0
+
+### Major Changes
+
+- added new commons functions, fixed schema and CLI issues ([#28](https://github.com/Gigadrive/sdk/pull/28))
+
+### Patch Changes
+
+- Updated dependencies [[`e41be7a`](https://github.com/Gigadrive/sdk/commit/e41be7a8798ad53e58438bfb0c78324b47344c72)]:
+  - @gigadrive/commons@1.1.0
+  - @gigadrive/network-config@2.0.2
+
 ## 0.0.4
 
 ### Patch Changes
