@@ -15,7 +15,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   release:
     name: Release
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
 
     permissions:
       contents: write
@@ -68,7 +68,7 @@ jobs:
 
   summary:
     name: Summary (release)
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs:
       - release
