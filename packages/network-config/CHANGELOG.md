@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 2.0.3
+
+### Patch Changes
+
+- remove dirname function ([#32](https://github.com/Gigadrive/sdk/pull/32))
+
 ## 2.0.2
 
 ### Patch Changes
