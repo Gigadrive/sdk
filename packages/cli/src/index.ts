@@ -17,11 +17,10 @@ const main = async () => {
 
   const program = new Command();
 
-  program.option('-v, --verbose', 'Enable verbose logging');
+  program.option('-v, --verbose', 'Enable verbose logging', false);
 
   program.hook('preSubcommand', (thisCommand, actionCommand) => {
-    setVerbose(thisCommand.opts().verbose as boolean);
-    console.log('preSubcommand hook', thisCommand.opts().verbose);
+    setVerbose((thisCommand.opts().verbose as boolean) === true);
 
     if (thisCommand.opts().verbose) {
       log('Using verbose mode');
@@ -29,7 +28,7 @@ const main = async () => {
   });
 
   program.hook('preAction', (thisCommand) => {
-    setVerbose(thisCommand.opts().verbose as boolean);
+    setVerbose((thisCommand.opts().verbose as boolean) === true);
   });
 
   // register service commands
