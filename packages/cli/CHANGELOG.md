@@ -1,5 +1,15 @@
 # gigadrive
 
+## 1.0.1
+
+### Patch Changes
+
+- remove dirname function ([#32](https://github.com/Gigadrive/sdk/pull/32))
+
+- Updated dependencies [[`14d00a2`](https://github.com/Gigadrive/sdk/commit/14d00a2a90deca6f611e1962667556e6b1655297)]:
+  - @gigadrive/commons@2.0.0
+  - @gigadrive/network-config@2.0.3
+
 ## 1.0.0
 
 ### Major Changes

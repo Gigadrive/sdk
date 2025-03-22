@@ -1,5 +1,11 @@
 # @gigadrive/commons
 
+## 2.0.0
+
+### Major Changes
+
+- remove dirname function ([#32](https://github.com/Gigadrive/sdk/pull/32))
+
 ## 1.1.0
 
 ### Minor Changes
