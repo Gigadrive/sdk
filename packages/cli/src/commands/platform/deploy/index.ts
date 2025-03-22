@@ -73,7 +73,7 @@ const handleDeployment = async (deploymentId: string, config: NormalizedConfig) 
     addLog(`Upload failed: ${(err as Error).message}`, 'ERROR', logs);
     status = 'FAILED';
     error('The deployment failed. Please check the logs for more information.');
-    return;
+    process.exit(1);
   }
 
   // Start status polling

@@ -40,7 +40,6 @@ export const warn = (message: any) => {
 
 export const debug = (message?: any, ...optionalParams: any[]) => {
   if (!verbose) {
-    console.log('debug', message, ...optionalParams);
     return;
   }
 
