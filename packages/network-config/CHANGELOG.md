@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 2.0.4
+
+### Patch Changes
+
+- fix invalid version check on Vercel Build Output API v3 files ([#34](https://github.com/Gigadrive/sdk/pull/34))
+
 ## 2.0.3
 
 ### Patch Changes
