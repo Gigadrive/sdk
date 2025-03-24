@@ -164,7 +164,7 @@ export const readConfigFile = async <T>(configFilePath: string): Promise<T | nul
     return null;
   }
 
-  const parsed = await parseRawConfig(configFilePath);
+  const parsed = await parseRawConfig(configFilePath, { disableVersionCheck: true });
 
   return parsed as T;
 };
