@@ -2,7 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import { parse as parseYaml } from 'yaml';
 
-export const parseRawConfig = async (filePath: string): Promise<any> => {
+export const parseRawConfig = async (
+  filePath: string,
+  { disableVersionCheck = false }: { disableVersionCheck?: boolean } = {}
+): Promise<any> => {
   // check if the file exists
   if (!fs.existsSync(filePath)) {
     throw new Error(`Config file not found at ${filePath}`);
@@ -40,7 +43,7 @@ export const parseRawConfig = async (filePath: string): Promise<any> => {
   }
 
   // check if the version is present
-  if (typeof parsed.version !== 'number') {
+  if (!disableVersionCheck && typeof parsed.version !== 'number') {
     throw new Error(`Config file is missing version at ${filePath}`);
   }
 

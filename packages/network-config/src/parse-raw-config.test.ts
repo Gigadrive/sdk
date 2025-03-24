@@ -85,4 +85,9 @@ describe('parseRawConfig', () => {
       `Config file is missing version at ${noVersionFilePath}`
     );
   });
+
+  test('should not throw error for file without version when disableVersionCheck is true', async () => {
+    const result = await parseRawConfig(noVersionFilePath, { disableVersionCheck: true });
+    expect(result).toEqual({ name: 'test-no-version' });
+  });
 });
