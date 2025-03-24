@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { build } from './commands/build';
+import { debug } from './commands/debug';
 import { platform } from './commands/platform';
 import { error, log, setVerbose } from './util/log';
 
@@ -31,10 +32,9 @@ const main = async () => {
     setVerbose((thisCommand.opts().verbose as boolean) === true);
   });
 
-  // register service commands
+  // register commands
   platform(program);
-
-  // register general commands
+  debug(program);
   build(program);
 
   try {
