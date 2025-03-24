@@ -42,7 +42,7 @@
     "prettier-plugin-packagejson": "^2.5.10",
     "tsup": "^8.4.0",
     "turbo": "^2.4.4",
-    "vite": "^6.2.2",
+    "vite": "^6.2.3",
     "vitest": "^3.0.9"
   },
   "packageManager": "pnpm@10.6.4"
