@@ -124,7 +124,7 @@ export const loadFunctions = async (config: Config, parseResult: NormalizedConfi
       environmentVariables,
       streaming,
       package: {
-        rootOverwrite: path.join(projectFolder, functionDirectory),
+        // rootOverwrite: path.join(projectFolder, functionDirectory),
         filePathMap: filePathMap,
       },
     });
