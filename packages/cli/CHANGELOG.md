@@ -1,5 +1,11 @@
 # gigadrive
 
+## 1.1.0
+
+### Minor Changes
+
+- add debug config command ([#36](https://github.com/Gigadrive/sdk/pull/36))
+
 ## 1.0.2
 
 ### Patch Changes
