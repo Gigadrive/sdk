@@ -13,7 +13,8 @@ import type { Region } from '../regions';
 import type { Runtime } from '../runtime';
 
 const configPath = '.vercel/output/config.json';
-const functionConfigsPattern = '.vercel/output/functions/*.func/.vc-config.json';
+const functionsFolder = '.vercel/output/functions';
+const functionConfigsPattern = `${functionsFolder}/**/*.func/.vc-config.json`;
 
 /**
  * Transforms a parsed config file using Vercel's Build Output API v3
@@ -74,7 +75,8 @@ export const loadFunctions = async (config: Config, parseResult: NormalizedConfi
       continue;
     }
 
-    const functionName: string = path.basename(path.dirname(functionConfigPath)).replace(/\.func$/, '');
+    const functionPathRelative = path.dirname(functionConfigPath).replace(functionsFolder, '');
+    const functionName: string = functionPathRelative.replace(/^\/|\.func$/g, '');
     const runtime = translateVercelRuntime(functionConfig.runtime);
 
     if (!runtime) {
