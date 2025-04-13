@@ -16,6 +16,7 @@ export const deepMerge = <T extends object>(target: T, partial: Partial<T>): T =
   }
 
   Object.keys(partial).forEach((key) => {
+    if (key === "__proto__" || key === "constructor") return;
     const targetValue = target[key as keyof T];
     const sourceValue = partial[key as keyof T];
 
