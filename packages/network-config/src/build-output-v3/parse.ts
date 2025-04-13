@@ -47,22 +47,22 @@ export const parseVercelBuildOutputV3 = async (
   // TODO: Prerender Functions
 
   const functionData = await loadFunctions(config, parseResult, projectFolder);
-  await loadAssetOverrides(config, parseResult);
+  const assetOverrides = await loadAssetOverrides(config, parseResult);
 
-  return deepMerge(parseResult, functionData);
+  return deepMerge(parseResult, functionData, assetOverrides);
 };
 
-const loadAssetOverrides = async (config: Config, parseResult: NormalizedConfig) => {
-  if (!parseResult.assets) {
-    parseResult.assets = {
-      paths: [],
-      prefixToStrip: '',
-    };
-  }
-
-  parseResult.assets.overrides = {
-    ...(parseResult.assets.overrides ?? {}),
-    ...config.overrides,
+const loadAssetOverrides = async (
+  config: Config,
+  parseResult: NormalizedConfig
+): Promise<Partial<NormalizedConfig>> => {
+  return {
+    assets: {
+      overrides: {
+        ...(parseResult.assets?.overrides ?? {}),
+        ...config.overrides,
+      },
+    },
   };
 };
 

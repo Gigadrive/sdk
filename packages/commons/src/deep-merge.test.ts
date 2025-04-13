@@ -14,7 +14,7 @@ describe('deepMerge', () => {
     const partial = { b: { d: 3 }, e: 4 };
     const originalTarget = JSON.parse(JSON.stringify(target)); // Deep copy
 
-    deepMerge(JSON.parse(JSON.stringify(target)), partial as any);
+    deepMerge(JSON.parse(JSON.stringify(target)), partial);
 
     expect(target).toEqual(originalTarget);
   });
@@ -58,7 +58,7 @@ describe('deepMerge', () => {
     const target = {};
     const partial = { a: 1 };
     const expected = { a: 1 };
-    expect(deepMerge(target, partial as any)).toEqual(expected);
+    expect(deepMerge(target, partial)).toEqual(expected);
   });
 
   it('should handle empty partial object', () => {
@@ -68,7 +68,7 @@ describe('deepMerge', () => {
     expect(deepMerge(target, partial as any)).toEqual(expected);
   });
 
-  it('should handle null or undefined values in partial (overwrite with ' + 'null/undefined)', () => {
+  it('should handle null or undefined values in partial (overwrite with null/undefined)', () => {
     const target = { a: 1, b: 'hello' };
     const partial = { a: null, b: undefined };
     const expected = { a: null, b: undefined };
@@ -78,24 +78,35 @@ describe('deepMerge', () => {
   it('should handle a target value of null or undefined', () => {
     const target = null;
     const partial = { a: 1 };
-    const expected = null;
-    expect(deepMerge(target as any, partial as any)).toEqual(target);
+    expect(deepMerge(target as any, partial)).toEqual(target);
 
     const target2 = undefined;
     const partial2 = { a: 1 };
-    const expected2 = undefined;
-    expect(deepMerge(target2 as any, partial2 as any)).toEqual(target2);
+    expect(deepMerge(target2 as any, partial2)).toEqual(target2);
   });
 
   it('should handle a partial value of null or undefined', () => {
     const target = { a: 1 };
     const partial = null;
-    const expected = { a: 1 };
-    expect(deepMerge(target as any, partial as any)).toEqual(target);
+    expect(deepMerge(target, partial as any)).toEqual(target);
 
     const target2 = { a: 1 };
     const partial2 = undefined;
-    const expected2 = { a: 1 };
-    expect(deepMerge(target2 as any, partial2 as any)).toEqual(target2);
+    expect(deepMerge(target2, partial2 as any)).toEqual(target2);
+  });
+
+  it('should merge multiple partial objects', () => {
+    const target = { a: 1 };
+    const partial1 = { b: 2 };
+    const partial2 = { c: 3 };
+    const expected = { a: 1, b: 2, c: 3 };
+    expect(deepMerge(target, partial1 as any, partial2 as any)).toEqual(expected);
+  });
+
+  it('should skip __proto__ and constructor properties', () => {
+    const target = { a: 1 };
+    const partial = { __proto__: { malicious: true }, constructor: { dangerous: true }, b: 2 };
+    const expected = { a: 1, b: 2 };
+    expect(deepMerge(target, partial as any)).toEqual(expected);
   });
 });
