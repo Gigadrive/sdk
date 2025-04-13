@@ -13,6 +13,7 @@ import { determineRepoRoot } from './determine-repo-root';
 import { getDefaultPathMap } from './get-default-path-map';
 import { getMonorepoFiles } from './get-monorepo-files';
 import { readConfigFile } from './read-config-file';
+import { translateVercelRegion } from './translate-vercel-region';
 import { translateVercelRuntime } from './translate-vercel-runtime';
 
 const configPath = '.vercel/output/config.json';
