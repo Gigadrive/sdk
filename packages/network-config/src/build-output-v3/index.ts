@@ -1,5 +1,14 @@
 // Vercel Build Output API v3 types
 
+import { FilePathMap } from '../normalized-config';
+
+/**
+ * Same as FilePathMap, but Vercel's API does not expect the left side to be an absolute path.
+ * Left side should be a relative path in the source code repository.
+ * For functions, that means relative to the project directory. So in a monorepo, it may be out of bounds.
+ */
+export type VercelFilePathMap = FilePathMap;
+
 // #region Configuration
 // .vercel/output/config.json
 // https://vercel.com/docs/build-output-api/v3/configuration
@@ -132,7 +141,7 @@ export type ServerlessFunctionConfig = {
   supportsWrapper?: boolean;
   supportsResponseStreaming?: boolean;
   experimentalResponseStreaming?: boolean; // seems to be deprecated
-  filePathMap?: Record<string, string>;
+  filePathMap?: VercelFilePathMap;
 };
 
 export type NodejsServerlessFunctionConfig = ServerlessFunctionConfig & {

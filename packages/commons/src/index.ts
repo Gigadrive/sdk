@@ -1,5 +1,6 @@
 export * from './all';
 export * from './buffered-readable-stream';
+export * from './deep-merge';
 export * from './encrypt';
 export * from './enum-default';
 export * from './format';

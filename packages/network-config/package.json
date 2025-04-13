@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@gigadrive/build-utils": "workspace:*",
+    "@gigadrive/commons": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "minimatch": "^10.0.1",

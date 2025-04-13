@@ -90,7 +90,7 @@ describe('exec', () => {
     const startTime = Date.now();
 
     await exec({
-      command: os.platform() === 'win32' ? 'ping -n 3 127.0.0.1' : 'ping -c 3 127.0.0.1',
+      command: os.platform() === 'win32' ? 'timeout /t 3' : 'sleep 3',
       onOutput: (data) => outputs.push(data),
     });
 

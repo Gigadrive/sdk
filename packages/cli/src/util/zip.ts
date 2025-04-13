@@ -1,3 +1,4 @@
+import { getFilesForPattern } from '@gigadrive/build-utils';
 import archiver from 'archiver';
 import fs from 'fs';
 import ignore, { type Ignore } from 'ignore';
@@ -75,7 +76,7 @@ function initializeIgnoreRules(baseDir: string): Ignore {
 }
 
 // Function to get all files and directories, excluding those in the ignore list
-async function getFilesToInclude(dir: string, ignoreRules: Ignore) {
+async function getFilesToInclude(dir: string, ignoreRules: Ignore, whitelist?: string[]) {
   const filesToInclude: string[] = [];
 
   function walkSync(currentDir: string) {
@@ -114,6 +115,7 @@ export async function createZipArchive(
   inputDir: string,
   outputFile: string,
   options: {
+    whitelist?: string[];
     useIgnoreFiles?: boolean;
     useManagedIgnore?: boolean;
   } = {}
@@ -121,7 +123,9 @@ export async function createZipArchive(
   const ignoreRules = options.useIgnoreFiles !== false ? initializeIgnoreRules(inputDir) : ignore();
 
   // Get list of files to include in the zip
-  const filesToInclude = await getFilesToInclude(inputDir, ignoreRules);
+  const filesToInclude = options.whitelist
+    ? await Promise.all(options.whitelist.map((file) => getFilesForPattern(inputDir, file)))
+    : await getFilesToInclude(inputDir, ignoreRules);
 
   // Create zip file
   const output = fs.createWriteStream(outputFile);
