@@ -1,5 +1,16 @@
 # @gigadrive/network-config
 
+## 2.1.0
+
+### Minor Changes
+
+- fix vercel-related issues and restructure some of the code ([#46](https://github.com/Gigadrive/sdk/pull/46))
+
+### Patch Changes
+
+- Updated dependencies [[`9e06f36`](https://github.com/Gigadrive/sdk/commit/9e06f3638a51c01c72050f8f9c12eb51c3851966)]:
+  - @gigadrive/commons@2.1.0
+
 ## 2.0.4
 
 ### Patch Changes
