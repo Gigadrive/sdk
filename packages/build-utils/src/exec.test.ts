@@ -89,8 +89,11 @@ describe('exec', () => {
     const outputs: string[] = [];
     const startTime = Date.now();
 
+    // Use a command that produces output to ensure outputs array is populated
     await exec({
-      command: os.platform() === 'win32' ? 'ping -n 3 127.0.0.1' : 'ping -c 3 127.0.0.1',
+      command: os.platform() === 'win32'
+        ? 'powershell -Command "Write-Host \'Starting\'; Start-Sleep -s 3; Write-Host \'Done\'"'
+        : 'echo "Starting"; sleep 3; echo "Done"',
       onOutput: (data) => outputs.push(data),
     });
 

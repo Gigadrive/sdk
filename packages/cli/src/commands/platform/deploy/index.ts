@@ -64,7 +64,7 @@ const handleDeployment = async (deploymentId: string, config: NormalizedConfig) 
   // Start upload
   try {
     debug('Starting upload process');
-    await uploadArchive(deploymentId, logs);
+    await uploadArchive(deploymentId, logs, config);
     debug('Upload completed successfully');
     addLog('Upload complete.', 'INFO', logs);
     addLog('The deployment pipeline is now being provisioned. This may take a few seconds.', 'INFO', logs);
@@ -158,7 +158,7 @@ const addLog = (message: string, type: 'INFO' | 'ERROR' | 'WARN', logs: Deployme
   }
 };
 
-const uploadArchive = async (deploymentId: string, logs: DeploymentLog[]) => {
+const uploadArchive = async (deploymentId: string, logs: DeploymentLog[], config: NormalizedConfig) => {
   debug('Starting uploadArchive');
   addLog('Creating archive...', 'INFO', logs);
 
@@ -171,7 +171,12 @@ const uploadArchive = async (deploymentId: string, logs: DeploymentLog[]) => {
   }
 
   debug('Creating zip archive');
-  await createZipArchive(process.cwd(), archivePath, { useIgnoreFiles: false, useManagedIgnore: false });
+
+  await createZipArchive(config.userArchive?.rootOverwrite || process.cwd(), archivePath, {
+    whitelist: config.userArchive?.fileWhitelist,
+    useIgnoreFiles: false,
+    useManagedIgnore: false,
+  });
 
   const fileStats = fs.statSync(archivePath);
   const fileSize = fileStats.size;

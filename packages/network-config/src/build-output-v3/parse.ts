@@ -1,19 +1,24 @@
 import { getFilesForPattern } from '@gigadrive/build-utils';
-import fs from 'fs';
+import { deepMerge } from '@gigadrive/commons';
 import path from 'path';
-import { type Config, type Route, type ServerlessFunctionConfig } from '.';
+import { type Config, type ServerlessFunctionConfig } from '.';
 import type {
   NormalizedConfig,
   NormalizedConfigRoute,
   NormalizedConfigRouteHandler,
   NormalizedConfigRouteMethod,
 } from '../normalized-config';
-import { parseRawConfig } from '../parse-raw-config';
 import type { Region } from '../regions';
-import type { Runtime } from '../runtime';
+import { determineRepoRoot } from './determine-repo-root';
+import { getDefaultPathMap } from './get-default-path-map';
+import { getMonorepoFiles } from './get-monorepo-files';
+import { readConfigFile } from './read-config-file';
+import { translateVercelRegion } from './translate-vercel-region';
+import { translateVercelRuntime } from './translate-vercel-runtime';
 
 const configPath = '.vercel/output/config.json';
-const functionConfigsPattern = '.vercel/output/functions/*.func/.vc-config.json';
+const functionsFolder = '.vercel/output/functions';
+const functionConfigsPattern = `${functionsFolder}/**/*.func/.vc-config.json`;
 
 /**
  * Transforms a parsed config file using Vercel's Build Output API v3
@@ -41,30 +46,38 @@ export const parseVercelBuildOutputV3 = async (
   // TODO: Edge Functions
   // TODO: Prerender Functions
 
-  await loadFunctions(config, parseResult, projectFolder);
-  await loadAssetOverrides(config, parseResult);
+  const functionData = await loadFunctions(config, parseResult, projectFolder);
+  const assetOverrides = await loadAssetOverrides(config, parseResult);
 
-  return parseResult;
+  return deepMerge(parseResult, functionData, assetOverrides);
 };
 
-const loadAssetOverrides = async (config: Config, parseResult: NormalizedConfig) => {
-  if (!parseResult.assets) {
-    parseResult.assets = {
-      paths: [],
-      prefixToStrip: '',
-    };
-  }
-
-  parseResult.assets.overrides = {
-    ...(parseResult.assets.overrides ?? {}),
-    ...config.overrides,
+const loadAssetOverrides = async (
+  config: Config,
+  parseResult: NormalizedConfig
+): Promise<Partial<NormalizedConfig>> => {
+  return {
+    assets: {
+      overrides: {
+        ...(parseResult.assets?.overrides ?? {}),
+        ...config.overrides,
+      },
+    },
   };
 };
 
-export const loadFunctions = async (config: Config, parseResult: NormalizedConfig, projectFolder: string) => {
+export const loadFunctions = async (
+  config: Config,
+  parseResult: NormalizedConfig,
+  projectFolder: string
+): Promise<Partial<NormalizedConfig>> => {
   const functionConfigs = await getFilesForPattern(functionConfigsPattern, projectFolder);
 
-  // console.debug('functionConfigs', functionConfigs);
+  const result: Partial<NormalizedConfig> = {
+    entrypoints: [],
+    routes: [],
+    regions: [],
+  };
 
   for (const functionConfigPath of functionConfigs) {
     const functionConfig = await readConfigFile<ServerlessFunctionConfig>(path.join(projectFolder, functionConfigPath));
@@ -74,7 +87,8 @@ export const loadFunctions = async (config: Config, parseResult: NormalizedConfi
       continue;
     }
 
-    const functionName: string = path.basename(path.dirname(functionConfigPath)).replace(/\.func$/, '');
+    const functionPathRelative = path.dirname(functionConfigPath).replace(functionsFolder, '');
+    const functionName = functionPathRelative.replace(/^\/|\.func$/g, '');
     const runtime = translateVercelRuntime(functionConfig.runtime);
 
     if (!runtime) {
@@ -83,131 +97,102 @@ export const loadFunctions = async (config: Config, parseResult: NormalizedConfi
     }
 
     const functionDirectory = `.vercel/output/functions/${functionName}.func`;
-    const handler = functionConfig.handler;
-    const maxDuration = functionConfig.maxDuration;
-    const memory = functionConfig.memory;
+    const {
+      handler,
+      maxDuration,
+      memory,
+      regions = [],
+      environment,
+      filePathMap: configFilePathMap = {},
+    } = functionConfig;
 
-    // add regions and filter duplicates
-    parseResult.regions = Array.from(
-      new Set([
-        ...(parseResult.regions ?? []),
-        ...(functionConfig.regions ?? ['us-east-1']).map((r) => translateVercelRegion(r)),
-      ])
-    ) as Region[];
+    // Add regions or use default if empty
+    const translatedRegions = regions.length > 0 ? regions.map(translateVercelRegion) : ['us-east-1'];
 
+    // Filter duplicates
+    result.regions = Array.from(new Set([...parseResult.regions, ...translatedRegions])) as Region[];
+
+    // Process environment variables
     const environmentVariables: Record<string, string> = {};
-
-    const functionEnv = functionConfig.environment;
-
-    if (functionEnv != null && typeof functionEnv === 'object') {
-      for (const env of Object.values(functionEnv)) {
-        for (const [key, value] of Object.entries(env)) {
-          environmentVariables[key] = value;
-        }
+    if (environment && typeof environment === 'object') {
+      for (const env of Object.values(environment)) {
+        Object.assign(environmentVariables, env);
       }
     }
 
-    const streaming: boolean = runtime == null || runtime.startsWith('node-') || runtime.startsWith('bun-');
+    const streaming = runtime.startsWith('node-') || runtime.startsWith('bun-');
 
-    // translate filePathMap relative paths to absolute paths
-    const filePathMap: Record<string, string> = {};
-    for (const [key, value] of Object.entries(functionConfig.filePathMap ?? {})) {
+    // Process file path map
+    let filePathMap: Record<string, string> = {};
+    for (const [key, value] of Object.entries(configFilePathMap)) {
       filePathMap[path.join(projectFolder, key)] = value;
     }
 
-    parseResult.entrypoints.push({
+    // Default file path map if none provided
+    if (Object.keys(filePathMap).length === 0) {
+      filePathMap = getDefaultPathMap(path.join(projectFolder, functionDirectory));
+    }
+
+    // Add entrypoint
+    if (!result.entrypoints) {
+      result.entrypoints = [];
+    }
+
+    result.entrypoints.push({
       displayName: functionName,
       runtime,
-      path: handler,
+      path: path.join(functionDirectory, handler),
       memory: memory ?? 1024,
       maxDuration: maxDuration ?? 15,
       environmentVariables,
       streaming,
       package: {
-        rootOverwrite: path.join(projectFolder, functionDirectory),
-        filePathMap: filePathMap,
+        filePathMap,
       },
     });
 
+    // Create routes
     const handlerType: NormalizedConfigRouteHandler = streaming
       ? 'SERVERLESS_FUNCTION_STREAMING'
       : 'SERVERLESS_FUNCTION';
 
-    (
-      [
-        {
-          path: `/${functionName}`,
-          methods: ['ANY'],
-          headers: {},
-          destination: handler,
-          handler: handlerType,
-        },
-        ...(config.routes
-          ?.filter((r) => r.dest === `/${functionName}`)
-          .map((r: Route) => ({
-            path: r.src ?? `/${functionName}`,
-            methods: ['ANY'] as NormalizedConfigRouteMethod[],
-            headers: {},
-            destination: handler,
-            handler: handlerType,
-          })) ?? []),
-      ] as NormalizedConfigRoute[]
-    ).forEach((route) => {
-      parseResult.routes.push(route);
-    });
-  }
-};
+    const defaultRoute: NormalizedConfigRoute = {
+      path: `/${functionName}`,
+      methods: ['ANY'],
+      headers: {},
+      destination: handler,
+      handler: handlerType,
+    };
 
-export const readConfigFile = async <T>(configFilePath: string): Promise<T | null> => {
-  if (!fs.existsSync(configFilePath)) {
-    // skip vercel transformation if no vercel output exists
-    return null;
+    const configRoutes =
+      config.routes
+        ?.filter((r) => r.dest === `/${functionName}`)
+        .map(
+          (r) =>
+            ({
+              path: r.src ?? `/${functionName}`,
+              methods: ['ANY'] as NormalizedConfigRouteMethod[],
+              headers: {},
+              destination: handler,
+              handler: handlerType,
+            }) as NormalizedConfigRoute
+        ) ?? [];
+
+    if (!result.routes) {
+      result.routes = [];
+    }
+
+    result.routes.push(defaultRoute, ...configRoutes);
   }
 
-  const parsed = await parseRawConfig(configFilePath, { disableVersionCheck: true });
-
-  return parsed as T;
-};
-
-export const translateVercelRuntime = (runtime: string): Runtime | null => {
-  switch (runtime) {
-    case 'nodejs12.x':
-    case 'nodejs14.x':
-    case 'nodejs16.x':
-    case 'nodejs18.x':
-      return 'node-18';
-    case 'nodejs20.x':
-    case 'nodejs22.x': // TODO: Update when Lambda supports Node.js 22
-      return 'node-20';
-    default:
-      return null;
-  }
-};
-
-/**
- * @link https://vercel.com/docs/edge-network/regions#region-list
- */
-export const translateVercelRegion = (region: string): string => {
-  const regionMap: Record<string, string> = {
-    arn1: 'eu-north-1',
-    bom1: 'ap-south-1',
-    cdg1: 'eu-west-3',
-    cle1: 'us-east-2',
-    cpt1: 'af-south-1',
-    dub1: 'eu-west-1',
-    fra1: 'eu-central-1',
-    gru1: 'sa-east-1',
-    hkg1: 'ap-east-1',
-    hnd1: 'ap-northeast-1',
-    iad1: 'us-east-1',
-    icn1: 'ap-northeast-2',
-    kix1: 'ap-northeast-3',
-    lhr1: 'eu-west-2',
-    pdx1: 'us-west-2',
-    sfo1: 'us-west-1',
-    sin1: 'ap-southeast-1',
-    syd1: 'ap-southeast-2',
+  return {
+    ...result,
+    userArchive: {
+      rootOverwrite: determineRepoRoot(projectFolder, result),
+      fileWhitelist: [
+        `${projectFolder}/*`,
+        ...getMonorepoFiles(projectFolder, result.entrypoints?.map((e) => e.package?.filePathMap ?? {}) ?? []),
+      ],
+    },
   };
-
-  return regionMap[region.toLowerCase()] ?? 'us-east-1';
 };

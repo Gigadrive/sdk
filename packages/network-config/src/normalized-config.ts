@@ -2,6 +2,14 @@ import { type Region } from './regions';
 import { type Runtime } from './runtime';
 
 /**
+ * A map of file paths to their corresponding paths in the deployment.
+ *
+ * Left side should be an absolute path on the file system.
+ * Right side should be a relative path in the deployment package.
+ */
+export type FilePathMap = Record<string, string>;
+
+/**
  * The object structure that all config versions will be parsed into.
  * This is done to provide a consistent interface for the rest of the codebase and easily provision the necessary resources, regardless of the config version.
  */
@@ -59,6 +67,22 @@ export interface NormalizedConfig {
   routes: Array<NormalizedConfigRoute>;
 
   services?: Array<NormalizedConfigService>;
+
+  /**
+   * Settings related to the archive the user uploads to the build workers.
+   */
+  userArchive?: {
+    /**
+     * Overwrite the root of the user-uploaded package. This is mostly used for monorepos to make sure all relevant files are included.
+     */
+    rootOverwrite?: string;
+
+    /**
+     * Use a whitelist to only include relevant files in monorepos. May be a glob pattern.
+     * @see getFilesForPattern
+     */
+    fileWhitelist?: string[];
+  };
 
   /**
    * Warning codes to be printed to the output during deployment.
@@ -126,7 +150,7 @@ export interface NormalizedConfigEntrypoint {
   streaming?: boolean;
   package?: {
     rootOverwrite?: string;
-    filePathMap?: Record<string, string>;
+    filePathMap?: FilePathMap;
   };
 }
 
