@@ -1,5 +1,11 @@
 # @gigadrive/commons
 
+## 2.1.0
+
+### Minor Changes
+
+- fix vercel-related issues and restructure some of the code ([#46](https://github.com/Gigadrive/sdk/pull/46))
+
 ## 2.0.0
 
 ### Major Changes
