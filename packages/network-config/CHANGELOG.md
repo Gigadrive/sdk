@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 2.1.1
+
+### Patch Changes
+
+- fix functions being defined as assets ([#58](https://github.com/Gigadrive/sdk/pull/58))
+
 ## 2.1.0
 
 ### Minor Changes
