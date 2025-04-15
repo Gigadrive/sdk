@@ -38,7 +38,7 @@
     "@types/archiver": "^6.0.2",
     "@types/react": "^18.3.3",
     "esbuild": "^0.25.2",
-    "typescript": "^5.0.0"
+    "typescript": "^5.8.3"
   },
   "publishConfig": {
     "access": "public"
