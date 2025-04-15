@@ -83,6 +83,11 @@ export const parseConfigV4 = async (config: ConfigV4, projectFolder: string): Pr
           continue;
         }
 
+        // if it is a function, skip it
+        if (getFunctionSettings(`${config.assets}/${assetName}`, config) != null) {
+          continue;
+        }
+
         assets.push(`${config.assets}/${assetName}`);
       }
     }
