@@ -1,6 +1,7 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { parseVercelBuildOutputV3 } from './build-output-v3/parse';
+import { filterFunctionsFromAssets } from './filter-functions-from-assets';
 import type { NormalizedConfig } from './normalized-config';
 import { parseRawConfig } from './parse-raw-config';
 import { parseConfigV4 } from './v4/parse';
@@ -62,6 +63,8 @@ export const parseConfig = async (filePath: string, projectFolder: string): Prom
       'The current project config does not resolve to any functions, assets or routes and can not be deployed.'
     );
   }
+
+  parseResult = await filterFunctionsFromAssets(parseResult);
 
   return parseResult;
 };
