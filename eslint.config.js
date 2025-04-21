@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/node_modules/',
       '**/storybook-static/',
       '**/.rslib/',
+      '**/coverage/',
       'vitest.config.ts',
       'vitest.workspace.ts',
       'tsup.config.ts',
