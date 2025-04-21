@@ -72,6 +72,8 @@ jobs:
     timeout-minutes: 5
     needs:
       - release
+    permissions:
+      contents: read
     steps:
       - name: Check All
         run: echo OK
