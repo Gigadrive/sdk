@@ -21,7 +21,7 @@ export const getFilesForPattern = async (
 
   try {
     regex = new RegExp(pattern);
-  } catch (e) {
+  } catch {
     // ignored
   }
 
@@ -40,7 +40,7 @@ export const getFilesForPattern = async (
 
         try {
           return new RegExp(excludeFile).test(file);
-        } catch (e) {
+        } catch {
           return false;
         }
       })

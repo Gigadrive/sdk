@@ -9,7 +9,7 @@
  * @returns The modified target object with merged properties
  */
 export const deepMerge = <T extends object>(target: T, ...partials: Partial<T>[]): T => {
-  const isObject = (item: any): item is object => item !== null && typeof item === 'object';
+  const isObject = (item: unknown): item is object => item !== null && typeof item === 'object';
 
   if (!isObject(target)) {
     return target as T;
@@ -26,11 +26,11 @@ export const deepMerge = <T extends object>(target: T, ...partials: Partial<T>[]
       const sourceValue = partial[key as keyof T];
 
       if (Array.isArray(targetValue) && Array.isArray(sourceValue)) {
-        (targetValue as any[]).push(...(sourceValue as any[])); // Ensure targetValue is treated as any[]
+        (targetValue as unknown[]).push(...(sourceValue as unknown[]));
       } else if (isObject(targetValue) && isObject(sourceValue)) {
         deepMerge(targetValue, sourceValue);
       } else {
-        (target as any)[key] = sourceValue; // Use type assertion to allow assignment
+        (target as Record<string, unknown>)[key] = sourceValue;
       }
     });
   }

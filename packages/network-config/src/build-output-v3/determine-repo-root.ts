@@ -32,7 +32,7 @@ export const determineRepoRoot = (projectFolder: string, config: Partial<Normali
   const pathParts = filePaths.map((p) => p.split(path.sep));
   const firstPath = pathParts[0];
 
-  let commonParts: string[] = [];
+  const commonParts: string[] = [];
   for (let i = 0; i < firstPath.length; i++) {
     const part = firstPath[i];
     if (pathParts.every((parts) => parts[i] === part)) {

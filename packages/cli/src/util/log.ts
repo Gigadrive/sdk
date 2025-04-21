@@ -22,23 +22,26 @@ export const setVerbose = (value: boolean) => {
 
 export const isVerbose = () => verbose;
 
-export const log = (message: any) => {
+export const log = (message: string | number | boolean | object) => {
   consola.info(message);
 };
 
-export const error = (message: any) => {
+export const error = (message: string | number | boolean | object) => {
   consola.error(message);
 };
 
-export const success = (message: any) => {
+export const success = (message: string | number | boolean | object) => {
   consola.success(message);
 };
 
-export const warn = (message: any) => {
+export const warn = (message: string | number | boolean | object) => {
   consola.warn(message);
 };
 
-export const debug = (message?: any, ...optionalParams: any[]) => {
+export const debug = (
+  message?: string | number | boolean | object,
+  ...optionalParams: (string | number | boolean | object)[]
+) => {
   if (!verbose) {
     return;
   }
@@ -46,7 +49,7 @@ export const debug = (message?: any, ...optionalParams: any[]) => {
   consola.debug('[DEBUG]', message, ...optionalParams);
 };
 
-export const spinner = (message: any) => {
+export const spinner = (message: string | number | boolean | object) => {
   //render(<Spinner label={message} />);
   log(message);
 };

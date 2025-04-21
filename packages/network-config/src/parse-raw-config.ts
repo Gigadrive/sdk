@@ -1,18 +1,20 @@
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 import { parse as parseYaml } from 'yaml';
 
 export const parseRawConfig = async (
   filePath: string,
   { disableVersionCheck = false }: { disableVersionCheck?: boolean } = {}
-): Promise<any> => {
+): Promise<Record<string, unknown>> => {
   // check if the file exists
-  if (!fs.existsSync(filePath)) {
+  try {
+    await fs.access(filePath);
+  } catch {
     throw new Error(`Config file not found at ${filePath}`);
   }
 
   // read the file
-  const fileContents = fs.readFileSync(filePath, 'utf8');
+  const fileContents = await fs.readFile(filePath, 'utf8');
 
   if (fileContents.length === 0) {
     throw new Error(`Config file is empty at ${filePath}`);

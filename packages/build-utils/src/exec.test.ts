@@ -91,9 +91,10 @@ describe('exec', () => {
 
     // Use a command that produces output to ensure outputs array is populated
     await exec({
-      command: os.platform() === 'win32'
-        ? 'powershell -Command "Write-Host \'Starting\'; Start-Sleep -s 3; Write-Host \'Done\'"'
-        : 'echo "Starting"; sleep 3; echo "Done"',
+      command:
+        os.platform() === 'win32'
+          ? "powershell -Command \"Write-Host 'Starting'; Start-Sleep -s 3; Write-Host 'Done'\""
+          : 'echo "Starting"; sleep 3; echo "Done"',
       onOutput: (data) => outputs.push(data),
     });
 

@@ -47,15 +47,12 @@ export const parseVercelBuildOutputV3 = async (
   // TODO: Prerender Functions
 
   const functionData = await loadFunctions(config, parseResult, projectFolder);
-  const assetOverrides = await loadAssetOverrides(config, parseResult);
+  const assetOverrides = loadAssetOverrides(config, parseResult);
 
   return deepMerge(parseResult, functionData, assetOverrides);
 };
 
-const loadAssetOverrides = async (
-  config: Config,
-  parseResult: NormalizedConfig
-): Promise<Partial<NormalizedConfig>> => {
+const loadAssetOverrides = (config: Config, parseResult: NormalizedConfig): Partial<NormalizedConfig> => {
   return {
     assets: {
       overrides: {

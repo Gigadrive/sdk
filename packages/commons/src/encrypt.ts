@@ -74,7 +74,7 @@ export async function decrypt(encryptedText: string, key: string): Promise<strin
 
     // Convert back to string
     return new TextDecoder().decode(decryptedBytes);
-  } catch (error) {
+  } catch {
     throw new Error('Failed to decrypt: Invalid input or key');
   }
 }

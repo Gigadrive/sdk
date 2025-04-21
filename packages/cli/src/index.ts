@@ -4,6 +4,7 @@ import { debug } from './commands/debug';
 import { platform } from './commands/platform';
 import { error, log, setVerbose } from './util/log';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let { isTTY } = process.stdout;
 //process.stdin.resume();
 
@@ -20,7 +21,7 @@ const main = async () => {
 
   program.option('-v, --verbose', 'Enable verbose logging', false);
 
-  program.hook('preSubcommand', (thisCommand, actionCommand) => {
+  program.hook('preSubcommand', (thisCommand) => {
     setVerbose((thisCommand.opts().verbose as boolean) === true);
 
     if (thisCommand.opts().verbose) {
@@ -40,20 +41,19 @@ const main = async () => {
   try {
     await program.parseAsync(process.argv);
   } catch (err) {
-    error(err);
+    error(err as string | number | boolean | object);
     exitCode = 1;
   }
 
   return exitCode;
 };
 
-const handleRejection = async (err: any) => {
+const handleRejection = (err: unknown) => {
   if (err) {
     if (err instanceof Error) {
-      await handleUnexpected(err);
+      handleUnexpected(err);
     } else {
-      // eslint-disable-next-line no-console
-      console.error(`An unexpected rejection occurred\n  ${err}`);
+      console.error(`An unexpected rejection occurred\n  ${JSON.stringify(err)}`);
     }
   } else {
     console.error('An unexpected empty rejection occurred');
@@ -79,7 +79,7 @@ process.on('exit', () => {
 });
 
 main()
-  .then(async (exitCode) => {
+  .then((exitCode) => {
     process.exitCode = exitCode;
   })
   .catch(handleUnexpected);

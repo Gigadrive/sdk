@@ -50,6 +50,6 @@ export async function downloadFile(url: string, outputPath: string): Promise<voi
       });
     });
   } catch (error) {
-    throw new Error(`Failed to download file: ${error}`);
+    throw new Error(`Failed to download file: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

@@ -1,6 +1,6 @@
 import arg from 'arg';
 
-type Handler = (value: string) => any;
+type Handler = (value: string) => unknown;
 
 interface Spec {
   [key: string]: string | Handler | [Handler];
