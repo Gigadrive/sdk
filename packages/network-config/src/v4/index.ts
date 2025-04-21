@@ -5,9 +5,10 @@ import type {
   NormalizedConfigServiceType,
   UpstashAWSRegion,
 } from '../normalized-config';
+import { Config } from '../parse-config';
 import type { Runtime } from '../runtime';
 
-export interface ConfigV4 {
+export interface ConfigV4 extends Config {
   version: 4;
 
   /**
@@ -111,6 +112,7 @@ export interface ConfigV4 {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface ConfigV4Service {}
 
 export interface ConfigV4ServiceRedis extends ConfigV4Service {

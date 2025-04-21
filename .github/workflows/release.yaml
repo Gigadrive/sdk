@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  TURBO_REMOTE_ONLY: "true"
+  TURBO_REMOTE_ONLY: 'true'
   TURBO_TEAM: gigadrive
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
@@ -54,7 +54,7 @@ jobs:
           publish: pnpm ci:publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
+          NPM_CONFIG_PROVENANCE: 'true'
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Set latest Release to `gigadrive`

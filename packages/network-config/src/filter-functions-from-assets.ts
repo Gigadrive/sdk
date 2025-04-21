@@ -6,7 +6,7 @@ import { NormalizedConfig } from './normalized-config';
  * @param config The normalized config to filter.
  * @returns A promise that resolves to the filtered config.
  */
-export const filterFunctionsFromAssets = async (config: NormalizedConfig): Promise<NormalizedConfig> => {
+export const filterFunctionsFromAssets = (config: NormalizedConfig): NormalizedConfig => {
   return {
     ...config,
     assets: {

@@ -77,63 +77,67 @@ const handleDeployment = async (deploymentId: string, config: NormalizedConfig) 
   }
 
   // Start status polling
-  const statusInterval = setInterval(async () => {
-    try {
-      debug(`Fetching deployment status for ${deploymentId}`);
-      const newStatus = await getDeploymentStatus(deploymentId);
-      debug(`Current status: ${status}, New status: ${newStatus}`);
+  const statusInterval = setInterval(() => {
+    void (async () => {
+      try {
+        debug(`Fetching deployment status for ${deploymentId}`);
+        const newStatus = await getDeploymentStatus(deploymentId);
+        debug(`Current status: ${status}, New status: ${newStatus}`);
 
-      if (newStatus === 'ACTIVE' || newStatus === 'FAILED') {
-        debug(`Final status reached: ${newStatus}, clearing interval`);
-        clearInterval(statusInterval);
-        clearInterval(logsInterval);
+        if (newStatus === 'ACTIVE' || newStatus === 'FAILED') {
+          debug(`Final status reached: ${newStatus}, clearing interval`);
+          clearInterval(statusInterval);
+          clearInterval(logsInterval);
 
-        if (newStatus === 'ACTIVE') {
-          success(`Deployed to https://${deploymentId}.gigadrivedev.com`);
-        } else {
-          error('The deployment failed. Please check the logs for more information.');
+          if (newStatus === 'ACTIVE') {
+            success(`Deployed to https://${deploymentId}.gigadrivedev.com`);
+          } else {
+            error('The deployment failed. Please check the logs for more information.');
+          }
+
+          return;
         }
 
-        return;
+        if (newStatus !== status) {
+          debug(`Updating status from ${status} to ${newStatus}`);
+          status = newStatus;
+          spinner(`Status: ${status.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}`);
+        }
+      } catch (err) {
+        debug(`Error fetching status: ${(err as Error).message}`);
       }
-
-      if (newStatus !== status) {
-        debug(`Updating status from ${status} to ${newStatus}`);
-        status = newStatus;
-        spinner(`Status: ${status.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}`);
-      }
-    } catch (err) {
-      debug(`Error fetching status: ${(err as Error).message}`);
-    }
+    })();
   }, 1000);
 
   // Start logs polling
-  const logsInterval = setInterval(async () => {
-    try {
-      debug(`Fetching logs for ${deploymentId}, current log count: ${logs.length}`);
-      const newLogs = await getLogs(deploymentId, {
-        offset: logs.length,
-        limit: 100,
-        'createdAt[gt]': logs[logs.length - 1]?.createdAt,
-      });
+  const logsInterval = setInterval(() => {
+    void (async () => {
+      try {
+        debug(`Fetching logs for ${deploymentId}, current log count: ${logs.length}`);
+        const newLogs = await getLogs(deploymentId, {
+          offset: logs.length,
+          limit: 100,
+          'createdAt[gt]': logs[logs.length - 1]?.createdAt,
+        });
 
-      debug(`Fetched ${newLogs.items.length} new logs`);
+        debug(`Fetched ${newLogs.items.length} new logs`);
 
-      // Display new logs
-      for (const logEntry of newLogs.items) {
-        logs.push(logEntry);
+        // Display new logs
+        for (const logEntry of newLogs.items) {
+          logs.push(logEntry);
 
-        if (logEntry.type === 'ERROR') {
-          error(logEntry.message);
-        } else if (logEntry.type === 'WARN') {
-          warn(logEntry.message);
-        } else {
-          log(logEntry.message);
+          if (logEntry.type === 'ERROR') {
+            error(logEntry.message);
+          } else if (logEntry.type === 'WARN') {
+            warn(logEntry.message);
+          } else {
+            log(logEntry.message);
+          }
         }
+      } catch (err) {
+        debug(`Error fetching logs: ${(err as Error).message}`);
       }
-    } catch (err) {
-      debug(`Error fetching logs: ${(err as Error).message}`);
-    }
+    })();
   }, 1000);
 
   // Initial status display
@@ -208,39 +212,41 @@ const uploadArchive = async (deploymentId: string, logs: DeploymentLog[], config
     const presignedUrl = await getPresignedUrl(deploymentId, uploadId, index);
     debug('Presigned URL for part', index, presignedUrl);
 
-    const promise = new Promise<Response>(async (resolve, reject) => {
-      try {
-        debug(`Reading chunk ${index} data`);
-        const readStream = fs.createReadStream(archivePath, {
-          start,
-          end: index < numChunks ? end - 1 : undefined,
-        });
+    const promise = new Promise<Response>((resolve, reject) => {
+      void (async () => {
+        try {
+          debug(`Reading chunk ${index} data`);
+          const readStream = fs.createReadStream(archivePath, {
+            start,
+            end: index < numChunks ? end - 1 : undefined,
+          });
 
-        const chunks: Buffer[] = [];
-        readStream.on('data', (chunk: Buffer | string) => {
-          chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-        });
+          const chunks: Buffer[] = [];
+          readStream.on('data', (chunk: Buffer | string) => {
+            chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+          });
 
-        await new Promise<void>((resolveRead) => {
-          readStream.on('end', () => resolveRead());
-          readStream.on('error', reject);
-        });
+          await new Promise<void>((resolveRead) => {
+            readStream.on('end', () => resolveRead());
+            readStream.on('error', reject);
+          });
 
-        const buffer = Buffer.concat(chunks);
+          const buffer = Buffer.concat(chunks);
 
-        debug(`Uploading chunk ${index} to presigned URL (${buffer.length} bytes)`);
-        const response = await fetch(presignedUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/zip',
-            'Content-Length': String(buffer.length),
-          },
-          body: buffer,
-        });
-        resolve(response);
-      } catch (err) {
-        reject(err);
-      }
+          debug(`Uploading chunk ${index} to presigned URL (${buffer.length} bytes)`);
+          const response = await fetch(presignedUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/zip',
+              'Content-Length': String(buffer.length),
+            },
+            body: buffer,
+          });
+          resolve(response);
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      })();
     });
 
     promises.push(promise);
@@ -306,7 +312,7 @@ const createDeployment = async ({ applicationId }: { applicationId: string }) =>
   const deployment = (await res.json()) as { id: string };
   debug(`Deployment created with ID: ${deployment.id}`);
 
-  return deployment.id as string;
+  return deployment.id;
 };
 
 const startMultipartUpload = async (deploymentId: string) => {
@@ -327,7 +333,7 @@ const startMultipartUpload = async (deploymentId: string) => {
   const upload = (await res.json()) as { uploadId: string };
   debug(`Multipart upload started with ID: ${upload.uploadId}`);
 
-  return upload.uploadId as string;
+  return upload.uploadId;
 };
 
 const getPresignedUrl = async (deploymentId: string, uploadId: string, partNumber: number) => {
@@ -351,7 +357,7 @@ const getPresignedUrl = async (deploymentId: string, uploadId: string, partNumbe
   const upload = (await res.json()) as { url: string };
   debug(`Got presigned URL for part ${partNumber}`);
 
-  return upload.url as string;
+  return upload.url;
 };
 
 const completeUpload = async (
@@ -399,7 +405,7 @@ const getDeploymentStatus = async (deploymentId: string) => {
   const deployment = (await res.json()) as { status: DeploymentStatus };
   debug(`Deployment status: ${deployment.status}`);
 
-  return deployment.status as DeploymentStatus;
+  return deployment.status;
 };
 
 const getLogs = async (
@@ -410,7 +416,7 @@ const getLogs = async (
     'createdAt[gt]'?: string;
   }
 ) => {
-  debug(`Getting logs for deployment: ${deploymentId}, options:`, options);
+  debug(`Getting logs for deployment: ${deploymentId}, options:`, options ?? 'No options');
   const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/logs${objectToQueryString(options)}`, {
     method: 'GET',
     headers: {

@@ -1,112 +1,117 @@
 import { getFilesForPattern } from '@gigadrive/build-utils';
 import archiver from 'archiver';
 import fs from 'fs';
+import fsPromises from 'fs/promises';
 import ignore, { type Ignore } from 'ignore';
 import path from 'path';
 
 const ignoreFileNames = [/*'.gitignore', */ '.gigadriveignore', '.vercelignore', '.dockerignore', '.nowignore'];
 
 // Function to read and parse the ignore file
-function readIgnoreFile(ignorePath: string) {
-  if (fs.existsSync(ignorePath)) {
-    return fs
-      .readFileSync(ignorePath, 'utf8')
-      .split('\n')
-      .filter((line) => line.trim() !== '');
+async function readIgnoreFile(ignorePath: string) {
+  try {
+    await fsPromises.access(ignorePath);
+    const content = await fsPromises.readFile(ignorePath, 'utf8');
+    return content.split('\n').filter((line: string) => line.trim() !== '');
+  } catch {
+    return [];
   }
-  return [];
 }
 
 // Collect ignore patterns from the given directory (including the root)
-function collectIgnorePatterns(dir: string, baseDir: string, ignoreRules: Ignore) {
-  const items = fs.readdirSync(dir);
+async function collectIgnorePatterns(dir: string, baseDir: string, ignoreRules: Ignore) {
+  const items = await fsPromises.readdir(dir);
 
-  items.forEach((item) => {
+  for (const item of items) {
     const fullPath = path.join(dir, item);
     const relativePath = path.relative(baseDir, fullPath);
-    const stat = fs.lstatSync(fullPath);
+    const stat = await fsPromises.lstat(fullPath);
 
     if (stat.isDirectory()) {
       // If the directory itself is ignored, skip it unless it has a negation rule
       if (ignoreRules.ignores(`${relativePath}/`)) {
-        return;
+        continue;
       }
 
       // Check if the directory contains an ignore file
-      ignoreFileNames.forEach((ignoreFileName) => {
+      for (const ignoreFileName of ignoreFileNames) {
         const ignoreFilePath = path.join(fullPath, ignoreFileName);
-        if (fs.existsSync(ignoreFilePath)) {
-          const patterns = readIgnoreFile(ignoreFilePath).map((pattern) => {
+        try {
+          await fsPromises.access(ignoreFilePath);
+          const patterns = (await readIgnoreFile(ignoreFilePath)).map((pattern: string) => {
             return pattern.startsWith('!')
               ? `!${path.join(relativePath, pattern.slice(1))}`
               : path.join(relativePath, pattern);
           });
           ignoreRules.add(patterns);
+        } catch {
+          // File doesn't exist, skip
         }
-      });
+      }
 
       // Recurse into subdirectory
-      collectIgnorePatterns(fullPath, baseDir, ignoreRules);
+      await collectIgnorePatterns(fullPath, baseDir, ignoreRules);
     }
-  });
+  }
 }
 
 // Function to initialize ignore rules including root-level ignore files
-function initializeIgnoreRules(baseDir: string): Ignore {
+async function initializeIgnoreRules(baseDir: string): Promise<Ignore> {
   const ignoreRules = ignore();
 
   // Add default ignore rules
   ignoreRules.add(['.git/', '**/.DS_Store', '**/Thumbs.db']);
 
   // Process root-level ignore files
-  ignoreFileNames.forEach((ignoreFileName) => {
+  for (const ignoreFileName of ignoreFileNames) {
     const ignoreFilePath = path.join(baseDir, ignoreFileName);
-    if (fs.existsSync(ignoreFilePath)) {
-      const patterns = readIgnoreFile(ignoreFilePath).map((pattern) => {
+    try {
+      await fsPromises.access(ignoreFilePath);
+      const patterns = (await readIgnoreFile(ignoreFilePath)).map((pattern: string) => {
         return pattern.startsWith('!') ? `!${pattern.slice(1)}` : pattern;
       });
       ignoreRules.add(patterns);
+    } catch {
+      // File doesn't exist, skip
     }
-  });
+  }
 
   // Recursively process all subdirectories to gather additional ignore patterns
-  collectIgnorePatterns(baseDir, baseDir, ignoreRules);
+  await collectIgnorePatterns(baseDir, baseDir, ignoreRules);
 
   return ignoreRules;
 }
 
 // Function to get all files and directories, excluding those in the ignore list
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function getFilesToInclude(dir: string, ignoreRules: Ignore, whitelist?: string[]) {
   const filesToInclude: string[] = [];
 
-  function walkSync(currentDir: string) {
-    const items = fs.readdirSync(currentDir);
+  async function walkDir(currentDir: string) {
+    const items = await fsPromises.readdir(currentDir);
 
-    items.forEach((item) => {
+    for (const item of items) {
       const fullPath = path.join(currentDir, item);
       const relativePath = path.relative(dir, fullPath);
-      const stat = fs.lstatSync(fullPath);
+      const stat = await fsPromises.lstat(fullPath);
 
       if (stat.isDirectory()) {
         if (ignoreRules.ignores(`${relativePath}/`)) {
-          //console.debug(`Ignoring directory: ${relativePath}/`);
-          return;
+          continue;
         }
-        walkSync(fullPath);
+        await walkDir(fullPath);
       } else {
         if (!ignoreRules.ignores(relativePath)) {
           filesToInclude.push(fullPath);
         } else if (ignoreRules.ignores(relativePath) && ignoreRules.test(relativePath).unignored) {
           // Handle whitelisted files that were previously ignored
           filesToInclude.push(fullPath);
-        } else {
-          //console.debug(`Ignoring file: ${relativePath}`);
         }
       }
-    });
+    }
   }
 
-  walkSync(dir);
+  await walkDir(dir);
   return filesToInclude;
 }
 
@@ -120,7 +125,7 @@ export async function createZipArchive(
     useManagedIgnore?: boolean;
   } = {}
 ) {
-  const ignoreRules = options.useIgnoreFiles !== false ? initializeIgnoreRules(inputDir) : ignore();
+  const ignoreRules = options.useIgnoreFiles !== false ? await initializeIgnoreRules(inputDir) : ignore();
 
   // Get list of files to include in the zip
   const filesToInclude = options.whitelist
@@ -138,10 +143,10 @@ export async function createZipArchive(
     archive.pipe(output);
 
     // Add files to the archive
-    filesToInclude.forEach((file) => {
+    for (const file of filesToInclude.flat()) {
       archive.file(file, { name: path.relative(inputDir, file) });
-    });
+    }
 
-    archive.finalize();
+    void archive.finalize();
   });
 }

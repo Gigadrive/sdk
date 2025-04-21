@@ -40,7 +40,7 @@ export const getPackageManager = async ({ cwd }: { cwd: string }): Promise<Packa
   try {
     await exec({ command: 'bun --version', cwd });
     return 'bun';
-  } catch (e) {
+  } catch {
     // If bun is not installed, return npm
     return 'npm';
   }

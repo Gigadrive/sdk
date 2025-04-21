@@ -22,7 +22,7 @@ routes:
   - source: /*
     destination: pages/$1.tsx?
   - source: /docs/*
-    destination: "https://docs.example.com/$1"
+    destination: 'https://docs.example.com/$1'
   - source: /*
     destination: src/index.ts
 services:

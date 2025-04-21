@@ -7,9 +7,15 @@ import { parseRawConfig } from './parse-raw-config';
 import { parseConfigV4 } from './v4/parse';
 import schemaV4 from './v4/schema.json';
 
+export interface Config {
+  version: number;
+  env?: Record<string, string>;
+  // Add other properties as needed
+}
+
 export const parseConfig = async (filePath: string, projectFolder: string): Promise<NormalizedConfig> => {
   const parsed = await parseRawConfig(filePath);
-  const version = parsed.version;
+  const version = parsed.version as number;
 
   const schemaMap: Record<number, object> = {
     /*1: schemaV1,
@@ -38,15 +44,22 @@ export const parseConfig = async (filePath: string, projectFolder: string): Prom
     throw new Error(`Config file at ${relativePath} is invalid: ${ajv.errorsText(validate.errors)}`);
   }
 
-  // @ts-ignore
-  const parserMap: Record<number, (config, projectFolder) => Promise<NormalizedConfig>> = {
+  const parserMap: Record<
+    number,
+    (config: Record<string, unknown>, projectFolder: string) => Promise<NormalizedConfig>
+  > = {
     /*1: parseConfigV1,
     2: parseConfigV2,
     3: parseConfigV3,*/
-    4: parseConfigV4,
+    4: parseConfigV4 as unknown as (
+      config: Record<string, unknown>,
+      projectFolder: string
+    ) => Promise<NormalizedConfig>,
   };
 
-  let parseResult: NormalizedConfig = await parserMap[version](parsed, projectFolder);
+  let parseResult: NormalizedConfig = await (
+    parserMap[version] as (config: Record<string, unknown>, projectFolder: string) => Promise<NormalizedConfig>
+  )(parsed, projectFolder);
 
   // TODO: apply transformers
   parseResult = await parseVercelBuildOutputV3(parseResult, projectFolder);
@@ -64,7 +77,7 @@ export const parseConfig = async (filePath: string, projectFolder: string): Prom
     );
   }
 
-  parseResult = await filterFunctionsFromAssets(parseResult);
+  parseResult = filterFunctionsFromAssets(parseResult);
 
   return parseResult;
 };

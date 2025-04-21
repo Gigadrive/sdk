@@ -17,7 +17,7 @@
  * // Returns ""
  * objectToQueryString(undefined);
  */
-export const objectToQueryString = (obj: undefined | Record<string, any | unknown | undefined>) => {
+export const objectToQueryString = (obj: undefined | Record<string, string | number | boolean | null | undefined>) => {
   if (!obj) {
     return '';
   }
@@ -28,7 +28,7 @@ export const objectToQueryString = (obj: undefined | Record<string, any | unknow
         return '';
       }
 
-      return `${encodeURIComponent(key)}=${encodeURIComponent(obj[key])}`;
+      return `${encodeURIComponent(key)}=${encodeURIComponent(String(obj[key]))}`;
     })
     .filter(Boolean);
 

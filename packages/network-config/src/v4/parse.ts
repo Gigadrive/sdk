@@ -71,7 +71,7 @@ export const parseConfigV4 = async (config: ConfigV4, projectFolder: string): Pr
         recursive: true,
       })) {
         // if file is a directory, skip it
-        if (fs.statSync(`${projectFolder}/${config.assets}/${asset}`).isDirectory()) {
+        if (fs.statSync(`${projectFolder}/${config.assets}/${asset.toString()}`).isDirectory()) {
           continue;
         }
 

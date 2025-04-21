@@ -61,7 +61,7 @@ export async function all<T>(promises: Iterable<Promise<T> | T>, concurrencyLimi
         })
         .catch((error) => {
           // If any promise rejects, reject the main promise
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
         });
     }
   });
