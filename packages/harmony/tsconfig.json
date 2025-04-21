@@ -1,0 +1,30 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "target": "ES2022",
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "experimentalDecorators": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "allowSyntheticDefaultImports": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "pretty": true,
+    "strictNullChecks": true,
+    "lib": ["ES2022", "ESNext.disposable", "dom"],
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "resolveJsonModule": true,
+    "noImplicitOverride": true,
+    "paths": {
+      "@/*": ["src/*"],
+      "stories/*": ["stories/*"]
+    }
+  },
+  "include": ["src"]
+}
