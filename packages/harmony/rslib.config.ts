@@ -4,19 +4,17 @@ import { defineConfig } from '@rslib/core';
 
 export default defineConfig({
   source: {
-    entry: {
-      index: './src/index.ts',
-    },
+    include: ['src/**/*.ts', 'src/**/*.tsx', 'src/**/*.scss'],
     tsconfigPath: './tsconfig.json',
   },
   lib: [
     {
-      bundle: true,
+      bundle: false,
       dts: true,
       format: 'esm',
     },
     {
-      bundle: true,
+      bundle: false,
       dts: true,
       format: 'cjs',
     },
