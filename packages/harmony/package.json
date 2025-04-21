@@ -31,7 +31,12 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./style.css": "./dist/index.css"
+    "./style.css": "./dist/index.css",
+    "./*": {
+      "types": "./dist/src/components/ui/*.d.ts",
+      "import": "./dist/components/ui/*.js",
+      "require": "./dist/components/ui/*.cjs"
+    }
   },
   "types": "dist/src/index.d.ts",
   "files": [
@@ -39,6 +44,7 @@
   ],
   "scripts": {
     "build": "rslib build",
+    "clean": "rm -rf dist",
     "storybook": "storybook dev -p 6006 --no-open",
     "storybook:build": "storybook build",
     "storybook:build-docs": "storybook build --docs"

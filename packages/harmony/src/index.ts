@@ -1,8 +1,7 @@
 import '@fontsource/manrope';
 import 'inter-ui/inter.css';
-import './main.css';
+import './index.css';
 
-export * from './components';
 export * from './hooks';
 export * from './lib';
 
