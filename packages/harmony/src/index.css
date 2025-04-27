@@ -1,4 +1,4 @@
-/* 
+/*
  * Resist Sans may require a commercial license and is not included in the code license of this repository.
  * See https://groteskly.xyz/resist-family for purchase options.
  */
@@ -113,7 +113,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overscroll-none;
   }
 
   html,
