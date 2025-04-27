@@ -148,13 +148,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     >
       <SidebarHeader>
         <SidebarMenu>
-          <SidebarMenuItem
-            icon={<Command className="h-4 w-4" />}
-            title="Acme Inc"
-            subtitle="Enterprise"
-            href="#"
-            tooltip="Acme Inc"
-          />
+          <SidebarMenuItem icon={<Command className="h-4 w-4" />} title="Acme Inc" href="#" tooltip="Acme Inc" />
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
