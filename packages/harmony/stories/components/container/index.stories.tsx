@@ -6,7 +6,6 @@ const meta = {
   title: 'Components/Container',
   component: Container,
   parameters: {
-    layout: 'centered',
     docs: {
       description: {
         component: `
@@ -24,7 +23,17 @@ The Container component provides a responsive wrapper for content with consisten
 
 ## Props
 - \`children\`: ReactNode - The content to be wrapped
+- \`size\`: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full' - Size preset for max-width
+- \`padded\`: boolean - Whether to apply default padding
 - \`className\`: string - Additional CSS classes to apply
+
+## Size Presets
+- sm: max-w-screen-sm
+- md: max-w-screen-md
+- lg: max-w-screen-lg
+- xl: max-w-screen-xl
+- 2xl: max-w-screen-2xl
+- full: max-w-full
 
 ## Accessibility
 - Semantic HTML structure
@@ -71,6 +80,17 @@ The Container component provides a responsive wrapper for content with consisten
     children: {
       description: 'The content to be wrapped',
     },
+    size: {
+      description: 'Size preset for max-width',
+      options: ['sm', 'md', 'lg', 'xl', '2xl', 'full'],
+      control: { type: 'select' },
+      defaultValue: 'xl',
+    },
+    padded: {
+      description: 'Whether to apply default padding',
+      control: { type: 'boolean' },
+      defaultValue: true,
+    },
     className: {
       description: 'Additional CSS classes to apply',
     },
@@ -101,9 +121,12 @@ export const Default: Story = {
 
 export const WithCustomWidth: Story = {
   render: () => (
-    <Container className="max-w-3xl bg-gray-100 dark:bg-gray-800 p-4 border border-dashed border-gray-300 dark:border-gray-600">
+    <Container
+      size="md"
+      className="bg-gray-100 dark:bg-gray-800 p-4 border border-dashed border-gray-300 dark:border-gray-600"
+    >
       <div className="p-4 bg-white dark:bg-gray-700 rounded shadow">
-        <p className="dark:text-gray-100">Container with custom max-width</p>
+        <p className="dark:text-gray-100">Container with medium max-width</p>
       </div>
     </Container>
   ),
@@ -111,7 +134,7 @@ export const WithCustomWidth: Story = {
     docs: {
       description: {
         story:
-          'A container with a custom max-width. Shows how to override the default max-width for different layout needs.',
+          'A container with a medium max-width preset. Shows how to use different size presets for different layout needs.',
       },
     },
   },
@@ -119,7 +142,10 @@ export const WithCustomWidth: Story = {
 
 export const WithCustomPadding: Story = {
   render: () => (
-    <Container className="bg-gray-100 dark:bg-gray-800 px-8 py-6 border border-dashed border-gray-300 dark:border-gray-600">
+    <Container
+      padded={false}
+      className="bg-gray-100 dark:bg-gray-800 px-8 py-6 border border-dashed border-gray-300 dark:border-gray-600"
+    >
       <div className="p-4 bg-white dark:bg-gray-700 rounded shadow">
         <p className="dark:text-gray-100">Container with custom padding</p>
       </div>
@@ -128,8 +154,7 @@ export const WithCustomPadding: Story = {
   parameters: {
     docs: {
       description: {
-        story:
-          'A container with custom padding. Demonstrates how to adjust the padding for different spacing requirements.',
+        story: 'A container with custom padding. Demonstrates how to disable default padding and apply custom padding.',
       },
     },
   },
@@ -162,13 +187,19 @@ export const WithContent: Story = {
 
 export const NestedContainers: Story = {
   render: () => (
-    <Container className="bg-gray-100 dark:bg-gray-800 p-4 border border-dashed border-gray-300 dark:border-gray-600">
+    <Container
+      size="2xl"
+      className="bg-gray-100 dark:bg-gray-800 p-4 border border-dashed border-gray-300 dark:border-gray-600"
+    >
       <div className="p-4 bg-white dark:bg-gray-700 rounded shadow mb-4">
-        <p className="dark:text-gray-100">Outer container</p>
+        <p className="dark:text-gray-100">Outer container (2xl)</p>
       </div>
-      <Container className="bg-blue-50 dark:bg-blue-900 border border-dashed border-blue-300 dark:border-blue-700">
+      <Container
+        size="lg"
+        className="bg-blue-50 dark:bg-blue-900 border border-dashed border-blue-300 dark:border-blue-700"
+      >
         <div className="p-4 bg-white dark:bg-gray-700 rounded shadow">
-          <p className="dark:text-gray-100">Nested container</p>
+          <p className="dark:text-gray-100">Nested container (lg)</p>
         </div>
       </Container>
     </Container>
@@ -177,7 +208,7 @@ export const NestedContainers: Story = {
     docs: {
       description: {
         story:
-          'Nested containers with different styles. Demonstrates how to nest containers and apply different styles to each level.',
+          'Nested containers with different sizes. Demonstrates how to nest containers and apply different size presets to each level.',
       },
     },
   },
