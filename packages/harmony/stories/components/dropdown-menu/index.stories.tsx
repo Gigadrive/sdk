@@ -122,15 +122,7 @@ A dropdown menu component built on top of Radix UI's Dropdown Menu primitive, pr
     },
     onOpenChange: {
       description: 'Callback when the open state changes',
-      control: 'function',
-    },
-    inset: {
-      description: 'Whether to inset the item',
-      control: 'boolean',
-    },
-    className: {
-      description: 'Additional CSS classes to apply to the dropdown menu',
-      control: 'text',
+      control: 'select',
     },
   },
 };
