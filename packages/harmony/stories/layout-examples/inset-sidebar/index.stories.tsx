@@ -464,7 +464,10 @@ A floating sidebar layout with a toolbar containing a sidebar trigger button. Th
         <Sidebar variant="floating" collapsible="offcanvas" hoverExpand {...props}>
           <SidebarHeader>
             <SidebarMenu>
-              <SidebarMenuItem icon={<Command className="h-4 w-4" />} title="Acme Inc" href="#" />
+              <div className="flex items-center justify-between">
+                <SidebarMenuItem icon={<Command className="h-4 w-4" />} title="Acme Inc" href="#" />
+                <SidebarMenuItem icon={<SidebarTrigger asChild />} />
+              </div>
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent>

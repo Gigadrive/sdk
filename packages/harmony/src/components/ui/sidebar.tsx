@@ -281,29 +281,37 @@ const Sidebar = React.forwardRef<
 Sidebar.displayName = 'Sidebar';
 
 // Toggle button for the sidebar
-const SidebarTrigger = React.forwardRef<React.ElementRef<typeof Button>, React.ComponentProps<typeof Button>>(
-  ({ className, onClick, ...props }, ref) => {
-    const { toggleSidebar } = useSidebar();
+const SidebarTrigger = React.forwardRef<
+  React.ElementRef<typeof Button>,
+  React.ComponentProps<typeof Button> & { asChild?: boolean }
+>(({ className, onClick, asChild, ...props }, ref) => {
+  const { toggleSidebar } = useSidebar();
 
-    return (
-      <Button
-        ref={ref}
-        data-sidebar="trigger"
-        variant="ghost"
-        size="icon"
-        className={cn('h-7 w-7', className)}
-        onClick={(event) => {
-          onClick?.(event);
-          toggleSidebar();
-        }}
-        {...props}
-      >
-        <PanelLeft />
-        <span className="sr-only">Toggle Sidebar</span>
-      </Button>
-    );
-  }
-);
+  const Comp = asChild ? 'span' : Button;
+  const buttonProps = asChild
+    ? {}
+    : {
+        variant: 'ghost' as const,
+        size: 'icon' as const,
+      };
+
+  return (
+    <Comp
+      ref={ref}
+      data-sidebar="trigger"
+      onClick={(event) => {
+        onClick?.(event);
+        toggleSidebar();
+      }}
+      className={!asChild ? cn('h-4 w-4', className) : undefined}
+      {...buttonProps}
+      {...props}
+    >
+      <PanelLeft className={asChild ? cn('h-4 w-4', className) : undefined} />
+      <span className="sr-only">Toggle Sidebar</span>
+    </Comp>
+  );
+});
 SidebarTrigger.displayName = 'SidebarTrigger';
 
 // Main content area that adjusts based on sidebar state
