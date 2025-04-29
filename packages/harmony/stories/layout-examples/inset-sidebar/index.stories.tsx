@@ -1,6 +1,3 @@
-import { BookOpen, Bot, Command, Frame, LifeBuoy, Map, PieChart, Send, Settings2, SquareTerminal } from 'lucide-react';
-import * as React from 'react';
-
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Breadcrumb,
@@ -10,6 +7,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Container } from '@/components/ui/container';
 import { Separator } from '@/components/ui/separator';
 import {
   Sidebar,
@@ -23,6 +21,9 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import type { Meta, StoryObj } from '@storybook/react';
+import { BookOpen, Bot, Command, Frame, LifeBuoy, Map, PieChart, Send, Settings2, SquareTerminal } from 'lucide-react';
+import * as React from 'react';
+import { Toolbar, ToolbarButton } from '../../../src/components/ui/toolbar';
 
 const data = {
   user: {
@@ -237,7 +238,7 @@ A complete implementation of the inset sidebar layout showcasing:
         <Sidebar variant="inset" {...props}>
           <SidebarHeader>
             <SidebarMenu>
-              <SidebarMenuItem icon={<Command className="h-4 w-4" />} title="Acme Inc" subtitle="Enterprise" href="#" />
+              <SidebarMenuItem icon={<Command className="h-4 w-4" />} title="Acme Inc" href="#" />
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent>
@@ -291,7 +292,6 @@ A complete implementation of the inset sidebar layout showcasing:
                   </Avatar>
                 }
                 title={data.user.name}
-                subtitle={data.user.email}
                 tooltip={data.user.name}
               />
             </SidebarMenu>
@@ -342,7 +342,7 @@ export const Floating: Story = {
         <Sidebar variant="floating" collapsible="icon" hoverExpand {...props}>
           <SidebarHeader>
             <SidebarMenu>
-              <SidebarMenuItem icon={<Command className="h-4 w-4" />} title="Acme Inc" subtitle="Enterprise" href="#" />
+              <SidebarMenuItem icon={<Command className="h-4 w-4" />} title="Acme Inc" href="#" />
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent>
@@ -396,7 +396,6 @@ export const Floating: Story = {
                   </Avatar>
                 }
                 title={data.user.name}
-                subtitle={data.user.email}
                 tooltip={data.user.name}
               />
             </SidebarMenu>
@@ -430,9 +429,9 @@ export const Floating: Story = {
                 <div className="rounded-lg border bg-card p-6">
                   <h2 className="text-lg font-medium">Usage</h2>
                   <pre className="mt-2 rounded bg-muted p-2 text-sm">
-                    {`<Sidebar 
-  variant="floating" 
-  collapsible="icon" 
+                    {`<Sidebar
+  variant="floating"
+  collapsible="icon"
   hoverExpand
 >
   <SidebarHeader>...</SidebarHeader>
@@ -445,6 +444,130 @@ export const Floating: Story = {
             </div>
           </main>
         </div>
+      </SidebarProvider>
+    );
+  },
+};
+
+export const WithToolbar: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story: `
+A floating sidebar layout with a toolbar containing a sidebar trigger button. The toolbar provides quick access to common actions while the sidebar remains collapsible.`,
+      },
+    },
+  },
+  render: () => {
+    const AppSidebar = ({ ...props }: React.ComponentProps<typeof Sidebar>) => {
+      return (
+        <Sidebar variant="floating" collapsible="offcanvas" hoverExpand {...props}>
+          <SidebarHeader>
+            <SidebarMenu>
+              <div className="flex items-center justify-between">
+                <SidebarMenuItem icon={<Command className="h-4 w-4" />} title="Acme Inc" href="#" />
+                <SidebarMenuItem icon={<SidebarTrigger asChild />} />
+              </div>
+            </SidebarMenu>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarMenu label="Platform">
+              {data.navMain.map((item) => (
+                <SidebarMenuItem
+                  key={item.title}
+                  icon={<item.icon className="h-4 w-4" />}
+                  title={item.title}
+                  href={item.url}
+                  isActive={item.isActive}
+                  defaultOpen={item.isActive}
+                  tooltip={item.title}
+                >
+                  {item.items?.map((subItem) => (
+                    <SidebarMenuItem key={subItem.title} title={subItem.title} href={subItem.url} />
+                  ))}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+            <SidebarMenu label="Projects">
+              {data.projects.map((project) => (
+                <SidebarMenuItem
+                  key={project.name}
+                  icon={<project.icon className="h-4 w-4" />}
+                  title={project.name}
+                  href={project.url}
+                  tooltip={project.name}
+                />
+              ))}
+            </SidebarMenu>
+            <SidebarMenu label="Support">
+              {data.navSecondary.map((item) => (
+                <SidebarMenuItem
+                  key={item.title}
+                  icon={<item.icon className="h-4 w-4" />}
+                  title={item.title}
+                  href={item.url}
+                  tooltip={item.title}
+                />
+              ))}
+            </SidebarMenu>
+          </SidebarContent>
+          <SidebarFooter>
+            <SidebarMenu>
+              <SidebarMenuItem
+                icon={
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={data.user.avatar} alt={data.user.name} />
+                    <AvatarFallback>{data.user.name[0]}</AvatarFallback>
+                  </Avatar>
+                }
+                title={data.user.name}
+                tooltip={data.user.name}
+              />
+            </SidebarMenu>
+          </SidebarFooter>
+        </Sidebar>
+      );
+    };
+
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <main className="flex-1 p-8">
+          <Container>
+            <h1 className="text-3xl font-bold">Floating Sidebar with Toolbar</h1>
+            <p className="mt-2 text-muted-foreground">
+              This example demonstrates a floating sidebar with a toolbar containing quick actions. The toolbar includes
+              a sidebar trigger and common actions.
+            </p>
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border bg-card p-6">
+                <h2 className="text-lg font-medium">Features</h2>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground">
+                  <li>Floating toolbar with sidebar integration</li>
+                  <li>Quick access to common actions</li>
+                  <li>Responsive design</li>
+                  <li>Collapsible sidebar with hover expand</li>
+                </ul>
+              </div>
+              <div className="rounded-lg border bg-card p-6">
+                <h2 className="text-lg font-medium">Usage</h2>
+                <pre className="mt-2 rounded bg-muted p-2 text-sm">
+                  {`<Toolbar position="bottom-center">
+  <ToolbarButton
+    icon={<SidebarTrigger />}
+    aria-label="Toggle sidebar"
+  />
+  {/* Additional toolbar items */}
+</Toolbar>`}
+                </pre>
+              </div>
+            </div>
+          </Container>
+        </main>
+
+        <Toolbar position="top-left" showWhenSidebarClosed size="sm">
+          <ToolbarButton icon={<SidebarTrigger />} aria-label="Toggle sidebar" />
+        </Toolbar>
       </SidebarProvider>
     );
   },

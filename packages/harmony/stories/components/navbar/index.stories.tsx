@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { Button } from '@/components/ui/button';
-import { Navbar } from '@/components/ui/navbar';
+import { Navbar, NavbarActions } from '@/components/ui/navbar';
 import { Sidebar, SidebarContent, SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
 const meta = {
@@ -19,10 +19,8 @@ The Navbar component provides a responsive navigation bar for your application. 
 - Sidebar integration
 - Logo placement options
 - Size variants
-- Navigation menu
 - Dark mode support
 - Custom styling options
-- Flexible content area
 - Mobile-friendly
 
 ## Props
@@ -34,16 +32,13 @@ The Navbar component provides a responsive navigation bar for your application. 
 - \`className\`: string - Additional CSS classes
 
 ## Subcomponents
-- \`NavigationMenu\`: Main navigation menu
-- \`NavigationMenuItem\`: Individual menu items
-- \`NavigationMenuTrigger\`: Dropdown trigger
-- \`NavigationMenuContent\`: Dropdown content
-- \`NavigationMenuLink\`: Navigation links
+- \`NavbarLogo\`: Logo container component
+- \`NavbarContent\`: Main content area (hidden on mobile)
+- \`NavbarActions\`: Actions container with responsive layout
 
 ## Accessibility
 - ARIA roles and attributes
 - Keyboard navigation
-- Focus management
 - Screen reader support
 - Color contrast
 - Semantic structure
@@ -112,10 +107,12 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <Navbar>
-      <div className="ml-auto flex items-center space-x-4">
-        <Button variant="ghost">Sign In</Button>
-        <Button>Get Started</Button>
-      </div>
+      <NavbarActions>
+        <Button size="sm" variant="ghost">
+          Sign In
+        </Button>
+        <Button size="sm">Get Started</Button>
+      </NavbarActions>
     </Navbar>
   ),
   parameters: {
@@ -151,10 +148,12 @@ export const WithSidebar: Story = {
           }
           logoPosition="center"
         >
-          <div className="ml-auto flex items-center space-x-4">
-            <Button variant="ghost">Sign In</Button>
-            <Button>Get Started</Button>
-          </div>
+          <NavbarActions>
+            <Button size="sm" variant="ghost">
+              Sign In
+            </Button>
+            <Button size="sm">Get Started</Button>
+          </NavbarActions>
         </Navbar>
         <div className="flex flex-1">
           <Sidebar variant="inset" className="top-[var(--header-height)] !h-[calc(100svh-var(--header-height))]!">

@@ -1,4 +1,4 @@
-/* 
+/*
  * Resist Sans may require a commercial license and is not included in the code license of this repository.
  * See https://groteskly.xyz/resist-family for purchase options.
  */
@@ -58,7 +58,8 @@
     --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
 
-    --text-correction: -3px;
+    /* --text-correction: -3px; */
+    --text-correction: -0.15rem;
   }
 
   .dark,
@@ -113,7 +114,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overscroll-none;
   }
 
   html,

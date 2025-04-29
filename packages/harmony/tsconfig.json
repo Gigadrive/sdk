@@ -26,5 +26,5 @@
       "stories/*": ["stories/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "stories"]
 }
