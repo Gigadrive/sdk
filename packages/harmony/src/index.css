@@ -60,6 +60,8 @@
 
     /* --text-correction: -3px; */
     --text-correction: -0.15rem;
+
+    --header-height: 3.5rem;
   }
 
   .dark,
