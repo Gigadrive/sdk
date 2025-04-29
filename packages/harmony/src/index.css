@@ -117,18 +117,6 @@
     @apply bg-background text-foreground overscroll-none;
   }
 
-  html,
-  * {
-    font-family: 'Inter', 'system-ui';
-  }
-
-  @supports (font-variation-settings: normal) {
-    html,
-    * {
-      font-family: 'Inter var', 'system-ui';
-    }
-  }
-
   .dark {
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
@@ -152,6 +140,13 @@
 
   ::-webkit-scrollbar-thumb {
     @apply bg-border rounded-full border-[1px] border-solid border-transparent bg-clip-padding;
+  }
+
+  .font-mono *,
+  .prose pre *,
+  .prose code * {
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace !important;
   }
 }
 
