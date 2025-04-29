@@ -95,7 +95,7 @@ A complete implementation of the inset sidebar with header layout featuring:
   render: () => (
     <div className="w-full min-h-screen flex flex-col" style={{ '--header-height': '3.5rem' } as React.CSSProperties}>
       <SidebarProvider>
-        <div className="h-screen w-full">
+        <div className="h-full w-full">
           <SiteHeader />
           <div className="flex-1 flex w-full">
             <AppSidebar />
