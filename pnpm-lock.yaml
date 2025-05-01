@@ -298,8 +298,8 @@ importers:
         specifier: ^12.7.4
         version: 12.9.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       inter-ui:
-        specifier: ^3.19.3
-        version: 3.19.3
+        specifier: ^4.1.0
+        version: 4.1.0
       lucide-react:
         specifier: ^0.503.0
         version: 0.503.0(react@18.3.1)
@@ -3713,8 +3713,9 @@ packages:
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
 
-  inter-ui@3.19.3:
-    resolution: {integrity: sha512-5FG9fjuYOXocIfjzcCBhICL5cpvwEetseL3FU6tP3d6Bn7g8wODhB+I9RNGRTizCT7CUG4GOK54OPxqq3msQgg==}
+  inter-ui@4.1.0:
+    resolution: {integrity: sha512-lUJ5YLtpj7jWsrhTbN5w32MLOqISGFGOTMRNn+IGhLrbt67z5yvmBRoqpLCWLVlJ+l7kqnH6su4meEqvLMfAAA==}
+    engines: {node: '>=16.0.0'}
 
   internal-slot@1.1.0:
     resolution: {integrity: sha512-4gd7VpWNQNB4UKKCFFVcp1AVv+FMOgs9NKzjHKusc8jTMhd5eL1NqQqOpE0KzMds804/yHlglp3uxgluOqAPLw==}
@@ -9136,7 +9137,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  inter-ui@3.19.3: {}
+  inter-ui@4.1.0: {}
 
   internal-slot@1.1.0:
     dependencies:
