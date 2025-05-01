@@ -36,11 +36,7 @@ type ParagraphProps = {
 export const Paragraph = forwardRef<HTMLParagraphElement, ParagraphProps>(
   ({ children, className, lead, ...props }, ref) => {
     return (
-      <p
-        ref={ref}
-        className={cn('text-base text-muted-foreground', lead && 'text-xl text-foreground', className)}
-        {...props}
-      >
+      <p ref={ref} className={cn('text-base', lead && 'text-xl text-foreground', className)} {...props}>
         {children}
       </p>
     );
@@ -97,7 +93,7 @@ export const Prose = forwardRef<HTMLDivElement, ProseProps>(
         ref={ref}
         className={cn(
           'prose prose-slate dark:prose-invert max-w-none',
-          'prose-headings:font-bold prose-headings:tracking-tight',
+          'prose-headings:font-bold prose-headings:tracking-tight prose-headings:text-foreground',
           'prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-h4:text-lg',
           'prose-p:text-base prose-p:text-muted-foreground',
           'prose-pre:rounded-lg prose-pre:bg-muted prose-pre:p-4',

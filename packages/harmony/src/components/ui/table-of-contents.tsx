@@ -34,7 +34,7 @@ export const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
                 });
               },
               {
-                rootMargin: `-${getComputedStyle(document.body).getPropertyValue('--header-height') || '0%'} 0% -80%`,
+                rootMargin: `0px 0% -80%`,
               }
             );
 
@@ -56,7 +56,7 @@ export const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
         <Headline as="h2" className="text-lg font-semibold">
           Table of Contents
         </Headline>
-        <ul className="space-y-1">
+        <ul className="space-y-1 relative">
           {items.map((item) => (
             <motion.li
               key={item.id}
@@ -69,11 +69,11 @@ export const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <a href={`#${item.id}`} className="block py-1">
+              <a href={`#${item.id}`} className="block py-1 relative">
                 {item.title}
                 {showActiveIndicator && activeId === item.id && (
                   <motion.div
-                    className="absolute left-0 top-0 h-full w-1 bg-primary rounded-r"
+                    className="absolute inset-0 -inset-x-2 bg-primary/20 rounded-full -z-10"
                     layoutId="activeIndicator"
                     transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
                   />

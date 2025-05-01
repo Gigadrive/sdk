@@ -1,5 +1,6 @@
 import { TableOfContents } from '@/components/ui/table-of-contents';
 import type { Meta, StoryObj } from '@storybook/react';
+import { Headline, Paragraph, Prose } from '../../../src/components/ui/typography';
 
 const meta: Meta<typeof TableOfContents> = {
   title: 'Components/Table of Contents',
@@ -34,7 +35,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <div className="flex gap-8">
-      <div className="max-w-md h-screen sticky top-0 pt-8">
+      <div className="max-w-md h-screen sticky top-0">
         <TableOfContents
           items={[
             { id: 'introduction', title: 'Introduction', level: 1 },
@@ -48,31 +49,47 @@ export const Default: Story = {
           ]}
         />
       </div>
-      <div className="prose max-w-2xl">
-        <h1 id="introduction">Introduction</h1>
-        <p>This is the introduction section. Scroll down to see the table of contents update.</p>
+      <Prose className="max-w-2xl">
+        <Headline as="h1" id="introduction">
+          Introduction
+        </Headline>
+        <Paragraph>This is the introduction section. Scroll down to see the table of contents update.</Paragraph>
 
-        <h1 id="getting-started">Getting Started</h1>
-        <p>Getting started with our amazing product.</p>
+        <Headline as="h2" id="getting-started">
+          Getting Started
+        </Headline>
+        <Paragraph>Getting started with our amazing product.</Paragraph>
 
-        <h2 id="installation">Installation</h2>
-        <p>Installation instructions go here.</p>
+        <Headline as="h3" id="installation">
+          Installation
+        </Headline>
+        <Paragraph>Installation instructions go here.</Paragraph>
 
-        <h2 id="configuration">Configuration</h2>
-        <p>Configuration options and settings.</p>
+        <Headline as="h3" id="configuration">
+          Configuration
+        </Headline>
+        <Paragraph>Configuration options and settings.</Paragraph>
 
-        <h1 id="features">Features</h1>
-        <p>All the amazing features we offer.</p>
+        <Headline as="h2" id="features">
+          Features
+        </Headline>
+        <Paragraph>All the amazing features we offer.</Paragraph>
 
-        <h2 id="customization">Customization</h2>
-        <p>How to customize the product to your needs.</p>
+        <Headline as="h3" id="customization">
+          Customization
+        </Headline>
+        <Paragraph>How to customize the product to your needs.</Paragraph>
 
-        <h2 id="advanced-usage">Advanced Usage</h2>
-        <p>Advanced features and usage patterns.</p>
+        <Headline as="h3" id="advanced-usage">
+          Advanced Usage
+        </Headline>
+        <Paragraph>Advanced features and usage patterns.</Paragraph>
 
-        <h1 id="conclusion">Conclusion</h1>
-        <p>Wrap up and next steps.</p>
-      </div>
+        <Headline as="h2" id="conclusion">
+          Conclusion
+        </Headline>
+        <Paragraph>Wrap up and next steps.</Paragraph>
+      </Prose>
     </div>
   ),
   parameters: {
