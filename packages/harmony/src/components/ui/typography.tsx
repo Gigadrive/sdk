@@ -1,6 +1,8 @@
 import { cn } from '@/lib/utils';
 import { forwardRef, type ReactNode } from 'react';
 
+// unfortunately, due to how Tailwind and PostCSS work, we have to manually define styles for all variants
+// When updating sizes or anything similar, make sure to update the styles for the standalone components, as well as the Prose component
 const TYPOGRAPHY_STYLES = {
   headings: {
     h1: 'text-3xl md:text-4xl lg:text-5xl font-bold',
@@ -24,13 +26,31 @@ const TYPOGRAPHY_STYLES = {
     block: 'rounded-xl bg-muted p-4 md:p-6 font-mono text-sm md:text-base',
     inline: 'text-foreground',
   },
-};
-
-const buildProseStyles = (classes: string, prefix: string): string => {
-  return classes
-    .split(' ')
-    .map((className) => `${prefix}${className}`)
-    .join(' ');
+  prose: {
+    base: 'prose prose-slate dark:prose-invert max-w-none',
+    headings: {
+      h1: 'prose-headings:h1:text-3xl prose-headings:h1:md:text-4xl prose-headings:h1:lg:text-5xl prose-headings:h1:font-bold',
+      h2: 'prose-headings:h2:text-2xl prose-headings:h2:md:text-3xl prose-headings:h2:lg:text-4xl prose-headings:h2:font-semibold',
+      h3: 'prose-headings:h3:text-xl prose-headings:h3:md:text-2xl prose-headings:h3:lg:text-3xl prose-headings:h3:font-semibold',
+      h4: 'prose-headings:h4:text-lg prose-headings:h4:md:text-xl prose-headings:h4:lg:text-2xl prose-headings:h4:font-medium',
+      h5: 'prose-headings:h5:text-base prose-headings:h5:md:text-lg prose-headings:h5:lg:text-xl prose-headings:h5:font-medium',
+      h6: 'prose-headings:h6:text-sm prose-headings:h6:md:text-base prose-headings:h6:lg:text-lg prose-headings:h6:font-medium',
+    },
+    paragraph: {
+      base: 'prose-p:text-base prose-p:md:text-lg prose-p:leading-relaxed',
+      lead: 'prose-p:text-xl prose-p:md:text-2xl prose-p:text-foreground prose-p:leading-relaxed',
+    },
+    code: {
+      block:
+        'prose-pre:rounded-xl prose-pre:bg-muted prose-pre:p-4 prose-pre:md:p-6 prose-pre:font-mono prose-pre:text-sm prose-pre:md:text-base',
+      inline: 'prose-code:text-foreground',
+    },
+    list: {
+      unordered: 'prose-ul:list-disc prose-ul:text-base prose-ul:md:text-lg prose-ul:leading-relaxed',
+      ordered: 'prose-ol:list-decimal prose-ol:text-base prose-ol:md:text-lg prose-ol:leading-relaxed',
+      base: 'prose-ul:my-6 prose-ul:md:my-8 prose-ul:-ml-3 prose-ol:my-6 prose-ol:md:my-8 prose-ol:-ml-3',
+    },
+  },
 };
 
 type HeadlineProps = {
@@ -128,25 +148,19 @@ export const Prose = forwardRef<HTMLDivElement, ProseProps>(
       <Component
         ref={ref}
         className={cn(
-          'prose prose-slate dark:prose-invert max-w-none',
-          buildProseStyles(TYPOGRAPHY_STYLES.headings.h1, 'prose-headings:h1:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.headings.h2, 'prose-headings:h2:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.headings.h3, 'prose-headings:h3:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.headings.h4, 'prose-headings:h4:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.headings.h5, 'prose-headings:h5:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.headings.h6, 'prose-headings:h6:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.paragraph.base, 'prose-p:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.paragraph.lead, 'prose-p:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.code.block, 'prose-pre:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.code.inline, 'prose-code:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.list.unordered, 'prose-ul:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.list.ordered, 'prose-ol:'),
-
-          // add for both list styles
-          buildProseStyles(TYPOGRAPHY_STYLES.list.base, 'prose-ul:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.list.base, 'prose-ol:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.paragraph.base, 'prose-ol:'),
-          buildProseStyles(TYPOGRAPHY_STYLES.paragraph.base, 'prose-ol:'),
+          TYPOGRAPHY_STYLES.prose.base,
+          TYPOGRAPHY_STYLES.prose.headings.h1,
+          TYPOGRAPHY_STYLES.prose.headings.h2,
+          TYPOGRAPHY_STYLES.prose.headings.h3,
+          TYPOGRAPHY_STYLES.prose.headings.h4,
+          TYPOGRAPHY_STYLES.prose.headings.h5,
+          TYPOGRAPHY_STYLES.prose.headings.h6,
+          TYPOGRAPHY_STYLES.prose.paragraph.base,
+          TYPOGRAPHY_STYLES.prose.code.block,
+          TYPOGRAPHY_STYLES.prose.code.inline,
+          TYPOGRAPHY_STYLES.prose.list.unordered,
+          TYPOGRAPHY_STYLES.prose.list.ordered,
+          TYPOGRAPHY_STYLES.prose.list.base,
           className
         )}
         {...props}

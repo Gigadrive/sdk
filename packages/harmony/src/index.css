@@ -60,6 +60,7 @@
 
     .prose {
       --tw-prose-headings: inherit;
+      --tw-prose-body: inherit;
     }
 
     /* --text-correction: -3px; */
@@ -117,6 +118,7 @@
 
     .prose {
       --tw-prose-headings: 0 0% 98%;
+      --tw-prose-body: 0 0% 98%;
     }
   }
 
