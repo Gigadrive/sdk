@@ -1,5 +1,15 @@
 # @gigadrive/harmony
 
+## 3.2.0
+
+### Minor Changes
+
+- add typography components + table of contents ([#89](https://github.com/Gigadrive/sdk/pull/89))
+
+### Patch Changes
+
+- remove inter-ui dependency ([#91](https://github.com/Gigadrive/sdk/pull/91))
+
 ## 3.1.0
 
 ### Minor Changes
