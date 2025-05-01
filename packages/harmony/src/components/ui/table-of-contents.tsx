@@ -3,7 +3,6 @@
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { forwardRef, useEffect, useState } from 'react';
-import { Headline } from './typography';
 
 type TableOfContentsProps = {
   items: {
@@ -53,9 +52,6 @@ export const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
 
     return (
       <nav ref={ref} className={cn('space-y-2', className)} {...props}>
-        <Headline as="h2" className="text-lg font-semibold">
-          Table of Contents
-        </Headline>
         <ul className="space-y-1 relative">
           {items.map((item) => (
             <motion.li
