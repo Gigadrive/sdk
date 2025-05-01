@@ -1,5 +1,4 @@
 import '@fontsource/manrope';
-import 'inter-ui/inter.css';
 import './index.css';
 
 export * from './hooks';
