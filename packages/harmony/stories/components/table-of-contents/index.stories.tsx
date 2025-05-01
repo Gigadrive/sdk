@@ -39,13 +39,13 @@ export const Default: Story = {
         <TableOfContents
           items={[
             { id: 'introduction', title: 'Introduction', level: 1 },
-            { id: 'getting-started', title: 'Getting Started', level: 1 },
-            { id: 'installation', title: 'Installation', level: 2 },
-            { id: 'configuration', title: 'Configuration', level: 2 },
-            { id: 'features', title: 'Features', level: 1 },
-            { id: 'customization', title: 'Customization', level: 2 },
-            { id: 'advanced-usage', title: 'Advanced Usage', level: 2 },
-            { id: 'conclusion', title: 'Conclusion', level: 1 },
+            { id: 'getting-started', title: 'Getting Started', level: 2 },
+            { id: 'installation', title: 'Installation', level: 3 },
+            { id: 'configuration', title: 'Configuration', level: 3 },
+            { id: 'features', title: 'Features', level: 2 },
+            { id: 'customization', title: 'Customization', level: 3 },
+            { id: 'advanced-usage', title: 'Advanced Usage', level: 3 },
+            { id: 'conclusion', title: 'Conclusion', level: 2 },
           ]}
         />
       </div>
