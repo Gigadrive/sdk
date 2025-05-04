@@ -5,6 +5,27 @@ export type PrismaModels = {
   [M in Prisma.ModelName]: Exclude<Awaited<ReturnType<PrismaClient[Uncapitalize<M>]['findUnique']>>, null>;
 };
 
+export type PrismaFindUniqueArgs<T = keyof PrismaModels> = Prisma.Args<
+  PrismaClient[Uncapitalize<T & keyof PrismaModels>],
+  'findUnique'
+>;
+export type PrismaFindManyArgs<T = keyof PrismaModels> = Prisma.Args<
+  PrismaClient[Uncapitalize<T & keyof PrismaModels>],
+  'findMany'
+>;
+export type PrismaCreateArgs<T = keyof PrismaModels> = Prisma.Args<
+  PrismaClient[Uncapitalize<T & keyof PrismaModels>],
+  'create'
+>;
+export type PrismaUpdateArgs<T = keyof PrismaModels> = Prisma.Args<
+  PrismaClient[Uncapitalize<T & keyof PrismaModels>],
+  'update'
+>;
+export type PrismaDeleteArgs<T = keyof PrismaModels> = Prisma.Args<
+  PrismaClient[Uncapitalize<T & keyof PrismaModels>],
+  'delete'
+>;
+
 export type EntitySchema<T extends keyof PrismaModels> = {
   /**
    * The name of the entity. This must match the name of the Prisma model.
