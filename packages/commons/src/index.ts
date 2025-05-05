@@ -1,3 +1,5 @@
+export * from './url';
+
 export * from './all';
 export * from './buffered-readable-stream';
 export * from './deep-merge';
@@ -7,4 +9,4 @@ export * from './format';
 export * from './random';
 export * from './sha256';
 export * from './sleep';
-export * from './url';
+export * from './types';

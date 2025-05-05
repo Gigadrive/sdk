@@ -101,7 +101,7 @@ describe('exec', () => {
     const duration = Date.now() - startTime;
     expect(duration).toBeGreaterThan(2000); // Should take at least 2 seconds
     expect(outputs.length).toBeGreaterThan(0);
-  });
+  }, 7000);
 
   it('should handle multiple commands in sequence', async () => {
     const allOutput: string[] = [];

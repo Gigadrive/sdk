@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import { BaseframeOptionsPrismaOnly } from '.';
 
 export type PrismaModels = {
   [M in Prisma.ModelName]: Exclude<Awaited<ReturnType<PrismaClient[Uncapitalize<M>]['findUnique']>>, null>;
@@ -25,6 +26,62 @@ export type PrismaDeleteArgs<T = keyof PrismaModels> = Prisma.Args<
   PrismaClient[Uncapitalize<T & keyof PrismaModels>],
   'delete'
 >;
+export type PrismaSelect<T = keyof PrismaModels> = Prisma.Args<
+  PrismaClient[Uncapitalize<T & keyof PrismaModels>],
+  'findUnique'
+>['select'];
+
+export const prismaModel = <T extends keyof PrismaModels>(entity: T, client: PrismaClient) => {
+  return client[entity.toLowerCase() as Uncapitalize<T>] as unknown as {
+    findUnique: (args: PrismaFindUniqueArgs<T>) => Promise<PrismaModels[T] | null>;
+    findMany: (args?: PrismaFindManyArgs<T>) => Promise<PrismaModels[T][]>;
+    create: (args: PrismaCreateArgs<T>) => Promise<PrismaModels[T]>;
+    update: (args: PrismaUpdateArgs<T>) => Promise<PrismaModels[T]>;
+    delete: (args: PrismaDeleteArgs<T>) => Promise<PrismaModels[T]>;
+  };
+};
+
+/**
+ * Retrieves a single entity by its ID from the database.
+ *
+ * @param entityType - The Prisma model name of the entity to retrieve
+ * @param id - The ID value to look up. Can be string or number depending on the model's ID field type
+ * @param options - Baseframe options containing the Prisma client instance
+ * @returns The found entity or null if not found
+ * @throws Error if the entity type is invalid or has no ID field
+ */
+export const getById = async <T extends keyof PrismaModels = keyof PrismaModels>(
+  entityTypeOrSchema: T | EntitySchema<T>,
+  id: string | number,
+  options: BaseframeOptionsPrismaOnly
+): Promise<PrismaModels[T] | null> => {
+  const entityType = typeof entityTypeOrSchema === 'string' ? entityTypeOrSchema : entityTypeOrSchema.entity;
+
+  const entity = prismaModel<keyof PrismaModels>(entityType, options.prisma);
+
+  const modelFields = Prisma.dmmf.datamodel.models.find((m) => m.name === entityType)?.fields;
+
+  if (!modelFields) {
+    console.error(`No model fields found for entity ${entityType}`);
+    throw new Error('Not found'); // TODO: proper Exception
+  }
+
+  const idField = modelFields.find((f) => f.isId === true);
+
+  if (!idField) {
+    console.error(`No id field found for entity ${entityType}`);
+    throw new Error('Not found'); // TODO: proper Exception
+  }
+
+  const idType = idField.type;
+
+  return (await entity.findUnique({
+    // @ts-expect-error - we explicitly check against Prisma's DMMF for the type
+    where: {
+      [idField.name]: (idType === 'Int' || idType === 'BigInt') && typeof id === 'string' ? parseInt(id) : id,
+    },
+  })) as PrismaModels[T] | null;
+};
 
 export type EntitySchema<T extends keyof PrismaModels> = {
   /**
@@ -42,9 +99,9 @@ export type EntitySchema<T extends keyof PrismaModels> = {
       /**
        * Use this to join with sub-entities.
        */
-      include?: {
+      /*include?: {
         [K in keyof PrismaModels[T] & Prisma.ModelName]: EntitySchema<K>;
-      };
+      };*/
 
       /**
        * Defines the properties that may be used to filter the results on the collection endpoint.
@@ -127,18 +184,3 @@ export type EntitySchema<T extends keyof PrismaModels> = {
 export const defineEntitySchema = <T extends keyof PrismaModels>(schema: EntitySchema<T>): EntitySchema<T> => {
   return schema;
 };
-
-const userSchema = defineEntitySchema({
-  entity: 'User',
-  operations: {
-    read: {
-      properties: ['id', 'email'],
-    },
-    create: {
-      enabled: true,
-      schema: z.object({
-        email: z.string().email(),
-      }),
-    },
-  },
-});

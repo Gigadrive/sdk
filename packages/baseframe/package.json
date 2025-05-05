@@ -23,10 +23,14 @@
   ],
   "scripts": {
     "build": "tsup",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push --force-reset --accept-data-loss"
   },
   "dependencies": {
-    "prisma-models": "^0.0.2"
+    "@gigadrive/commons": "workspace:*",
+    "prisma-models": "^0.0.2",
+    "superjson": "^2.2.2"
   },
   "devDependencies": {
     "@prisma/client": "^6.7.0",
