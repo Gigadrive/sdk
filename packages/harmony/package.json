@@ -104,7 +104,7 @@
     "@storybook/react-vite": "^8.6.12",
     "@storybook/test": "^8.6.12",
     "@tailwindcss/postcss": "^4.1.4",
-    "@tailwindcss/vite": "^4.1.4",
+    "@tailwindcss/vite": "^4.1.6",
     "@types/react": "^18.3.3",
     "@types/zxcvbn": "^4.4.5",
     "@vitejs/plugin-react": "^4.4.1",
