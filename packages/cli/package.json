@@ -28,7 +28,7 @@
     "@paralleldrive/cuid2": "^2.2.2",
     "archiver": "^7.0.1",
     "arg": "^5.0.2",
-    "commander": "^13.1.0",
+    "commander": "^14.0.0",
     "consola": "^3.4.2",
     "ignore": "^7.0.3",
     "react": "^18.3.1",
