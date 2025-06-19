@@ -191,7 +191,7 @@ export const WithSidebarMobile: Story = {
     <div className="[--header-height:calc(theme(spacing.14))]">
       <SidebarProvider className="flex flex-col" mobileCollapse>
         <Navbar
-          showSidebar
+          showSidebar="desktop"
           size="lg"
           logo={
             <>
