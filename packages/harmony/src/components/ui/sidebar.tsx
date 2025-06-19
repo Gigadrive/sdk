@@ -605,22 +605,29 @@ const SidebarMenuItem = React.forwardRef<
                   data-sidebar="menu-sub"
                   className="mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden group-data-[hover-expand=true]:group-data-[collapsible=icon]:group-hover:block"
                 >
-                  {React.Children.map(children, (child, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -5 }}
-                      animate={{
-                        opacity: 1,
-                        x: 0,
-                        transition: {
-                          delay: index * 0.05,
-                          duration: 0.2,
-                        },
-                      }}
-                    >
-                      {child}
-                    </motion.div>
-                  ))}
+                  {React.Children.map(children, (child, index) => {
+                    if (!React.isValidElement(child)) return child;
+                    const clonedChild = React.cloneElement(child as React.ReactElement, {
+                      parentTitle: typeof title === 'string' ? title : undefined,
+                      parentIcon: icon,
+                    });
+                    return (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: -5 }}
+                        animate={{
+                          opacity: 1,
+                          x: 0,
+                          transition: {
+                            delay: index * 0.05,
+                            duration: 0.2,
+                          },
+                        }}
+                      >
+                        {clonedChild}
+                      </motion.div>
+                    );
+                  })}
                 </ul>
               </motion.div>
             )}
