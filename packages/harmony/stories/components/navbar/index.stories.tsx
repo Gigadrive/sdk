@@ -2,7 +2,15 @@ import type { Meta, StoryObj } from '@storybook/react';
 
 import { Button } from '@/components/ui/button';
 import { Navbar, NavbarActions } from '@/components/ui/navbar';
-import { Sidebar, SidebarContent, SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarSubItem,
+} from '@/components/ui/sidebar';
 
 const meta = {
   title: 'Components/Navbar',
@@ -159,6 +167,75 @@ export const WithSidebar: Story = {
           <Sidebar variant="inset" className="top-[var(--header-height)] !h-[calc(100svh-var(--header-height))]!">
             <SidebarContent>
               <div className="p-4">Sidebar Content</div>
+            </SidebarContent>
+          </Sidebar>
+          <SidebarInset className="flex flex-col">
+            <div className="p-4">Main Content Area</div>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A navbar with sidebar integration. Shows how to combine the navbar with a sidebar component for a complete navigation experience.',
+      },
+    },
+  },
+};
+
+export const WithSidebarMobile: Story = {
+  render: () => (
+    <div className="[--header-height:calc(theme(spacing.14))]">
+      <SidebarProvider className="flex flex-col" mobileCollapse>
+        <Navbar
+          showSidebar
+          size="lg"
+          logo={
+            <>
+              <img
+                src="https://static-cdn.gigadrivegroup.com/logos/gigadrive/Gigadrive/2023/Gigadrive Logo Text Primary@0.25x.png"
+                alt="Gigadrive"
+                className="inline-block dark:hidden h-full"
+              />
+              <img
+                src="https://static-cdn.gigadrivegroup.com/logos/gigadrive/Gigadrive/2023/Gigadrive Logo Text White@0.25x.png"
+                alt="Gigadrive"
+                className="hidden dark:inline-block h-full"
+              />
+            </>
+          }
+          logoPosition="center"
+        >
+          <NavbarActions>
+            <Button size="sm" variant="ghost">
+              Sign In
+            </Button>
+            <Button size="sm">Get Started</Button>
+          </NavbarActions>
+        </Navbar>
+        <div className="flex flex-1">
+          <Sidebar variant="inset" className="top-[var(--header-height)] !h-[calc(100svh-var(--header-height))]!">
+            <SidebarContent>
+              <SidebarMenu label="Main">
+                <SidebarMenuItem icon={<span>🏠</span>} title="Dashboard" href="#" />
+                <SidebarMenuItem icon={<span>📁</span>} title="Projects">
+                  <SidebarSubItem title="Project Alpha" href="#" />
+                  <SidebarSubItem title="Project Beta" href="#" />
+                  <SidebarSubItem title="Project Gamma" href="#" isActive />
+                </SidebarMenuItem>
+                <SidebarMenuItem icon={<span>⚙️</span>} title="Settings" href="#" />
+              </SidebarMenu>
+              <SidebarMenu label="Team">
+                <SidebarMenuItem icon={<span>👥</span>} title="Members">
+                  <SidebarSubItem title="Alice" href="#" />
+                  <SidebarSubItem title="Bob" href="#" />
+                  <SidebarSubItem title="Charlie" href="#" />
+                </SidebarMenuItem>
+                <SidebarMenuItem icon={<span>➕</span>} title="Invite" href="#" />
+              </SidebarMenu>
             </SidebarContent>
           </Sidebar>
           <SidebarInset className="flex flex-col">
