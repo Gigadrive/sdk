@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.2.1
+
+### Patch Changes
+
+- fixed DX issues ([#147](https://github.com/Gigadrive/sdk/pull/147))
+
 ## 3.2.0
 
 ### Minor Changes
