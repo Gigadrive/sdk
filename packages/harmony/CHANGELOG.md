@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.2.2
+
+### Patch Changes
+
+- fix: remove invalid border style ([#154](https://github.com/Gigadrive/sdk/pull/154))
+
 ## 3.2.1
 
 ### Patch Changes
