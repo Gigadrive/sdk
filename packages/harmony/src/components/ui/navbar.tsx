@@ -4,7 +4,7 @@ import * as React from 'react';
 
 export interface NavbarProps extends React.HTMLAttributes<HTMLElement> {
   children?: React.ReactNode;
-  showSidebar?: boolean;
+  showSidebar?: boolean | 'mobile' | 'desktop';
   size?: 'default' | 'sm' | 'lg';
   logo?: React.ReactNode;
   logoPosition?: 'left' | 'center';
@@ -52,7 +52,18 @@ NavbarActions.displayName = 'NavbarActions';
 const Navbar = React.forwardRef<HTMLElement, NavbarProps>(
   ({ className, children, showSidebar = false, size = 'default', logo, logoPosition = 'left', ...props }, ref) => {
     const sidebarContext = React.useContext(SidebarContext);
-    const hasSidebar = showSidebar && sidebarContext !== null;
+
+    // Determine if sidebar trigger should be shown based on showSidebar prop
+    let showSidebarTrigger = false;
+    if (sidebarContext !== null) {
+      if (showSidebar === true) {
+        showSidebarTrigger = true;
+      } else if (showSidebar === 'mobile') {
+        showSidebarTrigger = true;
+      } else if (showSidebar === 'desktop') {
+        showSidebarTrigger = true;
+      }
+    }
 
     return (
       <nav
@@ -70,7 +81,22 @@ const Navbar = React.forwardRef<HTMLElement, NavbarProps>(
             size === 'sm' ? 'h-12' : size === 'lg' ? 'h-16' : 'h-[--header-height]'
           )}
         >
-          {hasSidebar && <SidebarTrigger />}
+          {/* SidebarTrigger logic for showSidebar */}
+          {showSidebarTrigger && (
+            <>
+              {showSidebar === true && <SidebarTrigger />}
+              {showSidebar === 'mobile' && (
+                <span className="flex md:hidden">
+                  <SidebarTrigger />
+                </span>
+              )}
+              {showSidebar === 'desktop' && (
+                <span className="hidden md:flex">
+                  <SidebarTrigger />
+                </span>
+              )}
+            </>
+          )}
 
           {logo && logoPosition === 'left' && <NavbarLogo>{logo}</NavbarLogo>}
 

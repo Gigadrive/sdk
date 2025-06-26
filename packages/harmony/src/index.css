@@ -89,7 +89,7 @@
     --destructive-foreground: 0 85.7% 97.3%;
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --ring: 142.13 76.22% 36.27%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -122,9 +122,6 @@
     }
   }
 
-  * {
-    @apply border-border;
-  }
   body {
     @apply bg-background text-foreground overscroll-none;
   }

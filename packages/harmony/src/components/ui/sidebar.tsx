@@ -1,7 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, PanelLeft } from 'lucide-react';
+import { ChevronDown, Menu, PanelLeft } from 'lucide-react';
 import * as React from 'react';
 
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
@@ -20,6 +27,17 @@ const SIDEBAR_WIDTH_ICON = '3rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
 // Types
+type ActiveItem = {
+  title: string;
+  href?: string;
+  icon?: React.ReactNode;
+  parent?: {
+    title: string;
+    href?: string;
+    icon?: React.ReactNode;
+  };
+};
+
 type SidebarContext = {
   state: 'expanded' | 'collapsed';
   open: boolean;
@@ -29,6 +47,9 @@ type SidebarContext = {
   isMobile: boolean;
   toggleSidebar: () => void;
   hoverExpand: boolean;
+  mobileCollapse?: boolean;
+  activeItem?: ActiveItem;
+  setActiveItem: (item?: ActiveItem) => void;
 };
 
 // Context
@@ -51,6 +72,7 @@ const SidebarProvider = React.forwardRef<
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     hoverExpand?: boolean;
+    mobileCollapse?: boolean;
   }
 >(
   (
@@ -59,6 +81,7 @@ const SidebarProvider = React.forwardRef<
       open: openProp,
       onOpenChange: setOpenProp,
       hoverExpand = false,
+      mobileCollapse = false,
       className,
       style,
       children,
@@ -68,6 +91,7 @@ const SidebarProvider = React.forwardRef<
   ) => {
     const isMobile = useIsMobile();
     const [openMobile, setOpenMobile] = React.useState(false);
+    const [activeItem, setActiveItem] = React.useState<ActiveItem | undefined>();
 
     // Internal state of the sidebar
     const [_open, _setOpen] = React.useState(defaultOpen);
@@ -117,8 +141,23 @@ const SidebarProvider = React.forwardRef<
         setOpenMobile,
         toggleSidebar,
         hoverExpand,
+        mobileCollapse,
+        activeItem,
+        setActiveItem,
       }),
-      [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, hoverExpand]
+      [
+        state,
+        open,
+        setOpen,
+        isMobile,
+        openMobile,
+        setOpenMobile,
+        toggleSidebar,
+        hoverExpand,
+        mobileCollapse,
+        activeItem,
+        setActiveItem,
+      ]
     );
 
     return (
@@ -316,6 +355,8 @@ SidebarTrigger.displayName = 'SidebarTrigger';
 
 // Main content area that adjusts based on sidebar state
 const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<'main'>>(({ className, ...props }, ref) => {
+  const { isMobile, setOpenMobile, mobileCollapse, activeItem } = useSidebar();
+
   return (
     <main
       ref={ref}
@@ -325,7 +366,37 @@ const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<'main
         className
       )}
       {...props}
-    />
+    >
+      {isMobile && mobileCollapse && activeItem && (
+        <button
+          onClick={() => setOpenMobile(true)}
+          className="sticky top-[var(--header-height,0px)] z-10 flex w-full items-center gap-2 border-b bg-sidebar px-4 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent"
+        >
+          <div className="flex items-center gap-2 flex-1 overflow-hidden">
+            {activeItem.icon}
+            <div className="flex-1 overflow-hidden">
+              <Breadcrumb>
+                <BreadcrumbList className="flex-nowrap overflow-hidden">
+                  {activeItem.parent && (
+                    <>
+                      <BreadcrumbItem>
+                        <BreadcrumbPage className="truncate">{activeItem.parent.title}</BreadcrumbPage>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                    </>
+                  )}
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="truncate">{activeItem.title}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+          </div>
+          <Menu className="ml-auto h-4 w-4 shrink-0" />
+        </button>
+      )}
+      {props.children}
+    </main>
   );
 });
 SidebarInset.displayName = 'SidebarInset';
@@ -401,10 +472,35 @@ const SidebarMenuItem = React.forwardRef<
     tooltip?: string | React.ComponentProps<typeof TooltipContent>;
   }
 >(({ className, defaultOpen, icon, title, href, isActive, tooltip, children, ...props }, ref) => {
-  const { isMobile, state, hoverExpand } = useSidebar();
+  const { isMobile, state, hoverExpand, setActiveItem } = useSidebar();
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
-
   const hasChildren = React.Children.count(children) > 0;
+
+  // Check if any child is active
+  const hasActiveChild = React.useMemo(() => {
+    return React.Children.toArray(children).some((child) => {
+      if (!React.isValidElement(child)) return false;
+      return child.props.isActive;
+    });
+  }, [children]);
+
+  // Update active item in context when this item becomes active
+  React.useEffect(() => {
+    if (typeof title === 'string' && isActive) {
+      setActiveItem({
+        title,
+        href,
+        icon,
+      });
+    }
+  }, [isActive, title, href, icon, setActiveItem]);
+
+  // Open the menu if it has an active child
+  React.useEffect(() => {
+    if (hasActiveChild && !isOpen) {
+      setIsOpen(true);
+    }
+  }, [hasActiveChild, isOpen]);
 
   if (!hasChildren) {
     const buttonContent = (
@@ -421,7 +517,7 @@ const SidebarMenuItem = React.forwardRef<
     const button = (
       <button
         data-sidebar="menu-button"
-        data-active={isActive}
+        data-active={isActive || hasActiveChild}
         className={cn(
           'flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-2 group-data-[hover-expand=true]:group-data-[collapsible=icon]:group-hover:h-auto group-data-[hover-expand=true]:group-data-[collapsible=icon]:group-hover:w-auto group-data-[hover-expand=true]:group-data-[collapsible=icon]:group-hover:p-2 [&>span:last-child]:truncate [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0',
           'data-[type=user]:group-data-[collapsible=icon]:!h-12 data-[type=user]:group-data-[collapsible=icon]:!w-12 data-[type=user]:group-data-[collapsible=icon]:!p-1 data-[type=user]:group-data-[collapsible=icon]:justify-center',
@@ -463,12 +559,12 @@ const SidebarMenuItem = React.forwardRef<
 
   return (
     <li ref={ref} data-sidebar="menu-item" className={cn('group/menu-item relative', className)} {...props}>
-      <Collapsible asChild defaultOpen={defaultOpen} onOpenChange={setIsOpen}>
+      <Collapsible asChild defaultOpen={defaultOpen || hasActiveChild} onOpenChange={setIsOpen}>
         <>
           <CollapsibleTrigger asChild>
             <button
               data-sidebar="menu-button"
-              data-active={isActive}
+              data-active={isActive || hasActiveChild}
               className="flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-2 group-data-[hover-expand=true]:group-data-[collapsible=icon]:group-hover:h-auto group-data-[hover-expand=true]:group-data-[collapsible=icon]:group-hover:w-auto group-data-[hover-expand=true]:group-data-[collapsible=icon]:group-hover:p-2 [&>span:last-child]:truncate [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0"
             >
               {icon}
@@ -509,22 +605,29 @@ const SidebarMenuItem = React.forwardRef<
                   data-sidebar="menu-sub"
                   className="mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5 group-data-[collapsible=icon]:hidden group-data-[hover-expand=true]:group-data-[collapsible=icon]:group-hover:block"
                 >
-                  {React.Children.map(children, (child, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -5 }}
-                      animate={{
-                        opacity: 1,
-                        x: 0,
-                        transition: {
-                          delay: index * 0.05,
-                          duration: 0.2,
-                        },
-                      }}
-                    >
-                      {child}
-                    </motion.div>
-                  ))}
+                  {React.Children.map(children, (child, index) => {
+                    if (!React.isValidElement(child)) return child;
+                    const clonedChild = React.cloneElement(child as React.ReactElement, {
+                      parentTitle: typeof title === 'string' ? title : undefined,
+                      parentIcon: icon,
+                    });
+                    return (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: -5 }}
+                        animate={{
+                          opacity: 1,
+                          x: 0,
+                          transition: {
+                            delay: index * 0.05,
+                            duration: 0.2,
+                          },
+                        }}
+                      >
+                        {clonedChild}
+                      </motion.div>
+                    );
+                  })}
                 </ul>
               </motion.div>
             )}
@@ -543,8 +646,28 @@ const SidebarSubItem = React.forwardRef<
     title: string;
     href: string;
     isActive?: boolean;
+    parentTitle?: string;
+    parentIcon?: React.ReactNode;
   }
->(({ className, title, href, isActive, ...props }, ref) => {
+>(({ className, title, href, isActive, parentTitle, parentIcon, ...props }, ref) => {
+  const { setActiveItem } = useSidebar();
+
+  // Update active item in context when this item becomes active
+  React.useEffect(() => {
+    if (isActive) {
+      setActiveItem({
+        title,
+        href,
+        parent: parentTitle
+          ? {
+              title: parentTitle,
+              icon: parentIcon,
+            }
+          : undefined,
+      });
+    }
+  }, [isActive, title, href, parentTitle, parentIcon, setActiveItem]);
+
   return (
     <li ref={ref} data-sidebar="menu-sub-item" className={cn('group/menu-sub-item relative', className)} {...props}>
       <a
