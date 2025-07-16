@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.3.0
+
+### Minor Changes
+
+- add as property to SidebarMenuItem ([#175](https://github.com/Gigadrive/sdk/pull/175))
+
 ## 3.2.2
 
 ### Patch Changes
