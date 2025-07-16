@@ -469,9 +469,10 @@ const SidebarMenuItem = React.forwardRef<
     title?: string | React.ReactNode;
     href?: string;
     isActive?: boolean;
+    as?: React.ElementType;
     tooltip?: string | React.ComponentProps<typeof TooltipContent>;
   }
->(({ className, defaultOpen, icon, title, href, isActive, tooltip, children, ...props }, ref) => {
+>(({ className, defaultOpen, icon, title, href, isActive, tooltip, children, as, ...props }, ref) => {
   const { isMobile, state, hoverExpand, setActiveItem } = useSidebar();
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
   const hasChildren = React.Children.count(children) > 0;
@@ -529,9 +530,11 @@ const SidebarMenuItem = React.forwardRef<
     );
 
     if (href) {
+      const Comp = as || 'a';
+
       return (
         <li className="group/menu-item relative">
-          <a href={href}>{button}</a>
+          <Comp href={href}>{button}</Comp>
         </li>
       );
     }
