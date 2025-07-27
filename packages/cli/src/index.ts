@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { build } from './commands/build';
 import { debug } from './commands/debug';
+import { login } from './commands/login';
 import { platform } from './commands/platform';
 import { error, log, setVerbose } from './util/log';
 
@@ -37,6 +38,7 @@ const main = async () => {
   platform(program);
   debug(program);
   build(program);
+  login(program);
 
   try {
     await program.parseAsync(process.argv);

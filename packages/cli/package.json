@@ -26,13 +26,16 @@
     "@gigadrive/commons": "workspace:*",
     "@gigadrive/network-config": "workspace:*",
     "@paralleldrive/cuid2": "^2.2.2",
+    "@t3-oss/env-core": "^0.13.8",
     "archiver": "^7.0.1",
     "arg": "^5.0.2",
     "commander": "^13.1.0",
     "consola": "^3.4.2",
     "ignore": "^7.0.3",
+    "open": "^10.2.0",
     "react": "^18.3.1",
-    "react-devtools-core": "^6.1.1"
+    "react-devtools-core": "^6.1.1",
+    "zod": "^4.0.10"
   },
   "devDependencies": {
     "@types/archiver": "^6.0.2",
