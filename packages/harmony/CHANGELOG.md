@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.3.1
+
+### Patch Changes
+
+- add slight animation when tapping the Button component ([#194](https://github.com/Gigadrive/sdk/pull/194))
+
 ## 3.3.0
 
 ### Minor Changes
