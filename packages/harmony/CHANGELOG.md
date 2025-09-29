@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.4.0
+
+### Minor Changes
+
+- make design more consistent, add new EmptyState component and fix some bugs ([#232](https://github.com/Gigadrive/sdk/pull/232))
+
 ## 3.3.1
 
 ### Patch Changes
