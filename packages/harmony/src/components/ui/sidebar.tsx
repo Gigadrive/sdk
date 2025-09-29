@@ -532,7 +532,7 @@ const SidebarMenuItem = React.forwardRef<
     tooltip?: string | React.ComponentProps<typeof TooltipContent>;
   }
 >(({ className, defaultOpen, icon, title, href, isActive, tooltip, children, as, ...props }, ref) => {
-  const { isMobile, state, hoverExpand, setActiveItem } = useSidebar();
+  const { isMobile, state, hoverExpand, setActiveItem, toggleSidebar } = useSidebar();
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
   const hasChildren = React.Children.count(children) > 0;
 
@@ -577,6 +577,12 @@ const SidebarMenuItem = React.forwardRef<
   }, [hasActiveChild, isOpen]);
 
   if (!hasChildren) {
+    const isSidebarTriggerIcon =
+      icon &&
+      React.isValidElement(icon) &&
+      (icon.type === SidebarTrigger ||
+        (icon as React.ReactElement & { type?: { displayName?: string } }).type?.displayName === 'SidebarTrigger');
+
     const buttonContent = (
       <>
         {icon}
@@ -597,6 +603,12 @@ const SidebarMenuItem = React.forwardRef<
           'data-[type=user]:group-data-[collapsible=icon]:!h-12 data-[type=user]:group-data-[collapsible=icon]:!w-12 data-[type=user]:group-data-[collapsible=icon]:!p-1 data-[type=user]:group-data-[collapsible=icon]:justify-center',
           className
         )}
+        onClick={(event) => {
+          // If icon is a SidebarTrigger and there's no href, clicking the outer button should toggle.
+          if (isSidebarTriggerIcon && !href && event.target === event.currentTarget) {
+            toggleSidebar();
+          }
+        }}
       >
         {buttonContent}
       </button>
