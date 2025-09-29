@@ -1,4 +1,4 @@
-import '@fontsource/manrope';
+//import '@fontsource/manrope';
 import './index.css';
 
 export * from './hooks';

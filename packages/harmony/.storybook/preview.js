@@ -1,5 +1,6 @@
 import { withThemeByClassName } from '@storybook/addon-themes';
 import '../src/index.ts';
+import '../src/theme.css';
 
 /** @type { import('@storybook/react').Preview } */
 const preview = {

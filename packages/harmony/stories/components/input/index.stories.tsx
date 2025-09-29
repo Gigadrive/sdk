@@ -129,7 +129,6 @@ export const Default: Story = {
 export const WithLabel: Story = {
   args: {
     label: 'Email',
-    placeholder: 'Enter your email',
   },
   parameters: {
     docs: {
@@ -143,7 +142,7 @@ export const WithLabel: Story = {
 export const WithError: Story = {
   args: {
     label: 'Username',
-    placeholder: 'Enter username',
+    value: 'john_doe',
     error: 'This username is already taken',
   },
   parameters: {

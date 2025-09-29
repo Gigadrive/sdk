@@ -27,7 +27,7 @@ const config = {
     },
     extend: {
       fontFamily: {
-        sans: ['Manrope', ..._fontFamily.sans],
+        sans: ['Resist Sans Text', ..._fontFamily.sans],
       },
       colors: {
         border: 'hsl(var(--border))',
