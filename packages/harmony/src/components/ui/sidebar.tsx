@@ -338,7 +338,7 @@ const Sidebar = React.forwardRef<
             className={cn(
               'flex h-full w-full flex-col bg-sidebar overflow-x-hidden',
               variant === 'floating' && 'rounded-lg border border-sidebar-border shadow-sm',
-              variant === 'inset' && 'rounded-lg shadow-sm',
+              variant === 'inset' && 'rounded-lg',
               hoverExpand && 'group-data-[collapsible=icon]:hover:opacity-100',
               'group-data-[collapsible=icon]:opacity-100 group-data-[collapsible=icon]:transition-all duration-200',
               hoverExpand && 'group-data-[collapsible=icon]:hover:overflow-y-auto'
