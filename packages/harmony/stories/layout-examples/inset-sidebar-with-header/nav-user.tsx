@@ -35,7 +35,7 @@ export function NavUser({
         icon={
           <Avatar className={cn('transition-all duration-200', isCollapsed ? 'h-6 w-6' : 'h-8 w-8')}>
             <AvatarImage src={user.avatar} alt={user.name} />
-            <AvatarFallback>{user.name[0]}</AvatarFallback>
+            <AvatarFallback>{user.name}</AvatarFallback>
           </Avatar>
         }
         title={user.name}

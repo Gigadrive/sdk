@@ -1,7 +1,7 @@
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import * as React from 'react';
 
-import { cn, wrapTextNodes } from '@/lib/utils';
+import { cn, getInitials, wrapTextNodes } from '@/lib/utils';
 
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
@@ -26,15 +26,26 @@ AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 const AvatarFallback = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Fallback>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Fallback
-    ref={ref}
-    className={cn('flex h-full w-full items-center justify-center rounded-xl bg-muted', className)}
-    {...props}
-  >
-    {wrapTextNodes(props.children)}
-  </AvatarPrimitive.Fallback>
-));
+>(({ className, children, ...props }, ref) => {
+  const compute = React.useCallback((value: string) => getInitials(value), []);
+
+  const content = React.useMemo(() => {
+    if (typeof children === 'string' || typeof children === 'number') {
+      return compute(String(children));
+    }
+    return children;
+  }, [children, compute]);
+
+  return (
+    <AvatarPrimitive.Fallback
+      ref={ref}
+      className={cn('flex h-full w-full items-center justify-center rounded-xl bg-muted text-xs', className)}
+      {...props}
+    >
+      {wrapTextNodes(content)}
+    </AvatarPrimitive.Fallback>
+  );
+});
 AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName;
 
 export { Avatar, AvatarFallback, AvatarImage };

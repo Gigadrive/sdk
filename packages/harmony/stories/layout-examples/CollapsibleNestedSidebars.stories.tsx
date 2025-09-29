@@ -52,7 +52,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 
 const data = {
   user: {
-    name: 'shadcn',
+    name: 'Max Mustermann',
     email: 'm@example.com',
     avatar: '/avatars/shadcn.jpg',
   },
