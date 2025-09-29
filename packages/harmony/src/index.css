@@ -160,6 +160,10 @@
 }
 
 @layer base {
+  html {
+    font-size: clamp(15px, 0.3vw + 14px, 18px);
+  }
+
   body {
     @apply bg-background text-foreground;
   }
