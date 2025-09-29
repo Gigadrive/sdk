@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
+import { AlertCircle, Info, Sparkles } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 
 const meta = {
@@ -170,52 +172,15 @@ export const WithIcons: Story = {
   render: () => (
     <div className="flex flex-wrap gap-2">
       <Badge className="gap-1">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-        </svg>
+        <Sparkles aria-hidden />
         New
       </Badge>
       <Badge variant="secondary" className="gap-1">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 16v-4M12 8h.01" />
-        </svg>
+        <Info aria-hidden />
         Info
       </Badge>
       <Badge variant="destructive" className="gap-1">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M18 6 6 18M6 6l12 12" />
-        </svg>
+        <AlertCircle aria-hidden />
         Error
       </Badge>
     </div>

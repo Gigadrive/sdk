@@ -3,6 +3,7 @@
  * See https://groteskly.xyz/resist-family for purchase options.
  */
 @import url('https://static-cdn.gigadrivegroup.com/resist-sans/stylesheet.css?v2');
+/* @import './font.css'; */
 
 @tailwind base;
 @tailwind components;
@@ -59,7 +60,8 @@
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
 
     /* --text-correction: -3px; */
-    --text-correction: -0.15rem;
+    /* --text-correction: -0.15rem; */
+    --text-correction: 0;
   }
 
   .dark,
