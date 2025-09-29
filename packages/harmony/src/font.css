@@ -1,31 +1,22 @@
 :root {
-  --font-resist-sans-text: 'Resist Sans Text', var(--font-sans);
-  --font-resist-sans-display: 'Resist Sans Display', var(--font-sans);
+  --font-sans-text: 'Resist Sans Text', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-sans-display: 'Resist Sans Display', var(--font-sans-text);
 }
 
-*,
-html,
-body,
+html {
+  font-family: var(--font-sans-text);
+  line-height: 1.4; /* important for cross-OS consistency */
+  font-synthesis: none; /* prevents faux styles, stabilizes metrics */
+}
+
 h1,
 h2,
 h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-resist-sans-text), sans-serif, 'system-ui' !important;
-}
-
-@supports (font-variation-settings: normal) {
-  html,
-  body,
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-family: var(--font-resist-sans-text), sans-serif, 'system-ui' !important;
-  }
+  font-family: var(--font-sans-display);
+  line-height: 1.15;
 }
 
 @font-face {
