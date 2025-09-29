@@ -32,6 +32,8 @@
       "require": "./dist/index.cjs"
     },
     "./style.css": "./dist/index.css",
+    "./theme.css": "./dist/theme.css",
+    "./font.css": "./dist/font.css",
     "./*": {
       "types": "./dist/src/components/ui/*.d.ts",
       "import": "./dist/components/ui/*.js",
