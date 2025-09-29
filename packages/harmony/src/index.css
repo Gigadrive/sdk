@@ -173,3 +173,13 @@
   outline: none !important;
   border: 1px solid var(--ring) !important;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  [id] {
+    scroll-margin-top: calc(var(--header-height) + 1rem);
+  }
+}
