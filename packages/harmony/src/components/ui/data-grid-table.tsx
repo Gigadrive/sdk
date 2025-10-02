@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { Checkbox } from '@/components/ui/checkbox';
 import { useDataGrid } from '@/components/ui/data-grid';
 import { cn } from '@/lib/utils';
@@ -379,7 +380,7 @@ function DataGridTableLoader() {
   );
 }
 
-function DataGridTableRowSelect<TData>({ row, size }: { row: Row<TData>; size?: 'sm' | 'md' | 'lg' }) {
+function DataGridTableRowSelect<TData>({ row }: { row: Row<TData> }) {
   return (
     <>
       <div
@@ -389,14 +390,13 @@ function DataGridTableRowSelect<TData>({ row, size }: { row: Row<TData>; size?: 
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
         aria-label="Select row"
-        size={size ?? 'sm'}
         className="align-[inherit]"
       />
     </>
   );
 }
 
-function DataGridTableRowSelectAll({ size }: { size?: 'sm' | 'md' | 'lg' }) {
+function DataGridTableRowSelectAll() {
   const { table, recordCount, isLoading } = useDataGrid();
 
   return (
@@ -405,7 +405,6 @@ function DataGridTableRowSelectAll({ size }: { size?: 'sm' | 'md' | 'lg' }) {
       disabled={isLoading || recordCount === 0}
       onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
       aria-label="Select all"
-      size={size}
       className="align-[inherit]"
     />
   );

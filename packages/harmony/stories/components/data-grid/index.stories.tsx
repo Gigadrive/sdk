@@ -1,624 +1,1012 @@
-import type { Meta, StoryObj } from '@storybook/react';
-import { useMemo, useState, type ReactNode } from 'react';
-
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DataGrid, DataGridContainer, type DataGridProps } from '@/components/ui/data-grid';
-import { DataGridColumnFilter } from '@/components/ui/data-grid-column-filter';
-import { DataGridColumnHeader } from '@/components/ui/data-grid-column-header';
-import { DataGridColumnVisibility } from '@/components/ui/data-grid-column-visibility';
+import { DataGrid, DataGridContainer } from '@/components/ui/data-grid';
 import { DataGridPagination } from '@/components/ui/data-grid-pagination';
 import { DataGridTable, DataGridTableRowSelect, DataGridTableRowSelectAll } from '@/components/ui/data-grid-table';
-import { DataGridTableDnd } from '@/components/ui/data-grid-table-dnd';
-import { DataGridTableDndRowHandle, DataGridTableDndRows } from '@/components/ui/data-grid-table-dnd-rows';
-
-import { DragEndEvent } from '@dnd-kit/core';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import type { Meta, StoryObj } from '@storybook/react';
 import {
   ColumnDef,
-  ExpandedState,
-  RowSelectionState,
-  SortingState,
-  VisibilityState,
-  createColumnHelper,
+  ColumnOrderState,
   getCoreRowModel,
-  getExpandedRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  PaginationState,
+  RowSelectionState,
+  SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import { Calendar, Mail, Shield, User, Users } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
-type Person = {
+interface IData {
   id: string;
   name: string;
+  availability: 'online' | 'away' | 'busy' | 'offline';
+  avatar: string;
+  status: 'active' | 'inactive';
+  flag: string; // Emoji flags
   email: string;
-  status: 'active' | 'inactive' | 'pending';
-  role: 'admin' | 'editor' | 'viewer';
-  createdAt: string;
-};
-
-const STATUSES: Person['status'][] = ['active', 'inactive', 'pending'];
-const ROLES: Person['role'][] = ['admin', 'editor', 'viewer'];
-
-function generatePeople(count = 42): Person[] {
-  const people: Person[] = [];
-  for (let i = 1; i <= count; i++) {
-    const status = STATUSES[i % STATUSES.length];
-    const role = ROLES[i % ROLES.length];
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    people.push({
-      id: `${i}`,
-      name: `User ${i}`,
-      email: `user${i}@example.com`,
-      status,
-      role,
-      createdAt: date.toISOString(),
-    });
-  }
-  return people;
+  company: string;
+  role: string;
+  joined: string;
+  location: string;
+  balance: number;
+  details: string;
 }
 
-const columnHelper = createColumnHelper<Person>();
-
-function useDemoColumns(opts?: {
-  withSelection?: boolean;
-  withIcons?: boolean;
-  withFilters?: boolean;
-  enableResize?: boolean;
-  enablePin?: boolean;
-  visibilityControlInHeader?: boolean;
-  expandedContent?: boolean;
-  showRowHandle?: boolean;
-}) {
-  const {
-    withSelection,
-    withIcons,
-    withFilters,
-    enableResize,
-    enablePin,
-    visibilityControlInHeader,
-    expandedContent,
-    showRowHandle,
-  } = opts || {};
-
-  const columns = useMemo<ColumnDef<Person, unknown>[]>(() => {
-    const cols: ColumnDef<Person, unknown>[] = [];
-
-    if (withSelection) {
-      cols.push({
-        id: 'select',
-        enableHiding: false,
-        size: 42,
-        header: () => <DataGridTableRowSelectAll size="sm" />,
-        cell: ({ row }) => <DataGridTableRowSelect row={row} size="sm" />,
-      });
-    }
-
-    if (showRowHandle) {
-      cols.push({
-        id: 'handle',
-        enableSorting: false,
-        enableHiding: false,
-        size: 48,
-        header: () => null,
-        cell: ({ row }) => <DataGridTableDndRowHandle rowId={row.id} />,
-      });
-    }
-
-    cols.push(
-      columnHelper.accessor('name', {
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            column={column}
-            title="Name"
-            icon={withIcons ? <User className="size-3.5" /> : undefined}
-            visibility={visibilityControlInHeader}
-          />
-        ),
-        cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
-        size: enableResize ? 180 : undefined,
-        meta: {
-          headerTitle: 'Name',
-          skeleton: <div className="h-4 w-24 bg-muted rounded" />,
-          expandedContent: expandedContent
-            ? (row: Person) => (
-                <div className="p-4 text-sm grid gap-1">
-                  <div className="font-medium">Details for {row.name}</div>
-                  <div>Email: {row.email}</div>
-                  <div>Role: {row.role}</div>
-                  <div>Status: {row.status}</div>
-                </div>
-              )
-            : undefined,
-        },
-      }) as ColumnDef<Person, unknown>,
-      columnHelper.accessor('email', {
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            column={column}
-            title="Email"
-            icon={withIcons ? <Mail className="size-3.5" /> : undefined}
-          />
-        ),
-        cell: ({ getValue }) => <span className="text-muted-foreground">{getValue()}</span>,
-        size: enableResize ? 240 : undefined,
-        meta: { headerTitle: 'Email', skeleton: <div className="h-4 w-40 bg-muted rounded" /> },
-      }) as ColumnDef<Person, unknown>,
-      columnHelper.accessor('status', {
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            column={column}
-            title="Status"
-            icon={withIcons ? <Users className="size-3.5" /> : undefined}
-            filter={
-              withFilters ? (
-                <DataGridColumnFilter
-                  column={column}
-                  title="Status"
-                  options={STATUSES.map((s) => ({ label: s, value: s }))}
-                />
-              ) : undefined
-            }
-          />
-        ),
-        cell: ({ getValue }) => {
-          const value = getValue();
-          const variant: 'default' | 'secondary' | 'outline' =
-            value === 'active' ? 'default' : value === 'pending' ? 'secondary' : 'outline';
-          return <Badge variant={variant}>{value}</Badge>;
-        },
-        size: enableResize ? 140 : undefined,
-        meta: { headerTitle: 'Status', skeleton: <div className="h-4 w-16 bg-muted rounded" /> },
-      }) as ColumnDef<Person, unknown>,
-      columnHelper.accessor('role', {
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            column={column}
-            title="Role"
-            icon={withIcons ? <Shield className="size-3.5" /> : undefined}
-            filter={
-              withFilters ? (
-                <DataGridColumnFilter
-                  column={column}
-                  title="Role"
-                  options={ROLES.map((r) => ({ label: r, value: r }))}
-                />
-              ) : undefined
-            }
-          />
-        ),
-        cell: ({ getValue }) => <span>{getValue()}</span>,
-        size: enableResize ? 140 : undefined,
-        meta: { headerTitle: 'Role', skeleton: <div className="h-4 w-16 bg-muted rounded" /> },
-      }) as ColumnDef<Person, unknown>,
-      columnHelper.accessor('createdAt', {
-        header: ({ column }) => (
-          <DataGridColumnHeader
-            column={column}
-            title="Created"
-            icon={withIcons ? <Calendar className="size-3.5" /> : undefined}
-          />
-        ),
-        cell: ({ getValue }) => new Date(getValue()).toLocaleDateString(),
-        size: enableResize ? 160 : undefined,
-        meta: { headerTitle: 'Created', skeleton: <div className="h-4 w-24 bg-muted rounded" /> },
-      }) as ColumnDef<Person, unknown>
-    );
-
-    if (enablePin) {
-      cols.forEach((c) => {
-        // allow pinning on all non-utility columns
-        if (c.id !== 'select' && c.id !== 'handle') {
-          c.enablePinning = true;
-        }
-      });
-    }
-
-    return cols;
-  }, [
-    withSelection,
-    withIcons,
-    withFilters,
-    enableResize,
-    enablePin,
-    visibilityControlInHeader,
-    expandedContent,
-    showRowHandle,
-  ]);
-
-  return columns;
-}
-
-function useDemoTable(
-  data: Person[],
-  columns: ColumnDef<Person, unknown>[],
-  options?: {
-    enableRowSelection?: boolean;
-    enableColumnResizing?: boolean;
-    enablePinning?: boolean;
-  }
-) {
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [expanded, setExpanded] = useState<ExpandedState>({});
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-
-  const table = useReactTable({
-    data,
-    columns,
-    state: { sorting, rowSelection, expanded, columnVisibility },
-    onSortingChange: setSorting,
-    onRowSelectionChange: setRowSelection,
-    onExpandedChange: setExpanded,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
-    enableRowSelection: options?.enableRowSelection ?? false,
-    enableColumnResizing: options?.enableColumnResizing,
-    columnResizeMode: 'onChange',
-    enablePinning: options?.enablePinning,
-  });
-
-  return table;
-}
+const demoData: IData[] = [
+  {
+    id: '1',
+    name: 'Kathryn Campbell',
+    availability: 'online',
+    avatar: '1.png',
+    status: 'active',
+    flag: '🇺🇸',
+    email: 'kathryn@apple.com',
+    company: 'Apple',
+    role: 'CEO',
+    joined: '2021-04-15',
+    location: 'San Francisco, USA',
+    balance: 5143.03,
+    details: 'Kathryn is a visionary leader at Apple, focusing on innovation and team growth.',
+  },
+  {
+    id: '2',
+    name: 'Robert Smith',
+    availability: 'away',
+    avatar: '2.png',
+    status: 'inactive',
+    flag: '🇬🇧',
+    email: 'robert@openai.com',
+    company: 'OpenAI',
+    role: 'CTO',
+    joined: '2020-07-20',
+    location: 'London, UK',
+    balance: 4321.87,
+    details: 'Robert is a technology pioneer specializing in artificial intelligence and machine learning.',
+  },
+  {
+    id: '3',
+    name: 'Sophia Johnson',
+    availability: 'busy',
+    avatar: '3.png',
+    status: 'active',
+    flag: '🇨🇦',
+    email: 'sophia@meta.com',
+    company: 'Meta',
+    role: 'Designer',
+    joined: '2019-03-12',
+    location: 'Toronto, Canada',
+    balance: 7654.98,
+    details: 'Sophia is a creative designer passionate about building user-centric experiences.',
+  },
+  {
+    id: '4',
+    name: 'Lucas Walker',
+    availability: 'offline',
+    avatar: '4.png',
+    status: 'inactive',
+    flag: '🇦🇺',
+    email: 'lucas@tesla.com',
+    company: 'Tesla',
+    role: 'Developer',
+    joined: '2022-01-18',
+    location: 'Sydney, Australia',
+    balance: 3456.45,
+    details: 'Lucas is a talented developer focused on innovative solutions in automotive technology.',
+  },
+  {
+    id: '5',
+    name: 'Emily Davis',
+    availability: 'online',
+    avatar: '5.png',
+    status: 'active',
+    flag: '🇩🇪',
+    email: 'emily@sap.com',
+    company: 'SAP',
+    role: 'Lawyer',
+    joined: '2023-05-23',
+    location: 'Berlin, Germany',
+    balance: 9876.54,
+    details: 'Emily is a corporate lawyer specializing in technology and software agreements.',
+  },
+  {
+    id: '6',
+    name: 'James Lee',
+    availability: 'away',
+    avatar: '6.png',
+    status: 'active',
+    flag: '🇲🇾',
+    email: 'james@keenthemes.com',
+    company: 'Keenthemes',
+    role: 'Director',
+    joined: '2018-11-30',
+    location: 'Kuala Lumpur, MY',
+    balance: 6214.22,
+    details: 'James oversees product development and team leadership at Keenthemes.',
+  },
+  {
+    id: '7',
+    name: 'Isabella Martinez',
+    availability: 'busy',
+    avatar: '7.png',
+    status: 'inactive',
+    flag: '🇪🇸',
+    email: 'isabella@bbva.es',
+    company: 'BBVA',
+    role: 'Product Manager',
+    joined: '2021-06-14',
+    location: 'Barcelona, Spain',
+    balance: 5321.77,
+    details: 'Isabella manages product development and strategy for BBVA’s digital platforms.',
+  },
+  {
+    id: '8',
+    name: 'Benjamin Harris',
+    availability: 'offline',
+    avatar: '8.png',
+    status: 'active',
+    flag: '🇯🇵',
+    email: 'benjamin@sony.jp',
+    company: 'Sony',
+    role: 'Marketing Lead',
+    joined: '2020-10-22',
+    location: 'Tokyo, Japan',
+    balance: 8452.39,
+    details: 'Benjamin leads innovative marketing campaigns for Sony’s flagship products.',
+  },
+  {
+    id: '9',
+    name: 'Olivia Brown',
+    availability: 'online',
+    avatar: '9.png',
+    status: 'active',
+    flag: '🇫🇷',
+    email: 'olivia@lvmh.fr',
+    company: 'LVMH',
+    role: 'Data Scientist',
+    joined: '2019-09-17',
+    location: 'Paris, France',
+    balance: 7345.1,
+    details: 'Olivia is a data scientist optimizing sales and marketing analytics at LVMH.',
+  },
+  {
+    id: '10',
+    name: 'Michael Clark',
+    availability: 'away',
+    avatar: '10.png',
+    status: 'inactive',
+    flag: '🇮🇹',
+    email: 'michael@eni.it',
+    company: 'ENI',
+    role: 'Engineer',
+    joined: '2023-02-11',
+    location: 'Milan, Italy',
+    balance: 5214.88,
+    details: 'Michael is a lead engineer developing sustainable energy solutions at ENI.',
+  },
+  {
+    id: '11',
+    name: 'Ava Wilson',
+    availability: 'busy',
+    avatar: '11.png',
+    status: 'active',
+    flag: '🇧🇷',
+    email: 'ava@vale.br',
+    company: 'Vale',
+    role: 'Software Engineer',
+    joined: '2022-12-01',
+    location: 'Rio de Janeiro, Brazil',
+    balance: 9421.5,
+    details: 'Ava develops cutting-edge software to optimize mining operations at Vale.',
+  },
+  {
+    id: '12',
+    name: 'David Young',
+    availability: 'offline',
+    avatar: '12.png',
+    status: 'active',
+    flag: '🇮🇳',
+    email: 'david@tata.in',
+    company: 'Tata',
+    role: 'Sales Manager',
+    joined: '2020-03-27',
+    location: 'Mumbai, India',
+    balance: 4521.67,
+    details: 'David manages international sales for Tata’s industrial and automotive products.',
+  },
+];
 
 const meta = {
-  title: 'Components/DataGrid',
-  component: DataGridContainer,
-  args: { children: null as unknown as ReactNode },
-  parameters: {
-    layout: 'fullscreen',
-    docs: {
-      description: {
-        component:
-          'A powerful data grid built on TanStack Table v8. Stories mirror examples from ReUI docs.' +
-          '\n\nDocs: https://reui.io/docs/data-grid.md',
-      },
-    },
-  },
+  title: 'Components/Data Grid',
   tags: ['autodocs'],
-} satisfies Meta<typeof DataGridContainer>;
+} satisfies Meta<typeof DataGrid>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-function GridShell(props: {
-  tableProps: Omit<DataGridProps<Person>, 'table' | 'recordCount'> & {
-    tableLayout?: DataGridProps<Person>['tableLayout'];
-  };
-  tableVariant: 'base' | 'dnd-columns' | 'dnd-rows';
-  table: ReturnType<typeof useDemoTable>;
-  data: Person[];
-  setData?: (updater: Person[] | ((prev: Person[]) => Person[])) => void;
-  children?: ReactNode;
-}) {
-  const { tableVariant, table, data, setData } = props;
-  const common = (
-    <>
-      {tableVariant === 'dnd-columns' ? (
-        <DataGridTableDnd
-          handleDragEnd={(event: DragEndEvent) => {
-            const { active, over } = event;
-            if (!over) return;
-            if (active.id !== over.id) {
-              const columnOrder = table.getState().columnOrder;
-              const oldIndex = columnOrder.indexOf(active.id as string);
-              const newIndex = columnOrder.indexOf(over.id as string);
-              const newOrder = [...columnOrder];
-              newOrder.splice(oldIndex, 1);
-              newOrder.splice(newIndex, 0, active.id as string);
-              table.setColumnOrder(newOrder);
-            }
-          }}
-        />
-      ) : tableVariant === 'dnd-rows' && setData ? (
-        <DataGridTableDndRows
-          dataIds={table.getRowModel().rows.map((r) => r.id)}
-          handleDragEnd={(event: DragEndEvent) => {
-            const { active, over } = event;
-            if (!over) return;
-            if (active.id !== over.id) {
-              setData((prev) => {
-                const oldIndex = prev.findIndex((p) => p.id === active.id);
-                const newIndex = prev.findIndex((p) => p.id === over.id);
-                if (oldIndex === -1 || newIndex === -1) return prev;
-                const next = [...prev];
-                const [moved] = next.splice(oldIndex, 1);
-                next.splice(newIndex, 0, moved);
-                return next;
-              });
-            }
-          }}
-        />
-      ) : (
-        <DataGridTable />
-      )}
-
-      <div className="border-t border-border">
-        <DataGridPagination more moreLimit={5} />
-      </div>
-    </>
-  );
-
-  return (
-    <DataGrid<Person> table={table} recordCount={data.length} {...props.tableProps}>
-      <DataGridContainer>
-        {props.children}
-        {common}
-      </DataGridContainer>
-    </DataGrid>
-  );
-}
-
-export const Basic: Story = {
+export const CellBorder: Story = {
   render: () => {
-    const data = generatePeople(36);
-    const columns = useDemoColumns({ withIcons: true, withFilters: true });
-    const table = useDemoTable(data, columns);
-
-    return (
-      <GridShell tableProps={{ tableLayout: { rowBorder: true } }} tableVariant="base" table={table} data={data}>
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Basic data grid</div>
-        </div>
-      </GridShell>
+    const [pagination, setPagination] = useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 5,
+    });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: true }]);
+    const [columnOrder, setColumnOrder] = useState<ColumnOrderState>([]);
+    const columns = useMemo<ColumnDef<IData>[]>(
+      () => [
+        {
+          accessorKey: 'name',
+          id: 'name',
+          header: 'Name',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-3">
+                <Avatar className="size-8">
+                  <AvatarImage src={`/media/avatars/${row.original.avatar}`} alt={row.original.name} />
+                  <AvatarFallback>N</AvatarFallback>
+                </Avatar>
+                <div className="space-y-px">
+                  <div className="font-medium text-foreground">{row.original.name}</div>
+                  <div className="text-muted-foreground">{row.original.email}</div>
+                </div>
+              </div>
+            );
+          },
+          size: 250,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'company',
+          header: 'Company',
+          cell: (info) => <span>{info.getValue() as string}</span>,
+          size: 150,
+          meta: {
+            headerClassName: '',
+          },
+        },
+        {
+          accessorKey: 'role',
+          header: 'Occupation',
+          cell: (info) => <span>{info.getValue() as string}</span>,
+          size: 125,
+          meta: {
+            headerClassName: '',
+          },
+        },
+        {
+          accessorKey: 'balance',
+          header: 'Salary',
+          cell: (info) => <span className="font-semibold">${(info.getValue() as number).toFixed(2)}</span>,
+          size: 120,
+        },
+      ],
+      []
     );
-  },
-};
-
-export const DenseAndBorders: Story = {
-  render: () => {
-    const data = generatePeople(24);
-    const columns = useDemoColumns({ withFilters: true });
-    const table = useDemoTable(data, columns);
-
+    const table = useReactTable({
+      columns,
+      data: demoData,
+      pageCount: Math.ceil((demoData?.length || 0) / pagination.pageSize),
+      getRowId: (row: IData) => row.id,
+      state: {
+        pagination,
+        sorting,
+        columnOrder,
+      },
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      onColumnOrderChange: setColumnOrder,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
     return (
-      <GridShell
-        tableProps={{
-          tableLayout: { dense: true, cellBorder: true, rowBorder: true },
+      <DataGrid
+        table={table}
+        recordCount={demoData?.length || 0}
+        tableLayout={{
+          cellBorder: true,
         }}
-        tableVariant="base"
-        table={table}
-        data={data}
       >
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Dense layout with cell and row borders</div>
+        <div className="w-full space-y-2.5">
+          <DataGridContainer>
+            <ScrollArea>
+              <DataGridTable />
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </DataGridContainer>
+          <DataGridPagination />
         </div>
-      </GridShell>
+      </DataGrid>
     );
   },
 };
 
-export const StripedAndAutoWidth: Story = {
+export const DenseTable: Story = {
   render: () => {
-    const data = generatePeople(30);
-    const columns = useDemoColumns();
-    const table = useDemoTable(data, columns);
-
+    const [pagination, setPagination] = useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 5,
+    });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: true }]);
+    const columns = useMemo<ColumnDef<IData>[]>(
+      () => [
+        {
+          accessorKey: 'name',
+          id: 'name',
+          header: 'Name',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-2">
+                <Avatar className="size-6">
+                  <AvatarImage src={`/media/avatars/${row.original.avatar}`} alt={row.original.name} />
+                  <AvatarFallback>N</AvatarFallback>
+                </Avatar>
+                <a href="#" className="font-medium text-foreground hover:text-primary">
+                  {row.original.name}
+                </a>
+              </div>
+            );
+          },
+          size: 175,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'email',
+          header: 'Email',
+          cell: (info) => (
+            <a href={`mailto:${info.getValue()}`} className="hover:text-primary hover:underline">
+              {info.getValue() as string}
+            </a>
+          ),
+          size: 175,
+          meta: {
+            headerClassName: '',
+          },
+        },
+        {
+          accessorKey: 'location',
+          header: 'Location',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-1.5">
+                {row.original.flag}
+                <div className="font-medium text-foreground">{row.original.location}</div>
+              </div>
+            );
+          },
+          size: 175,
+          meta: {
+            headerClassName: '',
+            cellClassName: 'text-start',
+          },
+        },
+        {
+          accessorKey: 'balance',
+          header: 'Balance ($)',
+          cell: (info) => <span className="font-semibold">${(info.getValue() as number).toFixed(2)}</span>,
+          size: 125,
+          meta: {
+            headerClassName: 'text-right rtl:text-left',
+            cellClassName: 'text-right rtl:text-left',
+          },
+        },
+      ],
+      []
+    );
+    const table = useReactTable({
+      columns,
+      data: demoData,
+      pageCount: Math.ceil((demoData?.length || 0) / pagination.pageSize),
+      getRowId: (row: IData) => row.id,
+      state: {
+        pagination,
+        sorting,
+      },
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
     return (
-      <GridShell
-        tableProps={{
-          tableLayout: { stripped: true, rowBorder: false, width: 'auto' },
-        }}
-        tableVariant="base"
-        table={table}
-        data={data}
-      >
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Striped rows and auto width</div>
+      <DataGrid table={table} recordCount={demoData?.length || 0} tableLayout={{ dense: true }}>
+        <div className="w-full space-y-2.5">
+          <DataGridContainer>
+            <ScrollArea>
+              <DataGridTable />
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </DataGridContainer>
+          <DataGridPagination />
         </div>
-      </GridShell>
+      </DataGrid>
     );
   },
 };
 
-export const StickyHeader: Story = {
+export const Light: Story = {
   render: () => {
-    const data = generatePeople(60);
-    const columns = useDemoColumns({ withFilters: true });
-    const table = useDemoTable(data, columns);
-    return (
-      <div style={{ height: 360, overflow: 'auto' }}>
-        <GridShell
-          tableProps={{ tableLayout: { headerSticky: true, rowBorder: true } }}
-          tableVariant="base"
-          table={table}
-          data={data}
-        >
-          <div className="flex items-center justify-between p-3">
-            <div className="text-sm text-muted-foreground">Sticky header</div>
-          </div>
-        </GridShell>
-      </div>
-    );
-  },
-};
-
-export const ColumnControlsAndVisibility: Story = {
-  render: () => {
-    const data = generatePeople(28);
-    const columns = useDemoColumns({ withFilters: true, withIcons: true, visibilityControlInHeader: true });
-    const table = useDemoTable(data, columns);
-    return (
-      <GridShell
-        tableProps={{ tableLayout: { columnsVisibility: true, columnsMovable: true, rowBorder: true } }}
-        tableVariant="base"
-        table={table}
-        data={data}
-      >
-        <div className="flex items-center justify-between p-3 gap-2">
-          <div className="text-sm text-muted-foreground">Column controls via header menu</div>
-          <DataGridColumnVisibility
-            table={table}
-            trigger={
-              <Button variant="outline" size="sm">
-                Columns
-              </Button>
+    const [pagination, setPagination] = useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 5,
+    });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: true }]);
+    const columns = useMemo<ColumnDef<IData>[]>(
+      () => [
+        {
+          accessorKey: 'name',
+          id: 'name',
+          header: 'Name',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-3">
+                <Avatar className="size-8">
+                  <AvatarImage src={`/media/avatars/${row.original.avatar}`} alt={row.original.name} />
+                  <AvatarFallback>N</AvatarFallback>
+                </Avatar>
+                <div className="space-y-px">
+                  <div className="font-medium text-foreground">{row.original.name}</div>
+                  <div className="text-muted-foreground">{row.original.email}</div>
+                </div>
+              </div>
+            );
+          },
+          size: 225,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'company',
+          id: 'company',
+          header: 'Role',
+          cell: ({ row }) => {
+            return (
+              <div className="space-y-0.5">
+                <div className="font-medium text-foreground">{row.original.role}</div>
+                <div className="text-muted-foreground">{row.original.company}</div>
+              </div>
+            );
+          },
+          size: 150,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'location',
+          header: 'Location',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-1.5">
+                {row.original.flag}
+                <div className="font-medium text-foreground">{row.original.location}</div>
+              </div>
+            );
+          },
+          size: 160,
+          meta: {
+            headerClassName: '',
+            cellClassName: 'text-start',
+          },
+        },
+        {
+          accessorKey: 'status',
+          id: 'status',
+          header: 'Status',
+          cell: ({ row }) => {
+            const status = row.original.status;
+            if (status == 'active') {
+              return <Badge variant="default">Approved</Badge>;
+            } else {
+              return <Badge variant="destructive">Pending</Badge>;
             }
-          />
+          },
+          size: 100,
+        },
+      ],
+      []
+    );
+    const table = useReactTable({
+      columns,
+      data: demoData,
+      pageCount: Math.ceil((demoData?.length || 0) / pagination.pageSize),
+      getRowId: (row: IData) => row.id,
+      state: {
+        pagination,
+        sorting,
+      },
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
+    return (
+      <DataGrid
+        table={table}
+        recordCount={demoData?.length || 0}
+        tableLayout={{
+          headerBackground: false,
+          rowBorder: false,
+          rowRounded: true,
+        }}
+      >
+        <div className="w-full space-y-2.5">
+          <DataGridContainer border={false}>
+            <ScrollArea>
+              <DataGridTable />
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </DataGridContainer>
+          <DataGridPagination />
         </div>
-      </GridShell>
+      </DataGrid>
     );
   },
 };
 
-export const ResizableAndPinnable: Story = {
+export const Striped: Story = {
   render: () => {
-    const data = generatePeople(32);
-    const columns = useDemoColumns({ enableResize: true, enablePin: true, withFilters: true });
-    const table = useDemoTable(data, columns, { enableColumnResizing: true, enablePinning: true });
+    const [pagination, setPagination] = useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 5,
+    });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: true }]);
+    const columns = useMemo<ColumnDef<IData>[]>(
+      () => [
+        {
+          accessorKey: 'name',
+          id: 'name',
+          header: 'Name',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-2">
+                <Avatar className="size-6">
+                  <AvatarImage src={`/media/avatars/${row.original.avatar}`} alt={row.original.name} />
+                  <AvatarFallback>N</AvatarFallback>
+                </Avatar>
+                <a href="#" className="font-medium text-foreground hover:text-primary">
+                  {row.original.name}
+                </a>
+              </div>
+            );
+          },
+          size: 175,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'email',
+          header: 'Email',
+          cell: (info) => (
+            <a href={`mailto:${info.getValue()}`} className="hover:text-primary hover:underline">
+              {info.getValue() as string}
+            </a>
+          ),
+          size: 180,
+        },
+        {
+          accessorKey: 'location',
+          header: 'Location',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-1.5">
+                {row.original.flag}
+                <div className="font-medium text-foreground">{row.original.location}</div>
+              </div>
+            );
+          },
+          size: 170,
+        },
+        {
+          accessorKey: 'balance',
+          header: 'Balance ($)',
+          cell: (info) => <span className="font-semibold">${(info.getValue() as number).toFixed(2)}</span>,
+          size: 120,
+          meta: {
+            headerClassName: 'text-right rtl:text-left',
+            cellClassName: 'text-right rtl:text-left',
+          },
+        },
+      ],
+      []
+    );
+    const table = useReactTable({
+      columns,
+      data: demoData,
+      pageCount: Math.ceil((demoData?.length || 0) / pagination.pageSize),
+      getRowId: (row: IData) => row.id,
+      state: {
+        pagination,
+        sorting,
+      },
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
     return (
-      <GridShell
-        tableProps={{ tableLayout: { columnsResizable: true, columnsPinnable: true, rowBorder: true } }}
-        tableVariant="base"
+      <DataGrid
         table={table}
-        data={data}
+        recordCount={demoData?.length || 0}
+        tableLayout={{
+          stripped: true,
+          rowRounded: true,
+        }}
       >
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Resizable columns with pinning</div>
+        <div className="w-full space-y-2.5">
+          <DataGridContainer border={false}>
+            <ScrollArea>
+              <DataGridTable />
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </DataGridContainer>
+          <DataGridPagination />
         </div>
-      </GridShell>
+      </DataGrid>
     );
   },
 };
 
-export const MovableColumns: Story = {
+export const AutoWidth: Story = {
   render: () => {
-    const data = generatePeople(26);
-    const columns = useDemoColumns({ withIcons: true });
-    const table = useDemoTable(data, columns);
-    return (
-      <GridShell
-        tableProps={{ tableLayout: { columnsMovable: true, rowBorder: true } }}
-        tableVariant="base"
-        table={table}
-        data={data}
-      >
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Move columns left or right from header menu</div>
-        </div>
-      </GridShell>
+    const [pagination, setPagination] = useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 5,
+    });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: true }]);
+    const columns = useMemo<ColumnDef<IData>[]>(
+      () => [
+        {
+          accessorKey: 'name',
+          id: 'name',
+          header: 'Name',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-2">
+                <Avatar className="size-6">
+                  <AvatarImage src={`/media/avatars/${row.original.avatar}`} alt={row.original.name} />
+                  <AvatarFallback>N</AvatarFallback>
+                </Avatar>
+                <a href="#" className="font-medium text-foreground hover:text-primary">
+                  {row.original.name}
+                </a>
+              </div>
+            );
+          },
+          size: 175,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'email',
+          header: 'Email',
+          cell: (info) => (
+            <a href={`mailto:${info.getValue()}`} className="hover:text-primary hover:underline">
+              {info.getValue() as string}
+            </a>
+          ),
+          size: 200,
+        },
+        {
+          accessorKey: 'location',
+          header: 'Location',
+          cell: (info) => <span>{info.getValue() as string}</span>,
+          size: 125,
+        },
+        {
+          accessorKey: 'joined',
+          header: 'Joined',
+          cell: (info) => info.getValue() as string,
+          size: 120,
+          meta: {
+            cellClassName: 'font-medium',
+          },
+        },
+      ],
+      []
     );
-  },
-};
-
-export const DraggableColumns: Story = {
-  render: () => {
-    const data = generatePeople(24);
-    const columns = useDemoColumns({ withIcons: true });
-    const table = useDemoTable(data, columns);
+    const table = useReactTable({
+      columns,
+      data: demoData,
+      pageCount: Math.ceil((demoData?.length || 0) / pagination.pageSize),
+      getRowId: (row) => row.id,
+      state: {
+        pagination,
+        sorting,
+      },
+      columnResizeMode: 'onChange',
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
     return (
-      <GridShell
-        tableProps={{ tableLayout: { columnsDraggable: true, rowBorder: true } }}
-        tableVariant="dnd-columns"
+      <DataGrid
         table={table}
-        data={data}
+        recordCount={demoData?.length || 0}
+        tableLayout={{
+          width: 'auto',
+        }}
       >
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Drag columns to reorder</div>
+        <div className="w-full space-y-2.5">
+          <DataGridContainer>
+            <ScrollArea>
+              <DataGridTable />
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </DataGridContainer>
+          <DataGridPagination />
         </div>
-      </GridShell>
-    );
-  },
-};
-
-export const DraggableRows: Story = {
-  render: () => {
-    const [data, setData] = useState<Person[]>(() => generatePeople(18));
-    const columns = useDemoColumns({ showRowHandle: true });
-    const table = useDemoTable(data, columns);
-    return (
-      <GridShell
-        tableProps={{ tableLayout: { rowsDraggable: true, rowBorder: true } }}
-        tableVariant="dnd-rows"
-        table={table}
-        data={data}
-        setData={setData}
-      >
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Drag rows using the handle</div>
-        </div>
-      </GridShell>
+      </DataGrid>
     );
   },
 };
 
 export const RowSelection: Story = {
   render: () => {
-    const data = generatePeople(22);
-    const columns = useDemoColumns({ withSelection: true });
-    const table = useDemoTable(data, columns, { enableRowSelection: true });
+    const [pagination, setPagination] = useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 5,
+    });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: true }]);
+    const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    useEffect(() => {
+      const selectedRowIds = Object.keys(rowSelection);
+      if (selectedRowIds.length > 0) {
+        setSelectedIds(selectedRowIds);
+      } else {
+        setSelectedIds([]);
+      }
+    }, [rowSelection]);
+    const columns = useMemo<ColumnDef<IData>[]>(
+      () => [
+        {
+          accessorKey: 'id',
+          header: () => <DataGridTableRowSelectAll />,
+          cell: ({ row }) => <DataGridTableRowSelect row={row} />,
+          enableSorting: false,
+          size: 35,
+          meta: {
+            headerClassName: '',
+            cellClassName: '',
+          },
+        },
+        {
+          accessorKey: 'name',
+          id: 'name',
+          header: 'Name',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-3">
+                <Avatar className="size-8">
+                  <AvatarImage src={`/media/avatars/${row.original.avatar}`} alt={row.original.name} />
+                  <AvatarFallback>N</AvatarFallback>
+                </Avatar>
+                <div className="space-y-px">
+                  <div className="font-medium text-foreground">{row.original.name}</div>
+                  <div className="text-muted-foreground">{row.original.email}</div>
+                </div>
+              </div>
+            );
+          },
+          size: 200,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'company',
+          id: 'company',
+          header: 'Role',
+          cell: ({ row }) => {
+            return (
+              <div className="space-y-0.5">
+                <div className="font-medium text-foreground">{row.original.role}</div>
+                <div className="text-muted-foreground">{row.original.company}</div>
+              </div>
+            );
+          },
+          size: 140,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'location',
+          header: 'Location',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-1.5">
+                {row.original.flag}
+                <div className="font-medium text-foreground">{row.original.location}</div>
+              </div>
+            );
+          },
+          size: 180,
+          meta: {
+            headerClassName: '',
+            cellClassName: 'text-start',
+          },
+        },
+        {
+          accessorKey: 'joined',
+          header: 'Joined',
+          cell: (info) => info.getValue() as string,
+          size: 120,
+          meta: {
+            headerClassName: '',
+            cellClassName: 'font-medium',
+          },
+        },
+      ],
+      []
+    );
+    const table = useReactTable({
+      columns,
+      data: demoData,
+      pageCount: Math.ceil((demoData?.length || 0) / pagination.pageSize),
+      getRowId: (row: IData) => row.id,
+      state: {
+        pagination,
+        sorting,
+        rowSelection,
+      },
+      enableRowSelection: true,
+      onRowSelectionChange: setRowSelection,
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
     return (
-      <GridShell tableProps={{ tableLayout: { rowBorder: true } }} tableVariant="base" table={table} data={data}>
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Row selection with checkbox column</div>
-          <div className="text-xs text-muted-foreground">
-            Selected: {Object.keys(table.getState().rowSelection).length}
-          </div>
+      <DataGrid table={table} recordCount={demoData?.length || 0}>
+        <div className="w-full space-y-2.5">
+          <DataGridContainer>
+            <ScrollArea>
+              <DataGridTable />
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </DataGridContainer>
+          <DataGridPagination />
         </div>
-      </GridShell>
+      </DataGrid>
     );
   },
 };
 
-export const ExpandableRows: Story = {
+export const ExpandableRow: Story = {
   render: () => {
-    const data = generatePeople(20);
-    const columns = useDemoColumns({ expandedContent: true });
-    const table = useDemoTable(data, columns);
-    // Enable expanding on all rows via a simple click on the row
-    table.getRowModel().rows.forEach((r) => (r.getCanExpand = () => true));
-    return (
-      <GridShell tableProps={{ tableLayout: { rowBorder: true } }} tableVariant="base" table={table} data={data}>
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Rows expand to show custom content</div>
-        </div>
-      </GridShell>
+    const [pagination, setPagination] = useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 5,
+    });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: true }]);
+    const columns = useMemo<ColumnDef<IData>[]>(
+      () => [
+        {
+          id: 'id',
+          header: () => null,
+          cell: ({ row }) => {
+            return row.getCanExpand() ? (
+              <Button
+                {...{
+                  className: 'size-6 text-muted-foreground',
+                  onClick: row.getToggleExpandedHandler(),
+                  mode: 'icon',
+                  variant: 'ghost',
+                }}
+              >
+                {row.getIsExpanded() ? <ChevronUp /> : <ChevronDown />}
+              </Button>
+            ) : null;
+          },
+          size: 12,
+          meta: {
+            expandedContent: (row) => <div className="ms-12 py-3 text-muted-foreground text-sm">{row.details}</div>,
+          },
+        },
+        {
+          accessorKey: 'name',
+          id: 'name',
+          header: 'Name',
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-2">
+                <Avatar className="size-6">
+                  <AvatarImage src={`/media/avatars/${row.original.avatar}`} alt={row.original.name} />
+                  <AvatarFallback>N</AvatarFallback>
+                </Avatar>
+                <a href="#" className="font-medium text-foreground hover:text-primary">
+                  {row.original.name}
+                </a>
+              </div>
+            );
+          },
+          size: 175,
+          enableSorting: true,
+          enableHiding: false,
+        },
+        {
+          accessorKey: 'email',
+          header: 'Email',
+          cell: (info) => (
+            <a href={`mailto:${info.getValue()}`} className="hover:text-primary hover:underline">
+              {info.getValue() as string}
+            </a>
+          ),
+          size: 150,
+        },
+        {
+          accessorKey: 'location',
+          header: 'Location',
+          cell: (info) => <span>{info.getValue() as string}</span>,
+          size: 150,
+          meta: {
+            headerClassName: '',
+            cellClassName: 'text-start',
+          },
+        },
+        {
+          accessorKey: 'status',
+          id: 'status',
+          header: 'Status',
+          cell: ({ row }) => {
+            const status = row.original.status;
+            if (status == 'active') {
+              return <Badge variant="default">Approved</Badge>;
+            } else {
+              return <Badge variant="destructive">Pending</Badge>;
+            }
+          },
+          size: 100,
+        },
+      ],
+      []
     );
-  },
-};
-
-export const LoadingSkeleton: Story = {
-  render: () => {
-    const data = generatePeople(25);
-    const columns = useDemoColumns({ withIcons: true });
-    const table = useDemoTable(data, columns);
+    const table = useReactTable({
+      columns,
+      data: demoData,
+      pageCount: Math.ceil((demoData?.length || 0) / pagination.pageSize),
+      getRowId: (row: IData) => row.id,
+      getRowCanExpand: (row) => Boolean(row.original.details),
+      state: {
+        pagination,
+        sorting,
+      },
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
     return (
-      <GridShell
-        tableProps={{ isLoading: true, loadingMode: 'skeleton', tableLayout: { rowBorder: true } }}
-        tableVariant="base"
-        table={table}
-        data={data}
-      >
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Skeleton loading</div>
+      <DataGrid table={table} recordCount={demoData?.length || 0} tableLayout={{ headerBackground: false }}>
+        <div className="w-full space-y-2.5">
+          <DataGridContainer border={false}>
+            <ScrollArea>
+              <DataGridTable />
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </DataGridContainer>
+          <DataGridPagination />
         </div>
-      </GridShell>
-    );
-  },
-};
-
-export const EmptyState: Story = {
-  render: () => {
-    const data: Person[] = [];
-    const columns = useDemoColumns();
-    const table = useDemoTable(data, columns);
-    return (
-      <GridShell
-        tableProps={{ tableLayout: { rowBorder: true }, emptyMessage: 'No data available' }}
-        tableVariant="base"
-        table={table}
-        data={data}
-      >
-        <div className="flex items-center justify-between p-3">
-          <div className="text-sm text-muted-foreground">Empty state</div>
-        </div>
-      </GridShell>
+      </DataGrid>
     );
   },
 };

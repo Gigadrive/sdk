@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { Button } from '@/components/ui/button';
 import { useDataGrid } from '@/components/ui/data-grid';
 import {
@@ -38,7 +39,7 @@ function DataGridTableDndRowHandle({ rowId }: { rowId: string }) {
   });
 
   return (
-    <Button variant="dim" size="sm" className="size-7" {...attributes} {...listeners}>
+    <Button variant="ghost" size="sm" className="size-7" {...attributes} {...listeners}>
       <GripHorizontal />
     </Button>
   );
