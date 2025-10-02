@@ -1,7 +1,9 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardFooter, CardHeader, CardTable, CardToolbar } from '@/components/ui/card';
 import { DataGrid, DataGridContainer } from '@/components/ui/data-grid';
+import { DataGridColumnHeader } from '@/components/ui/data-grid-column-header';
 import { DataGridPagination } from '@/components/ui/data-grid-pagination';
 import { DataGridTable, DataGridTableRowSelect, DataGridTableRowSelectAll } from '@/components/ui/data-grid-table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -18,8 +20,19 @@ import {
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Ellipsis, Filter, Search, UserRoundPlus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { Checkbox } from '../../../src/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../../src/components/ui/dropdown-menu';
+import { Input } from '../../../src/components/ui/input';
+import { Label } from '../../../src/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '../../../src/components/ui/popover';
 
 interface IData {
   id: string;
@@ -1006,6 +1019,257 @@ export const ExpandableRow: Story = {
           </DataGridContainer>
           <DataGridPagination />
         </div>
+      </DataGrid>
+    );
+  },
+};
+
+export const CRUD: Story = {
+  render: () => {
+    const [pagination, setPagination] = useState<PaginationState>({
+      pageIndex: 0,
+      pageSize: 5,
+    });
+    const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: true }]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+    const filteredData = useMemo(() => {
+      return demoData.filter((item) => {
+        // Filter by status
+        const matchesStatus = !selectedStatuses?.length || selectedStatuses.includes(item.status);
+        // Filter by search query (case-insensitive)
+        const searchLower = searchQuery.toLowerCase();
+        const matchesSearch =
+          !searchQuery ||
+          Object.values(item)
+            .join(' ') // Combine all fields into a single string
+            .toLowerCase()
+            .includes(searchLower);
+        return matchesStatus && matchesSearch;
+      });
+    }, [searchQuery, selectedStatuses]);
+    const statusCounts = useMemo(() => {
+      return demoData.reduce(
+        (acc, item) => {
+          acc[item.status] = (acc[item.status] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
+    }, []);
+    const handleStatusChange = (checked: boolean, value: string) => {
+      setSelectedStatuses(
+        (
+          prev = [] // Default to an empty array
+        ) => (checked ? [...prev, value] : prev.filter((v) => v !== value))
+      );
+    };
+    const columns = useMemo<ColumnDef<IData>[]>(
+      () => [
+        {
+          accessorKey: 'id',
+          id: 'id',
+          header: () => <DataGridTableRowSelectAll />,
+          cell: ({ row }) => <DataGridTableRowSelect row={row} />,
+          enableSorting: false,
+          size: 35,
+          meta: {
+            headerClassName: '',
+            cellClassName: '',
+          },
+          enableResizing: false,
+        },
+        {
+          accessorKey: 'name',
+          id: 'name',
+          header: ({ column }) => <DataGridColumnHeader title="User" visibility={true} column={column} />,
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-3">
+                <Avatar className="size-8">
+                  <AvatarImage src={`/media/avatars/${row.original.avatar}`} alt={row.original.name} />
+                  <AvatarFallback>N</AvatarFallback>
+                </Avatar>
+                <div className="space-y-px">
+                  <div className="font-medium text-foreground">{row.original.name}</div>
+                  <div className="text-muted-foreground">{row.original.email}</div>
+                </div>
+              </div>
+            );
+          },
+          size: 250,
+          enableSorting: true,
+          enableHiding: false,
+          enableResizing: true,
+        },
+        {
+          accessorKey: 'location',
+          id: 'location',
+          header: ({ column }) => <DataGridColumnHeader title="Location" visibility={true} column={column} />,
+          cell: ({ row }) => {
+            return (
+              <div className="flex items-center gap-1.5">
+                {row.original.flag}
+                <div className="font-medium text-foreground">{row.original.location}</div>
+              </div>
+            );
+          },
+          size: 200,
+          meta: {
+            headerClassName: '',
+            cellClassName: 'text-start',
+          },
+          enableSorting: true,
+          enableHiding: true,
+          enableResizing: true,
+        },
+        {
+          accessorKey: 'status',
+          id: 'status',
+          header: ({ column }) => <DataGridColumnHeader title="Status" visibility={true} column={column} />,
+          cell: ({ row }) => {
+            const status = row.original.status;
+            if (status == 'active') {
+              return <Badge variant="default">Approved</Badge>;
+            } else if (status == 'inactive') {
+              return <Badge variant="secondary">Inactive</Badge>;
+            } else {
+              return <Badge variant="secondary">Pending</Badge>;
+            }
+          },
+          size: 100,
+          enableSorting: true,
+          enableHiding: true,
+          enableResizing: true,
+        },
+        {
+          id: 'actions',
+          header: '',
+          cell: () => (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="size-7" variant="ghost">
+                  <Ellipsis />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="bottom" align="end">
+                <DropdownMenuItem onClick={() => {}}>Edit</DropdownMenuItem>
+                <DropdownMenuItem>Copy ID</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>Delete</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ),
+          size: 60,
+          enableSorting: false,
+          enableHiding: false,
+          enableResizing: false,
+        },
+      ],
+      []
+    );
+    const [columnOrder, setColumnOrder] = useState<string[]>(columns.map((column) => column.id as string));
+    const table = useReactTable({
+      columns,
+      data: filteredData,
+      pageCount: Math.ceil((filteredData?.length || 0) / pagination.pageSize),
+      getRowId: (row: IData) => row.id,
+      state: {
+        pagination,
+        sorting,
+        columnOrder,
+      },
+      columnResizeMode: 'onChange',
+      onColumnOrderChange: setColumnOrder,
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      getCoreRowModel: getCoreRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    });
+    return (
+      <DataGrid
+        table={table}
+        recordCount={filteredData?.length || 0}
+        tableLayout={{
+          columnsPinnable: true,
+          columnsResizable: true,
+          columnsMovable: true,
+          columnsVisibility: true,
+        }}
+      >
+        <Card>
+          <CardHeader className="py-4">
+            <div className="flex items-center gap-2.5">
+              <div className="relative">
+                <Search className="size-4 text-muted-foreground absolute start-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="ps-9 w-40"
+                />
+                {searchQuery.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    className="absolute end-1.5 top-1/2 -translate-y-1/2 h-6 w-6"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <X />
+                  </Button>
+                )}
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline">
+                    <Filter />
+                    Status
+                    {selectedStatuses.length > 0 && <Badge variant="secondary">{selectedStatuses.length}</Badge>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-40 p-3" align="start">
+                  <div className="space-y-3">
+                    <div className="text-xs font-medium text-muted-foreground">Filters</div>
+                    <div className="space-y-3">
+                      {Object.keys(statusCounts).map((status) => (
+                        <div key={status} className="flex items-center gap-2.5">
+                          <Checkbox
+                            id={status}
+                            checked={selectedStatuses.includes(status)}
+                            onCheckedChange={(checked) => handleStatusChange(checked === true, status)}
+                          />
+                          <Label
+                            htmlFor={status}
+                            className="grow flex items-center justify-between font-normal gap-1.5"
+                          >
+                            {status}
+                            <span className="text-muted-foreground">{statusCounts[status]}</span>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <CardToolbar>
+              <Button>
+                <UserRoundPlus />
+                Add new
+              </Button>
+            </CardToolbar>
+          </CardHeader>
+          <CardTable>
+            <ScrollArea>
+              <DataGridTable />
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </CardTable>
+          <CardFooter>
+            <DataGridPagination />
+          </CardFooter>
+        </Card>
       </DataGrid>
     );
   },
