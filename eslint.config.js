@@ -55,6 +55,7 @@ export default tseslint.config(
       'react/react-in-jsx-scope': 'off',
       'react/no-unescaped-entities': 'off',
       'react-hooks/rules-of-hooks': 'off',
+      'react/no-unknown-property': 'off',
     },
     languageOptions: {
       parserOptions: {
