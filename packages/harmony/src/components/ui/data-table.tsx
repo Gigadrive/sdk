@@ -449,7 +449,7 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" aria-label="Columns">
-                <Settings2 className="h-4 w-4" />
+                <Settings2 />
                 Columns
               </Button>
             </DropdownMenuTrigger>
@@ -988,7 +988,7 @@ function DataTableFilters({ columns }: { columns?: string[] }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" aria-label="Filters">
-          <ListFilter className="h-4 w-4" />
+          <ListFilter />
           Filters
         </Button>
       </DropdownMenuTrigger>
