@@ -12,7 +12,25 @@ import {
   DataTablePagination,
   DataTableSearch,
   DataTableToolbar,
+  useDataTable,
 } from '@/components/ui/data-table';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { ColumnDef } from '@tanstack/react-table';
 
 type Person = {
@@ -389,4 +407,98 @@ export const Composable: Story = {
       </CardContent>
     </Card>
   ),
+};
+
+export const WithBulkDelete: Story = {
+  name: 'With bulk actions (dropdown + confirm)',
+  render: () => {
+    const [rows, setRows] = useState<Person[]>(data);
+
+    function BulkActions({ onDelete }: { onDelete: (ids: string[]) => void }) {
+      const { table } = useDataTable<Person>();
+      const selected = table.getSelectedRowModel().flatRows;
+      const count = selected.length;
+      const selectedIds = selected.map((r) => (r.original as Person).id);
+      const [open, setOpen] = useState(false);
+
+      return (
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                Actions
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-56">
+              <DropdownMenuLabel>Bulk actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={count === 0} onSelect={() => setOpen(true)}>
+                Delete selected ({count})
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={count === 0} onSelect={(e) => e.preventDefault()}>
+                Export selected
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={count === 0} onSelect={(e) => e.preventDefault()}>
+                Mark as active
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={count === 0} onSelect={() => table.resetRowSelection()}>
+                Clear selection
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  Delete {count} {count === 1 ? 'user' : 'users'}?
+                </DialogTitle>
+                <DialogDescription>
+                  This action cannot be undone. The selected {count === 1 ? 'user will' : 'users will'} be permanently
+                  removed.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      onDelete(selectedIds);
+                      table.resetRowSelection();
+                      setOpen(false);
+                    }}
+                  >
+                    Confirm delete
+                  </Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    return (
+      <DataTable<Person> columns={columns} data={rows} selection>
+        <DataTableToolbar>
+          <div className="flex w-full items-center gap-2">
+            <DataTableSearch />
+            <DataTableFilters />
+            <DataTableColumns />
+            <div className="ml-auto">
+              <BulkActions onDelete={(ids) => setRows((prev) => prev.filter((u) => !ids.includes(u.id)))} />
+            </div>
+          </div>
+        </DataTableToolbar>
+        <DataTableContent />
+        <div className="mt-3">
+          <DataTablePagination />
+        </div>
+      </DataTable>
+    );
+  },
 };
