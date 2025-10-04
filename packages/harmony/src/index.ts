@@ -1,6 +1,7 @@
 //import '@fontsource/manrope';
 import './index.css';
 
+export * from './components/ui/data-table';
 export * from './hooks';
 export * from './lib';
 

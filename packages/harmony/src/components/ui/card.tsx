@@ -29,7 +29,7 @@ const CardDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HT
 CardDescription.displayName = 'CardDescription';
 
 const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+  ({ className, ...props }, ref) => <div ref={ref} className={cn('px-6 py-6 pt-0', className)} {...props} />
 );
 CardContent.displayName = 'CardContent';
 
@@ -38,4 +38,16 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardFooter.displayName = 'CardFooter';
 
-export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };
+const CardToolbar = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} data-slot="card-toolbar" className={cn('flex items-center gap-2.5', className)} {...props} />
+  )
+);
+CardToolbar.displayName = 'CardToolbar';
+
+const CardTable = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => <div ref={ref} data-slot="card-table" className={cn(className)} {...props} />
+);
+CardTable.displayName = 'CardTable';
+
+export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTable, CardTitle, CardToolbar };
