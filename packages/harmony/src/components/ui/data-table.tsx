@@ -395,15 +395,26 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
       if (!columnOrdering) return;
       const { active, over } = event;
       if (!active || !over) return;
-      if (active.id === over.id) return;
+
+      const activeId = String(active.id);
+      const overId = String(over.id);
+      if (activeId === overId) return;
+
+      const target = table.getColumn(overId);
+      if (target) {
+        const meta = (target.columnDef.meta as ColumnMeta | undefined) ?? {};
+        const isPinned = target.getIsPinned?.();
+        if ((meta.enableOrdering ?? true) === false || isPinned) return;
+      }
 
       setColumnOrder((current) => {
-        const oldIndex = current.indexOf(String(active.id));
-        const newIndex = current.indexOf(String(over.id));
+        const oldIndex = current.indexOf(activeId);
+        const newIndex = current.indexOf(overId);
+        if (oldIndex === -1 || newIndex === -1) return current;
         return arrayMove(current, oldIndex, newIndex);
       });
     },
-    [columnOrdering]
+    [columnOrdering, table]
   );
 
   // Padding settings now handled by subcomponents; keep for API compatibility
