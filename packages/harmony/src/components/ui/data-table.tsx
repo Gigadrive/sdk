@@ -136,6 +136,23 @@ export interface DataTableProps<TData, TValue> {
    * Use subcomponents to build your own layout: Toolbar/Search/Filters/Columns/Content/Pagination.
    */
   children?: React.ReactNode;
+  /**
+   * Enable manual filtering mode (typically for server-side data fetching).
+   * Recommended for server-side because query inputs can be inferred via useDataTable().
+   * Defaults to true when `pagination` is provided; otherwise false.
+   */
+  manualFiltering?: boolean;
+  /**
+   * Optional: Called when query inputs change (filters, global filter, sorting, pagination).
+   * You can alternatively infer state directly from useDataTable() in children.
+   */
+  onQueryChange?: (query: {
+    globalFilter: string;
+    columnFilters: ColumnFiltersState;
+    sorting: SortingState;
+    pageIndex: number;
+    pageSize: number;
+  }) => void;
 }
 
 /** Column-level metadata used by the built-in UI */
@@ -226,6 +243,8 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
     renderTopToolbar,
     renderBottomToolbar,
     children,
+    manualFiltering,
+    onQueryChange,
   } = props;
 
   const [globalFilter, setGlobalFilter] = React.useState('');
@@ -325,6 +344,8 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
     enableSorting: sorting,
     enableRowSelection: selection,
     manualPagination: Boolean(pagination),
+    manualFiltering: manualFiltering ?? Boolean(pagination),
+    manualSorting: manualFiltering ?? Boolean(pagination),
     pageCount: pagination?.pageCount,
     state: {
       sorting: sortingState,
@@ -337,9 +358,48 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
       pagination: { pageIndex: effectivePagination.pageIndex, pageSize: effectivePagination.pageSize },
     },
     globalFilterFn: 'auto',
-    onGlobalFilterChange: setGlobalFilter,
-    onSortingChange: setSortingState,
-    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: (value) => {
+      setGlobalFilter(value);
+      if (onQueryChange) {
+        onQueryChange({
+          globalFilter: value ?? '',
+          columnFilters,
+          sorting: sortingState,
+          pageIndex: effectivePagination.pageIndex,
+          pageSize: effectivePagination.pageSize,
+        });
+      }
+    },
+    onSortingChange: (updater) => {
+      const next =
+        typeof updater === 'function' ? (updater as (old: SortingState) => SortingState)(sortingState) : updater;
+      setSortingState(next);
+      if (onQueryChange) {
+        onQueryChange({
+          globalFilter,
+          columnFilters,
+          sorting: next,
+          pageIndex: effectivePagination.pageIndex,
+          pageSize: effectivePagination.pageSize,
+        });
+      }
+    },
+    onColumnFiltersChange: (updater) => {
+      const next =
+        typeof updater === 'function'
+          ? (updater as (old: ColumnFiltersState) => ColumnFiltersState)(columnFilters)
+          : updater;
+      setColumnFilters(next);
+      if (onQueryChange) {
+        onQueryChange({
+          globalFilter,
+          columnFilters: next,
+          sorting: sortingState,
+          pageIndex: effectivePagination.pageIndex,
+          pageSize: effectivePagination.pageSize,
+        });
+      }
+    },
     onColumnVisibilityChange: setColumnVisibilityState,
     onColumnPinningChange: setColumnPinningState,
     onColumnOrderChange: setColumnOrder,
@@ -357,10 +417,25 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
             : (updater as { pageIndex: number; pageSize: number })
         );
       }
+      const nextState =
+        typeof updater === 'function'
+          ? (updater as (old: { pageIndex: number; pageSize: number }) => { pageIndex: number; pageSize: number })(
+              effectivePagination
+            )
+          : (updater as { pageIndex: number; pageSize: number });
+      if (onQueryChange) {
+        onQueryChange({
+          globalFilter,
+          columnFilters,
+          sorting: sortingState,
+          pageIndex: nextState.pageIndex,
+          pageSize: nextState.pageSize,
+        });
+      }
     },
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: (manualFiltering ?? Boolean(pagination)) ? undefined : getSortedRowModel(),
+    getFilteredRowModel: (manualFiltering ?? Boolean(pagination)) ? undefined : getFilteredRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     ...(pagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
     initialState: {
