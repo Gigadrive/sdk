@@ -64,14 +64,8 @@ export interface DataTableProps<TData, TValue> {
    * - Use column `meta` to control built-in UI (e.g., filterVariant, filterOptions, headerLabel).
    */
   columns: ColumnDef<TData, TValue>[];
-  /** Array of row objects to render. */
-  data: TData[];
   /** Additional class names applied to the root wrapper. */
   className?: string;
-  /**
-   * Shows loading skeletons (5 rows) instead of data. Applies to both default and composable layouts.
-   */
-  loading?: boolean;
   /** Whether to render the global search input. Defaults to true. */
   searchable?: boolean;
   /** Placeholder text for the global search input. */
@@ -191,6 +185,9 @@ type DataTableContextValue<TData> = {
   globalFilter: string;
   setGlobalFilter: (value: string) => void;
   onDragEnd: (event: DragEndEvent) => void | undefined;
+  /** Allow children to feed data/loading into the parent DataTable */
+  setExternalData?: (rows: TData[] | undefined) => void;
+  setExternalLoading?: (loading: boolean | undefined) => void;
 };
 
 /** React context providing access to the table instance and UI config */
@@ -222,9 +219,7 @@ function useDataTable<TData>(): DataTableContextValue<TData> {
 export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, TValue>) {
   const {
     columns,
-    data,
     className,
-    loading = false,
     searchable = true,
     searchPlaceholder = 'Search…',
     columnVisibility = true,
@@ -257,6 +252,8 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
   const [columnOrder, setColumnOrder] = React.useState<ColumnOrderState>(initialColumnOrder ?? []);
   const density = densityProp;
   const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
+  const [externalData, setExternalData] = React.useState<TData[] | undefined>(undefined);
+  const [externalLoading, setExternalLoading] = React.useState<boolean | undefined>(undefined);
   const [internalPagination, setInternalPagination] = React.useState<{ pageIndex: number; pageSize: number }>({
     pageIndex: 0,
     pageSize: 10,
@@ -339,7 +336,7 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
 
   /** Create TanStack Table instance */
   const table = useReactTable<TData>({
-    data,
+    data: externalData ?? [],
     columns: computedColumns,
     enableSorting: sorting,
     enableRowSelection: selection,
@@ -532,10 +529,12 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
     filters,
     pagination,
     density,
-    loading,
+    loading: externalLoading ?? false,
     globalFilter,
     setGlobalFilter,
     onDragEnd: (event: DragEndEvent) => handleDragEnd(event),
+    setExternalData,
+    setExternalLoading,
   };
 
   const hasChildren = React.Children.count(children) > 0;
@@ -566,8 +565,22 @@ export function DataTable<TData, TValue = unknown>(props: DataTableProps<TData, 
  * DataTableContent
  * Renders the table header and body using the shared table instance from context.
  */
-function DataTableContent(): JSX.Element {
-  const { table, columnOrdering, columnPinning, density, onDragEnd, loading } = useDataTable<unknown>();
+function DataTableContent({ data, loading }: { data?: unknown[]; loading?: boolean }): JSX.Element {
+  const {
+    table,
+    columnOrdering,
+    columnPinning,
+    density,
+    onDragEnd,
+    loading: ctxLoading,
+    setExternalData,
+    setExternalLoading,
+  } = useDataTable<unknown>();
+  React.useEffect(() => {
+    if (data !== undefined) setExternalData?.(data);
+    if (loading !== undefined) setExternalLoading?.(loading);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, loading]);
   const headerCellPadding = density === 'compact' ? 'px-2 py-1.5' : 'px-4 py-3';
   const bodyCellPadding = density === 'compact' ? 'p-2' : 'p-4';
 
@@ -651,7 +664,7 @@ function DataTableContent(): JSX.Element {
           ))}
         </TableHeader>
         <TableBody>
-          {loading ? (
+          {(loading ?? ctxLoading) ? (
             Array.from({ length: 5 }).map((_, i) => (
               <TableRow key={`loading-${i}`}>
                 {table.getAllLeafColumns().map((col) => (
