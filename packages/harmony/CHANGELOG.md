@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.5.0
+
+### Minor Changes
+
+- add data grid and table components ([#235](https://github.com/Gigadrive/sdk/pull/235))
+
 ## 3.4.0
 
 ### Minor Changes
