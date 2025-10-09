@@ -1,778 +1,149 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import * as React from 'react';
-import { useEffect, useMemo, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  DataTable,
-  DataTableColumns,
-  DataTableContent,
-  DataTableFilters,
-  DataTablePagination,
-  DataTableSearch,
-  DataTableToolbar,
-  useDataTable,
-} from '@/components/ui/data-table';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import type { ColumnDef } from '@tanstack/react-table';
+import { DataTable, DataTableColumn } from '@/components/ui/data-table';
+import { Badge } from '../../../src/components/ui/badge';
+import { useDataTable } from '../../../src/hooks/use-data-table';
 
-type Person = {
-  id: string;
-  name: string;
-  email: string;
-  age: number;
-  role: 'Admin' | 'Editor' | 'Viewer';
-  active: boolean;
-};
-
-const data: Person[] = Array.from({ length: 137 }).map((_, i) => ({
-  id: `user-${i + 1}`,
-  name: `User ${i + 1}`,
-  email: `user${i + 1}@example.com`,
-  age: 18 + ((i * 7) % 50),
-  role: (['Admin', 'Editor', 'Viewer'] as const)[i % 3],
-  active: i % 2 === 0,
-}));
-
-const columns: ColumnDef<Person>[] = [
-  {
-    accessorKey: 'name',
-    header: 'Name',
-    cell: ({ row }) => <span className="font-medium">{row.getValue('name')}</span>,
-    meta: { filterVariant: 'text', headerLabel: 'Name' },
-  },
-  {
-    accessorKey: 'email',
-    header: 'Email',
-    meta: { filterVariant: 'text', headerLabel: 'Email' },
-  },
-  {
-    accessorKey: 'age',
-    header: 'Age',
-    meta: { filterVariant: 'number', headerLabel: 'Age' },
-  },
-  {
-    accessorKey: 'role',
-    header: 'Role',
-    meta: {
-      filterVariant: 'select',
-      filterOptions: [
-        { label: 'Admin', value: 'Admin' },
-        { label: 'Editor', value: 'Editor' },
-        { label: 'Viewer', value: 'Viewer' },
-      ],
-      headerLabel: 'Role',
-    },
-  },
-  {
-    accessorKey: 'active',
-    header: 'Active',
-    cell: ({ row }) => (row.getValue('active') ? 'Yes' : 'No'),
-    meta: {
-      filterVariant: 'select',
-      filterOptions: [
-        { label: 'Active', value: 'true' },
-        { label: 'Inactive', value: 'false' },
-      ],
-    },
-  },
-  {
-    id: 'actions',
-    header: '',
-    enableSorting: false,
-    enableHiding: true,
-    cell: () => (
-      <Button size="sm" variant="outline">
-        View
-      </Button>
-    ),
-    meta: { enableOrdering: false, enableHeaderMenu: false },
-  },
-];
-
-// Helper to bind generic for Storybook component typing
-function DataTablePerson(props: React.ComponentProps<typeof DataTable<Person>>) {
-  return <DataTable<Person> {...props} />;
-}
-
-const meta: Meta<typeof DataTablePerson> = {
+const meta = {
   title: 'Components/Data Table',
-  component: DataTablePerson,
+  component: DataTable,
   tags: ['autodocs'],
   parameters: {
-    layout: 'fullscreen',
+    layout: 'centered',
+  },
+} satisfies Meta<typeof DataTable>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  status: 'active' | 'inactive';
+}
+
+async function fetchUsers({
+  pagination,
+  sorting,
+}: {
+  pagination: { pageIndex: number; pageSize: number };
+  sorting: { id: string; direction: 'asc' | 'desc' } | null;
+}) {
+  // Simulate API delay
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  // Generate mock data
+  const allUsers: User[] = Array.from({ length: 100 }, (_, i) => ({
+    id: i + 1,
+    name: `User ${i + 1}`,
+    email: `user${i + 1}@example.com`,
+    role: ['Admin', 'Editor', 'Viewer'][i % 3],
+    status: i % 3 === 0 ? 'inactive' : 'active',
+  }));
+
+  // Apply sorting
+  const sortedUsers = [...allUsers];
+  if (sorting) {
+    sortedUsers.sort((a, b) => {
+      const aValue = a[sorting.id as keyof User];
+      const bValue = b[sorting.id as keyof User];
+
+      if (aValue < bValue) return sorting.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sorting.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  // Apply pagination
+  const start = pagination.pageIndex * pagination.pageSize;
+  const end = start + pagination.pageSize;
+  const paginatedUsers = sortedUsers.slice(start, end);
+
+  return {
+    data: paginatedUsers,
+    totalRows: allUsers.length,
+  };
+}
+
+export const Default: Story = {
+  args: {
+    columns: [
+      { id: 'col1', header: 'Column 1' },
+      { id: 'col2', header: 'Column 2' },
+    ],
+    data: [],
+  },
+  parameters: {
     docs: {
       description: {
-        component: `
-Comprehensive data table built on TanStack Table v8 with a composable API.
-
-## When to use
-- Display medium-to-large tabular datasets
-- Need search, filters, sorting, visibility, pinning or drag reordering
-- Require either client or server pagination
-
-## Features
-- Global search (string columns auto-detected)
-- Column filters: text, number, select (with options)
-- Sorting (click header), column visibility & pinning, drag to reorder
-- Optional row selection column
-- Pagination: uncontrolled or fully controlled (server data)
-- Density: default or compact
-- Loading state skeletons
-
-## Composable API
-Use subcomponents for custom layouts:
-- \`DataTableToolbar\`, \`DataTableSearch\`, \`DataTableFilters\`, \`DataTableColumns\`
-- \`DataTableContent\`
-- \`DataTablePagination\`
-
-## Props overview
-- \`columns\`: TanStack column defs (supports \`meta\` for filter UI)
-- \`data\`: array of rows
-- \`selection\`: boolean to add checkbox column
-- \`searchable\`, \`columnVisibility\`, \`columnPinning\`, \`columnOrdering\`, \`sorting\`
-- \`density\`: 'default' | 'compact'
-- \`filters\`: { columns?: string[] } to show Filters menu for listed columns
-- \`pagination\`: { pageIndex, pageSize, pageCount?, onPageChange, onPageSizeChange?, pageSizeOptions? }
-- \`loading\`: show skeletons
-
-## Server-side usage (recommended)
-- Use \`manualFiltering\` and \`onQueryChange\` to receive query inputs (globalFilter, columnFilters, sorting, pageIndex, pageSize), fetch rows, and pass them to \`DataTableContent\` via its \`data\` and \`loading\` props. Provide controlled \`pagination\` and update \`pageCount\`.
-
-Example (no extra fetcher component):
-
-\`\`\`tsx
-const [pageIndex, setPageIndex] = useState(0);
-const [pageSize, setPageSize] = useState(10);
-const [rows, setRows] = useState<Person[]>([]);
-const [pageCount, setPageCount] = useState(0);
-const [loading, setLoading] = useState(false);
-
-function fetchUsers(q: { globalFilter: string; columnFilters: unknown[]; sorting: unknown[]; pageIndex: number; pageSize: number }) {
-  setLoading(true);
-  const params = new URLSearchParams({ gf: q.globalFilter || '', pi: String(q.pageIndex), ps: String(q.pageSize) });
-  fetch('/api/users?' + params.toString())
-    .then((r) => r.json())
-    .then(({ rows: r, total }) => {
-      setRows(r);
-      setPageCount(Math.max(1, Math.ceil(total / q.pageSize)));
-    })
-    .finally(() => setLoading(false));
-}
-
-<DataTable<Person>
-  columns={columns}
-  manualFiltering
-  onQueryChange={(q) => fetchUsers(q)}
-  pagination={{ pageIndex, pageSize, pageCount, onPageChange: setPageIndex, onPageSizeChange: setPageSize }}
->
-  <DataTableToolbar>
-    <div className="flex w-full items-center gap-2">
-      <DataTableSearch />
-      <DataTableFilters />
-      <DataTableColumns />
-    </div>
-  </DataTableToolbar>
-  <DataTableContent data={rows} loading={loading} />
-  <div className="mt-3">
-    <DataTablePagination />
-  </div>
-</DataTable>
-\`\`\`
-
-React Query example (no extra fetcher component):
-
-\`\`\`tsx
-const [pageIndex, setPageIndex] = useState(0);
-const [pageSize, setPageSize] = useState(10);
-const [rows, setRows] = useState<Person[]>([]);
-const [pageCount, setPageCount] = useState(0);
-const [loading, setLoading] = useState(false);
-const [queryInputs, setQueryInputs] = useState({ globalFilter: '', columnFilters: [] as unknown[], sorting: [] as unknown[], pageIndex, pageSize });
-
-const query = useQuery({
-  queryKey: ['users', queryInputs],
-  queryFn: async () => {
-    const { globalFilter, pageIndex, pageSize } = queryInputs as { globalFilter: string; pageIndex: number; pageSize: number };
-    const params = new URLSearchParams({ gf: globalFilter || '', pi: String(pageIndex), ps: String(pageSize) });
-    const res = await fetch('/api/users?' + params.toString());
-    return (await res.json()) as { rows: Person[]; total: number };
-  },
-  keepPreviousData: true,
-});
-
-useEffect(() => {
-  setLoading(query.isFetching);
-  if (query.data) {
-    setRows(query.data.rows);
-    setPageCount(Math.max(1, Math.ceil(query.data.total / pageSize)));
-  }
-}, [query.data, query.isFetching, pageSize]);
-
-<DataTable<Person>
-  columns={columns}
-  manualFiltering
-  onQueryChange={(q) => setQueryInputs({ ...q, pageIndex, pageSize })}
-  pagination={{ pageIndex, pageSize, pageCount, onPageChange: setPageIndex, onPageSizeChange: setPageSize }}
->
-  <DataTableToolbar>
-    <div className="flex w-full items-center gap-2">
-      <DataTableSearch />
-      <DataTableFilters />
-      <DataTableColumns />
-    </div>
-  </DataTableToolbar>
-  <DataTableContent data={rows} loading={loading} />
-  <div className="mt-3">
-    <DataTablePagination />
-  </div>
-</DataTable>
-\`\`\`
-
-Example:
-
-\`\`\`tsx
-const [pageIndex, setPageIndex] = useState(0);
-const [pageSize, setPageSize] = useState(10);
-const [loading, setLoading] = useState(false);
-const [rows, setRows] = useState<Person[]>([]);
-const [pageCount, setPageCount] = useState(0);
-
-function ServerFetcher() {
-  const { table } = useDataTable<Person>();
-  const { globalFilter, columnFilters, sorting, pagination } = table.getState();
-
-  useEffect(() => {
-    setLoading(true);
-    fetch('/api/users?gf=' + (globalFilter || '') + '&pi=' + pagination.pageIndex + '&ps=' + pagination.pageSize)
-      .then((r) => r.json())
-      .then(({ data, total }) => {
-        setRows(data);
-        setPageCount(Math.max(1, Math.ceil(total / pagination.pageSize)));
-      })
-      .finally(() => setLoading(false));
-  }, [globalFilter, columnFilters, sorting, pagination.pageIndex, pagination.pageSize]);
-  return null;
-}
-
-<DataTable
-  columns={columns}
-  data={rows}
-  loading={loading}
-  manualFiltering
-  pagination={{ pageIndex, pageSize, pageCount, onPageChange: setPageIndex, onPageSizeChange: setPageSize }}
->
-  <ServerFetcher />
-  <DataTableToolbar>
-    <div className="flex w-full items-center gap-2">
-      <DataTableSearch />
-      <DataTableFilters />
-      <DataTableColumns />
-    </div>
-  </DataTableToolbar>
-  <DataTableContent />
-  <div className="mt-3">
-    <DataTablePagination />
-  </div>
-</DataTable>
-\`\`\`
-
-## Column meta
-- \`filterVariant\`: 'text' | 'number' | 'select'
-- \`filterOptions\`: for 'select' [{ label, value }]
-- \`enableHiding\`: toggle visibility menu item
-- \`enableOrdering\`: enable drag-reorder
-- \`enableHeaderMenu\`: show column kebab menu
-- \`headerLabel\`: aria-label for header
-`,
+        story: 'A minimal DataTable with two columns and no rows.',
       },
     },
   },
-  argTypes: {},
-};
-
-export default meta;
-
-type Story = StoryObj<typeof meta>;
-
-export const Default: Story = {
-  name: 'Default',
-  render: () => (
-    <DataTable<Person> columns={columns} selection filters={{ columns: ['name', 'role', 'active'] }}>
-      <DataTableToolbar>
-        <div className="flex w-full items-center gap-2">
-          <DataTableSearch />
-          <DataTableFilters />
-          <DataTableColumns />
-        </div>
-      </DataTableToolbar>
-      <DataTableContent data={data} />
-      <div className="mt-3">
-        <DataTablePagination />
-      </div>
-    </DataTable>
-  ),
-};
-
-export const Loading: Story = {
-  name: 'Loading state',
-  render: () => (
-    <DataTable<Person> columns={columns}>
-      <DataTableToolbar>
-        <div className="flex w-full items-center gap-2">
-          <DataTableSearch />
-          <DataTableFilters />
-          <DataTableColumns />
-        </div>
-      </DataTableToolbar>
-      <DataTableContent data={[]} loading />
-    </DataTable>
-  ),
-};
-
-export const Compact: Story = {
-  name: 'Density: compact',
-  render: () => (
-    <DataTable<Person>
-      columns={columns}
-      searchable={false}
-      columnOrdering={false}
-      columnPinning={false}
-      columnVisibility={false}
-      density="compact"
-    >
-      <DataTableContent data={data} />
-      <div className="mt-3">
-        <DataTablePagination />
-      </div>
-    </DataTable>
-  ),
-};
-
-export const NoSearch: Story = {
-  name: 'Search disabled',
-  render: () => (
-    <DataTable<Person> columns={columns} searchable={false}>
-      <DataTableToolbar>
-        <div className="flex w-full items-center gap-2">
-          <DataTableFilters />
-          <DataTableColumns />
-        </div>
-      </DataTableToolbar>
-      <DataTableContent data={data} />
-      <div className="mt-3">
-        <DataTablePagination />
-      </div>
-    </DataTable>
-  ),
-};
-
-export const WithSelection: Story = {
-  name: 'With selection',
-  render: () => (
-    <DataTable<Person> columns={columns} selection>
-      <DataTableToolbar>
-        <div className="flex w-full items-center gap-2">
-          <DataTableSearch />
-          <DataTableFilters />
-          <DataTableColumns />
-        </div>
-      </DataTableToolbar>
-      <DataTableContent data={data} />
-      <div className="mt-3">
-        <DataTablePagination />
-      </div>
-    </DataTable>
-  ),
-};
-
-export const ColumnControlsDisabled: Story = {
-  name: 'No column pin/visibility/order',
-  render: () => (
-    <DataTable<Person> columns={columns} columnOrdering={false} columnPinning={false} columnVisibility={false}>
-      <DataTableToolbar>
-        <div className="flex w-full items-center gap-2">
-          <DataTableSearch />
-          <DataTableFilters />
-        </div>
-      </DataTableToolbar>
-      <DataTableContent data={data} />
-      <div className="mt-3">
-        <DataTablePagination />
-      </div>
-    </DataTable>
-  ),
-};
-
-export const ControlledPagination: Story = {
-  name: 'Controlled pagination (server data)',
   render: () => {
-    const [pageIndex, setPageIndex] = useState(0);
-    const [pageSize, setPageSize] = useState(10);
-    const [query, setQuery] = useState<{ globalFilter: string; columnFilters: unknown[]; sorting: unknown[] }>({
-      globalFilter: '',
-      columnFilters: [],
-      sorting: [],
+    const table = useDataTable<User>({
+      fetchData: fetchUsers,
+      initialPagination: { pageIndex: 0, pageSize: 10 },
     });
 
-    // Simulated server: compute paged data + total on the fly
-    const filtered = useMemo(() => {
-      let rows = data;
-      const gf = query.globalFilter?.toLowerCase?.() ?? '';
-      if (gf) rows = rows.filter((r) => String(r.name).toLowerCase().includes(gf));
-      return rows;
-    }, [query]);
-    const pageCount = useMemo(() => Math.max(1, Math.ceil(filtered.length / pageSize)), [filtered.length, pageSize]);
-    const pageData = useMemo(() => {
-      const start = pageIndex * pageSize;
-      return filtered.slice(start, start + pageSize);
-    }, [filtered, pageIndex, pageSize]);
+    const columns: DataTableColumn<User>[] = [
+      {
+        id: 'id',
+        header: 'ID',
+        accessorKey: 'id',
+        sortable: true,
+        width: 'w-20',
+      },
+      {
+        id: 'name',
+        header: 'Name',
+        accessorKey: 'name',
+        sortable: true,
+      },
+      {
+        id: 'email',
+        header: 'Email',
+        accessorKey: 'email',
+        sortable: true,
+      },
+      {
+        id: 'role',
+        header: 'Role',
+        accessorKey: 'role',
+        sortable: true,
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        accessorKey: 'status',
+        cell: (row) => <Badge variant={row.status === 'active' ? 'default' : 'secondary'}>{row.status}</Badge>,
+        sortable: true,
+      },
+    ];
 
     return (
-      <DataTable<Person>
-        columns={columns}
-        manualFiltering
-        onQueryChange={(q) =>
-          setQuery({
-            globalFilter: q.globalFilter,
-            columnFilters: q.columnFilters as unknown[],
-            sorting: q.sorting as unknown[],
-          })
-        }
-        pagination={{
-          pageIndex,
-          pageSize,
-          pageCount,
-          onPageChange: setPageIndex,
-          onPageSizeChange: setPageSize,
-          pageSizeOptions: [5, 10, 25, 50],
-        }}
-      >
-        <DataTableToolbar>
-          <div className="flex w-full items-center gap-2">
-            <DataTableSearch />
-            <DataTableFilters />
-            <DataTableColumns />
+      <div className="container mx-auto py-12 px-4">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Basic Example</h1>
+            <p className="text-muted-foreground mt-2">Simple data table with server-side pagination and sorting</p>
           </div>
-        </DataTableToolbar>
-        <DataTableContent data={pageData} />
-        <div className="mt-3">
-          <DataTablePagination />
+
+          <DataTable
+            columns={columns}
+            data={table.data}
+            pagination={table.pagination}
+            onPaginationChange={table.setPagination}
+            sorting={table.sorting}
+            onSortingChange={table.setSorting}
+            totalRows={table.totalRows}
+            isLoading={table.isLoading}
+            enablePageSizeSelector
+          />
         </div>
-      </DataTable>
-    );
-  },
-};
-
-export const ServerInferQueryWithHook: Story = {
-  name: 'Server (infer query via hook)',
-  render: () => {
-    const [pageIndex, setPageIndex] = useState(0);
-    const [pageSize, setPageSize] = useState(10);
-    // derive view directly
-    const filtered = useMemo(() => {
-      const rows = data;
-      return rows;
-    }, []);
-    const pageCount = useMemo(() => Math.max(1, Math.ceil(filtered.length / pageSize)), [filtered.length, pageSize]);
-    const rows = useMemo(() => {
-      const start = pageIndex * pageSize;
-      return filtered.slice(start, start + pageSize);
-    }, [filtered, pageIndex, pageSize]);
-
-    // Basic client-side simulation of a server fetch using the live table state
-    function ServerFetcher() {
-      const { table } = useDataTable<Person>();
-      const { globalFilter, columnFilters, sorting } = table.getState();
-
-      // no-op; included for realism (would fetch on server)
-      useEffect(() => {}, [globalFilter, columnFilters, sorting]);
-
-      return null;
-    }
-
-    return (
-      <DataTable<Person>
-        columns={columns}
-        manualFiltering
-        pagination={{
-          pageIndex,
-          pageSize,
-          pageCount,
-          onPageChange: setPageIndex,
-          onPageSizeChange: setPageSize,
-          pageSizeOptions: [5, 10, 25, 50],
-        }}
-      >
-        <ServerFetcher />
-        <DataTableToolbar>
-          <div className="flex w-full items-center gap-2">
-            <DataTableSearch />
-            <DataTableFilters />
-            <DataTableColumns />
-          </div>
-        </DataTableToolbar>
-        <DataTableContent data={rows} />
-        <div className="mt-3">
-          <DataTablePagination />
-        </div>
-      </DataTable>
-    );
-  },
-};
-
-export const ServerWithReactQuery: Story = {
-  name: 'Server (React Query)',
-  render: () => {
-    const [pageIndex, setPageIndex] = useState(0);
-    const [pageSize, setPageSize] = useState(10);
-    // state derived via refs from query
-    const queryClientRef = React.useRef<QueryClient>();
-    if (!queryClientRef.current) queryClientRef.current = new QueryClient();
-
-    function ReactQueryBridge() {
-      const { table } = useDataTable<Person>();
-      const { globalFilter, columnFilters, sorting, pagination } = table.getState();
-      const query = useQuery<{ rows: Person[]; total: number }>({
-        queryKey: ['users', globalFilter, columnFilters, sorting, pagination.pageIndex, pagination.pageSize],
-        queryFn: async () => {
-          await new Promise((r) => setTimeout(r, 200));
-          let result = data;
-          const gf = (globalFilter as string)?.toLowerCase?.() ?? '';
-          if (gf) result = result.filter((r) => String(r.name).toLowerCase().includes(gf));
-          const total = result.length;
-          const start = pagination.pageIndex * pagination.pageSize;
-          const end = start + pagination.pageSize;
-          return { rows: result.slice(start, end), total };
-        },
-        placeholderData: (prev) => prev,
-      });
-
-      const current = query.data ?? { rows: [], total: 0 };
-      rowsRef.current = current.rows;
-      totalRef.current = current.total;
-      loadingRef.current = query.isFetching;
-      return null;
-    }
-
-    // Local refs to avoid extra effects
-    const rowsRef = React.useRef<Person[]>([]);
-    const totalRef = React.useRef(0);
-    const loadingRef = React.useRef(false);
-
-    return (
-      <QueryClientProvider client={queryClientRef.current}>
-        <DataTable<Person>
-          columns={columns}
-          manualFiltering
-          pagination={{
-            pageIndex,
-            pageSize,
-            pageCount: Math.max(1, Math.ceil(totalRef.current / pageSize)),
-            onPageChange: setPageIndex,
-            onPageSizeChange: setPageSize,
-            pageSizeOptions: [5, 10, 25, 50],
-          }}
-        >
-          <ReactQueryBridge />
-          <DataTableToolbar>
-            <div className="flex w-full items-center gap-2">
-              <DataTableSearch />
-              <DataTableFilters />
-              <DataTableColumns />
-            </div>
-          </DataTableToolbar>
-          <DataTableContent data={rowsRef.current} loading={loadingRef.current} />
-          <div className="mt-3">
-            <DataTablePagination />
-          </div>
-        </DataTable>
-      </QueryClientProvider>
-    );
-  },
-};
-
-export const WithFiltersConfigured: Story = {
-  name: 'Filters configured',
-  render: () => (
-    <DataTable<Person> columns={columns} filters={{ columns: ['name', 'role', 'active'] }}>
-      <DataTableToolbar>
-        <div className="flex w-full items-center gap-2">
-          <DataTableSearch />
-          <DataTableFilters />
-          <DataTableColumns />
-        </div>
-      </DataTableToolbar>
-      <DataTableContent data={data} />
-      <div className="mt-3">
-        <DataTablePagination />
       </div>
-    </DataTable>
-  ),
-};
-
-export const InCard: Story = {
-  name: 'In Card layout',
-  render: () => (
-    <Card className="max-w-5xl w-full">
-      <CardHeader>
-        <CardTitle>Users</CardTitle>
-        <CardDescription>A table of users with filters and actions</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <DataTable<Person> columns={columns} selection filters={{ columns: ['name', 'role', 'active'] }}>
-          <DataTableToolbar>
-            <div className="flex w-full items-center gap-2">
-              <DataTableSearch />
-              <DataTableFilters />
-              <DataTableColumns />
-            </div>
-          </DataTableToolbar>
-          <DataTableContent data={data} />
-          <div className="mt-3">
-            <DataTablePagination />
-          </div>
-        </DataTable>
-      </CardContent>
-    </Card>
-  ),
-};
-
-export const Composable: Story = {
-  name: 'Composable (custom toolbar and layout)',
-  render: () => (
-    <Card className="max-w-5xl w-full">
-      <CardHeader>
-        <CardTitle>Users</CardTitle>
-        <CardDescription>Custom toolbar composition using subcomponents</CardDescription>
-      </CardHeader>
-      <CardContent className="px-0">
-        <DataTable<Person> columns={columns} selection filters={{ columns: ['name', 'role'] }}>
-          <DataTableToolbar>
-            <div className="flex w-full items-center gap-2 px-6">
-              <DataTableSearch />
-              <DataTableFilters />
-              <DataTableColumns />
-            </div>
-          </DataTableToolbar>
-          <DataTableContent data={data} />
-          <div className="mt-3 px-6">
-            <DataTablePagination />
-          </div>
-        </DataTable>
-      </CardContent>
-    </Card>
-  ),
-};
-
-export const WithBulkDelete: Story = {
-  name: 'With bulk actions (dropdown + confirm)',
-  render: () => {
-    const [rows, setRows] = useState<Person[]>(data);
-
-    function BulkActions({ onDelete }: { onDelete: (ids: string[]) => void }) {
-      const { table } = useDataTable<Person>();
-      const selected = table.getSelectedRowModel().flatRows;
-      const count = selected.length;
-      const selectedIds = selected.map((r) => (r.original as Person).id);
-      const [open, setOpen] = useState(false);
-
-      return (
-        <>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline">
-                Actions
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-56">
-              <DropdownMenuLabel>Bulk actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={count === 0} onSelect={() => setOpen(true)}>
-                Delete selected ({count})
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={count === 0} onSelect={(e) => e.preventDefault()}>
-                Export selected
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={count === 0} onSelect={(e) => e.preventDefault()}>
-                Mark as active
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={count === 0} onSelect={() => table.resetRowSelection()}>
-                Clear selection
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  Delete {count} {count === 1 ? 'user' : 'users'}?
-                </DialogTitle>
-                <DialogDescription>
-                  This action cannot be undone. The selected {count === 1 ? 'user will' : 'users will'} be permanently
-                  removed.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      onDelete(selectedIds);
-                      table.resetRowSelection();
-                      setOpen(false);
-                    }}
-                  >
-                    Confirm delete
-                  </Button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </>
-      );
-    }
-
-    return (
-      <DataTable<Person> columns={columns} selection>
-        <DataTableToolbar>
-          <div className="flex w-full items-center gap-2">
-            <DataTableSearch />
-            <DataTableFilters />
-            <DataTableColumns />
-            <div className="ml-auto">
-              <BulkActions onDelete={(ids) => setRows((prev) => prev.filter((u) => !ids.includes(u.id)))} />
-            </div>
-          </div>
-        </DataTableToolbar>
-        <DataTableContent data={rows} />
-        <div className="mt-3">
-          <DataTablePagination />
-        </div>
-      </DataTable>
     );
   },
 };
