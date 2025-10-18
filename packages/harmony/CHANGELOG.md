@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.5.1
+
+### Patch Changes
+
+- fix calendar compilation issue ([#243](https://github.com/Gigadrive/sdk/pull/243))
+
 ## 3.5.0
 
 ### Minor Changes
