@@ -1,5 +1,23 @@
 # @gigadrive/harmony
 
+## 3.5.0
+
+### Minor Changes
+
+- add data grid and table components ([#235](https://github.com/Gigadrive/sdk/pull/235))
+
+## 3.4.0
+
+### Minor Changes
+
+- make design more consistent, add new EmptyState component and fix some bugs ([#232](https://github.com/Gigadrive/sdk/pull/232))
+
+## 3.3.1
+
+### Patch Changes
+
+- add slight animation when tapping the Button component ([#194](https://github.com/Gigadrive/sdk/pull/194))
+
 ## 3.3.0
 
 ### Minor Changes

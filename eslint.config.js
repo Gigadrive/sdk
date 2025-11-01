@@ -37,6 +37,7 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-redundant-type-constituents': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
     },
   },
   {
@@ -55,6 +56,7 @@ export default tseslint.config(
       'react/react-in-jsx-scope': 'off',
       'react/no-unescaped-entities': 'off',
       'react-hooks/rules-of-hooks': 'off',
+      'react/no-unknown-property': 'off',
     },
     languageOptions: {
       parserOptions: {

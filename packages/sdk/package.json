@@ -1,6 +1,6 @@
 {
   "name": "@gigadrive/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gigadrive/sdk.git",
@@ -26,7 +26,7 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "esbuild": "^0.25.2"
+    "esbuild": "^0.25.10"
   },
   "engines": {
     "node": ">=18.0.0"

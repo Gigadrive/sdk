@@ -27,7 +27,7 @@ import { Toolbar, ToolbarButton } from '../../../src/components/ui/toolbar';
 
 const data = {
   user: {
-    name: 'shadcn',
+    name: 'T Three-Chat',
     email: 'm@example.com',
     avatar: '/avatars/shadcn.jpg',
   },
@@ -288,7 +288,7 @@ A complete implementation of the inset sidebar layout showcasing:
                 icon={
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={data.user.avatar} alt={data.user.name} />
-                    <AvatarFallback>{data.user.name[0]}</AvatarFallback>
+                    <AvatarFallback>{data.user.name}</AvatarFallback>
                   </Avatar>
                 }
                 title={data.user.name}
@@ -392,7 +392,7 @@ export const Floating: Story = {
                 icon={
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={data.user.avatar} alt={data.user.name} />
-                    <AvatarFallback>{data.user.name[0]}</AvatarFallback>
+                    <AvatarFallback>{data.user.name}</AvatarFallback>
                   </Avatar>
                 }
                 title={data.user.name}
@@ -517,7 +517,7 @@ A floating sidebar layout with a toolbar containing a sidebar trigger button. Th
                 icon={
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={data.user.avatar} alt={data.user.name} />
-                    <AvatarFallback>{data.user.name[0]}</AvatarFallback>
+                    <AvatarFallback>{data.user.name}</AvatarFallback>
                   </Avatar>
                 }
                 title={data.user.name}

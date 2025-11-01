@@ -1,5 +1,11 @@
 # @gigadrive/commons
 
+## 2.1.1
+
+### Patch Changes
+
+- update dependencies ([#232](https://github.com/Gigadrive/sdk/pull/232))
+
 ## 2.1.0
 
 ### Minor Changes

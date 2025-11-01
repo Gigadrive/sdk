@@ -1,7 +1,4 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const path = require('node:path');
 
 /** @type { import('@storybook/react-vite').StorybookConfig } */
 const config = {
@@ -39,4 +36,5 @@ const config = {
     reactDocgen: 'react-docgen-typescript',
   },
 };
-export default config;
+
+module.exports = config;

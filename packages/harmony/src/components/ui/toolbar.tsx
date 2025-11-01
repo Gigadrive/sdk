@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes, ComponentProps, CSSProperties, ReactNode } f
 import * as React from 'react';
 import { Button } from './button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './dropdown-menu';
-import { SidebarContext } from './sidebar';
+import { SidebarContext, SidebarTrigger } from './sidebar';
 
 // Predefined positions for the floating toolbar
 const POSITION_CLASSES: Record<string, string> = {
@@ -100,15 +100,44 @@ interface ToolbarButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon: ReactNode;
   className?: string;
 }
-const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(({ icon, className, ...props }, ref) => (
-  <Button ref={ref} variant="ghost" size="icon" className={className} {...props}>
-    {icon && React.isValidElement(icon)
-      ? React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
-          className: cn('w-6 h-6', (icon as React.ReactElement<{ className?: string }>).props.className),
-        })
-      : icon}
-  </Button>
-));
+const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
+  ({ icon, className, onClick, ...props }, ref) => {
+    const sidebar = React.useContext(SidebarContext);
+
+    const isSidebarTriggerIcon =
+      React.isValidElement(icon) &&
+      (icon.type === SidebarTrigger ||
+        (icon as React.ReactElement & { type?: { displayName?: string } }).type?.displayName === 'SidebarTrigger');
+
+    const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+      onClick?.(event);
+      if (event.defaultPrevented) return;
+      if (isSidebarTriggerIcon) {
+        // If the click originated on the outer button (not the inner icon),
+        // toggle here. Otherwise, let the inner SidebarTrigger handle it.
+        if (event.target === event.currentTarget) {
+          sidebar?.toggleSidebar();
+        }
+        return;
+      }
+    };
+
+    return (
+      <Button ref={ref} variant="ghost" size="icon" className={className} onClick={handleClick} {...props}>
+        {icon && React.isValidElement(icon)
+          ? isSidebarTriggerIcon
+            ? React.cloneElement(icon as React.ReactElement<{ className?: string; asChild?: boolean }>, {
+                asChild: true,
+                className: cn('w-6 h-6', (icon as React.ReactElement<{ className?: string }>).props.className),
+              })
+            : React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
+                className: cn('w-6 h-6', (icon as React.ReactElement<{ className?: string }>).props.className),
+              })
+          : icon}
+      </Button>
+    );
+  }
+);
 ToolbarButton.displayName = 'ToolbarButton';
 
 // Toolbar Menu Item (Radix DropdownMenu.Item based)

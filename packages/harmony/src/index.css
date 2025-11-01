@@ -1,121 +1,19 @@
-/*
- * Resist Sans may require a commercial license and is not included in the code license of this repository.
- * See https://groteskly.xyz/resist-family for purchase options.
- */
-@import url('https://static-cdn.gigadrivegroup.com/resist-sans/stylesheet.css');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.92%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.92%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.92%;
-    --primary: 142.13 76.22% 36.27%;
-    --primary-foreground: 355.71 100% 97.25%;
-    --secondary: 240 4.76% 95.88%;
-    --secondary-foreground: 240 5.88% 10%;
-    --muted: 240 4.76% 95.88%;
-    --muted-foreground: 240 3.83% 46.08%;
-    --accent: 240 4.76% 95.88%;
-    --accent-foreground: 240 5.88% 10%;
-    --destructive: 0 84.24% 60.2%;
-    --destructive-foreground: 0 0% 98.04%;
-    --border: 240 5.88% 90%;
-    --input: 240 5.88% 90%;
-    --ring: 142.13 76.22% 36.27%;
-    --chart-1: 11.92 75.88% 60.98%;
-    --chart-2: 173.22 57.79% 39.02%;
-    --chart-3: 197.33 36.59% 24.12%;
-    --chart-4: 43.13 73.56% 65.88%;
-    --chart-5: 27.12 86.9% 67.06%;
-    --sidebar: 0 0% 98.5%;
-    --sidebar-foreground: 0 0% 14.5%;
-    --sidebar-primary: 0 0% 20.5%;
-    --sidebar-primary-foreground: 0 0% 98.5%;
-    --sidebar-accent: 0 0% 97%;
-    --sidebar-accent-foreground: 0 0% 20.5%;
-    --sidebar-border: 0 0% 92.2%;
-    --sidebar-ring: 0 0% 70.8%;
-    --font-sans:
-      'Resist Sans Text', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-      'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-      'Noto Color Emoji';
-    --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-    --radius: 0.7rem;
-    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
-    --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-    --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
-    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-
     .prose {
       --tw-prose-headings: inherit;
       --tw-prose-body: inherit;
     }
-
-    /* --text-correction: -3px; */
-    --text-correction: -0.15rem;
 
     --header-height: 3.5rem;
   }
 
   .dark,
   :root[class~='dark'] {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 142.13 76.22% 36.27%;
-    --primary-foreground: 355.71 100% 97.25%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 85.7% 97.3%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 142.13 76.22% 36.27%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 240 4.9% 83.9%;
-    --font-sans: undefined;
-    --font-serif: undefined;
-    --font-mono: undefined;
-    --radius: 0.7rem;
-    --shadow-2xs: undefined undefined undefined undefined hsl(0 0% 0% / NaN);
-    --shadow-xs: undefined undefined undefined undefined hsl(0 0% 0% / NaN);
-    --shadow-sm: undefined undefined undefined undefined hsl(0 0% 0% / NaN), undefined 1px 2px -1px hsl(0 0% 0% / NaN);
-    --shadow: undefined undefined undefined undefined hsl(0 0% 0% / NaN), undefined 1px 2px -1px hsl(0 0% 0% / NaN);
-    --shadow-md: undefined undefined undefined undefined hsl(0 0% 0% / NaN), undefined 2px 4px -1px hsl(0 0% 0% / NaN);
-    --shadow-lg: undefined undefined undefined undefined hsl(0 0% 0% / NaN), undefined 4px 6px -1px hsl(0 0% 0% / NaN);
-    --shadow-xl: undefined undefined undefined undefined hsl(0 0% 0% / NaN), undefined 8px 10px -1px hsl(0 0% 0% / NaN);
-    --shadow-2xl: undefined undefined undefined undefined hsl(0 0% 0% / NaN);
-
     .prose {
       --tw-prose-headings: 0 0% 98%;
       --tw-prose-body: 0 0% 98%;
@@ -123,18 +21,7 @@
   }
 
   body {
-    @apply bg-background text-foreground overscroll-none;
-  }
-
-  .dark {
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    @apply bg-background text-foreground;
   }
 
   /* Global scrollbar styling */
@@ -160,12 +47,193 @@
 }
 
 @layer base {
+  /* white border fix */
+  *,
+  body *,
+  ::before,
+  ::after {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    font-size: clamp(15px, 0.3vw + 14px, 20px);
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
   }
 }
 
 .richtext-outline {
   outline: none !important;
   border: 1px solid var(--ring) !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  [id] {
+    scroll-margin-top: calc(var(--header-height) + 1rem);
+  }
+}
+
+.link {
+  color: hsl(var(--primary));
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes ping {
+  75%,
+  to {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.animate-ping {
+  animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pipe-flow {
+  0% {
+    transform: translateX(-60%);
+  }
+
+  to {
+    transform: translateX(60%);
+  }
+}
+
+.animate-pipe-flow {
+  animation: pipe-flow 2s linear infinite;
+}
+
+@keyframes pipe-grow {
+  0% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  49% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(3);
+  }
+
+  60% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+}
+
+.animate-pipe-grow {
+  animation: pipe-grow 2s linear infinite;
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-out {
+  animation: fade-in 0.2s ease-out reverse forwards;
+}
+
+@keyframes fade-in-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down 0.5s ease-out;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.animate-roll {
+  animation: spin 2s linear reverse;
+}
+
+@keyframes wipe-left {
+  0% {
+    -webkit-clip-path: inset(0 0 0 0);
+    clip-path: inset(0 0 0 0);
+  }
+
+  to {
+    -webkit-clip-path: inset(0 100% 0 0);
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+.animate-wipe-left {
+  animation: wipe-left 1s linear;
+}
+
+.example-enter {
+  transform: translateX(100%);
+}
+
+.example-enter.example-enter-active {
+  transform: translateX(0%);
+  transition: transform 500ms ease-in-out;
+}
+
+.example-leave {
+  transform: translateX(0%);
+}
+
+.example-leave.example-leave-active {
+  transform: translateX(-100%);
+  transition: transform 300ms ease-in-out;
 }

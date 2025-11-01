@@ -1,6 +1,6 @@
 {
   "name": "gigadrive",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gigadrive/sdk.git",
@@ -31,17 +31,15 @@
     "arg": "^5.0.2",
     "commander": "^13.1.0",
     "consola": "^3.4.2",
-    "ignore": "^7.0.3",
-    "open": "^10.2.0",
+    "ignore": "^7.0.5",
     "react": "^18.3.1",
-    "react-devtools-core": "^6.1.1",
-    "zod": "^4.0.10"
+    "react-devtools-core": "^6.1.5"
   },
   "devDependencies": {
-    "@types/archiver": "^6.0.2",
-    "@types/react": "^18.3.3",
-    "esbuild": "^0.25.2",
-    "typescript": "^5.8.3"
+    "@types/archiver": "^6.0.3",
+    "@types/react": "^18.3.24",
+    "esbuild": "^0.25.10",
+    "typescript": "^5.9.2"
   },
   "publishConfig": {
     "access": "public"

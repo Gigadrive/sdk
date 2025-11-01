@@ -1,5 +1,11 @@
 # @gigadrive/build-utils
 
+## 1.0.1
+
+### Patch Changes
+
+- update dependencies ([#232](https://github.com/Gigadrive/sdk/pull/232))
+
 ## 1.0.0
 
 ### Major Changes

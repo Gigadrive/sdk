@@ -1,0 +1,317 @@
+:root {
+  --font-sans-text: 'Resist Sans Text', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-sans-display: 'Resist Sans Display', var(--font-sans-text);
+}
+
+html {
+  font-family: var(--font-sans-text);
+  line-height: 1.4; /* important for cross-OS consistency */
+  font-synthesis: none; /* prevents faux styles, stabilizes metrics */
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-sans-display);
+  line-height: 1.15;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display Light Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.eot');
+  src:
+    local('Resist Sans Display Light Oblique'),
+    local('ResistSansDisplay-LightOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.ttf') format('truetype');
+  font-weight: 300;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.eot');
+  src:
+    local('Resist Sans Display Bold'),
+    local('ResistSansDisplay-Bold'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.eot');
+  src:
+    local('Resist Sans Display Light'),
+    local('ResistSansDisplay-Light'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.eot');
+  src:
+    local('Resist Sans Display Medium'),
+    local('ResistSansDisplay-Medium'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display Bold Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.eot');
+  src:
+    local('Resist Sans Display Bold Oblique'),
+    local('ResistSansDisplay-BoldOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.ttf') format('truetype');
+  font-weight: bold;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display Medium Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.eot');
+  src:
+    local('Resist Sans Display Medium Oblique'),
+    local('ResistSansDisplay-MediumOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.ttf') format('truetype');
+  font-weight: 500;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.eot');
+  src:
+    local('Resist Sans Text Medium'),
+    local('ResistSansText-Medium'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text Light Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.eot');
+  src:
+    local('Resist Sans Text Light Oblique'),
+    local('ResistSansText-LightOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.ttf') format('truetype');
+  font-weight: 300;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text Medium Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.eot');
+  src:
+    local('Resist Sans Text Medium Oblique'),
+    local('ResistSansText-MediumOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.ttf') format('truetype');
+  font-weight: 500;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display Thin Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.eot');
+  src:
+    local('Resist Sans Display Thin Oblique'),
+    local('ResistSansDisplay-ThinOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.ttf') format('truetype');
+  font-weight: 100;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.eot');
+  src:
+    local('Resist Sans Display Thin'),
+    local('ResistSansDisplay-Thin'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.eot');
+  src:
+    local('Resist Sans Text Bold'),
+    local('ResistSansText-Bold'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.eot?#iefix') format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.eot');
+  src:
+    local('Resist Sans Display'),
+    local('ResistSansDisplay-Regular'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.eot');
+  src:
+    local('Resist Sans Text Light'),
+    local('ResistSansText-Light'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.eot?#iefix') format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text Bold Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.eot');
+  src:
+    local('Resist Sans Text Bold Oblique'),
+    local('ResistSansText-BoldOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.ttf') format('truetype');
+  font-weight: bold;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Display Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.eot');
+  src:
+    local('Resist Sans Display Oblique'),
+    local('ResistSansDisplay-RegularOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.ttf') format('truetype');
+  font-weight: normal;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.eot');
+  src:
+    local('Resist Sans Text Oblique'),
+    local('ResistSansText-RegularOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.ttf') format('truetype');
+  font-weight: normal;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.eot');
+  src:
+    local('Resist Sans Text Thin'),
+    local('ResistSansText-Thin'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.eot?#iefix') format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text Thin Oblique';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.eot');
+  src:
+    local('Resist Sans Text Thin Oblique'),
+    local('ResistSansText-ThinOblique'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.ttf') format('truetype');
+  font-weight: 100;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Resist Sans Text';
+  src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.eot');
+  src:
+    local('Resist Sans Text'),
+    local('ResistSansText-Regular'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.eot?#iefix')
+      format('embedded-opentype'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}

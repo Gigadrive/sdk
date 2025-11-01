@@ -1,6 +1,6 @@
 {
   "name": "@gigadrive/network-config",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gigadrive/sdk.git",
@@ -31,12 +31,12 @@
     "@gigadrive/commons": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "minimatch": "^10.0.1",
-    "yaml": "^2.7.1"
+    "minimatch": "^10.0.3",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "esbuild": "^0.25.2"
+    "@types/node": "^22.18.7",
+    "esbuild": "^0.25.10"
   },
   "publishConfig": {
     "access": "public"

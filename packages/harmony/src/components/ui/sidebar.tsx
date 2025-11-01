@@ -49,7 +49,30 @@ type SidebarContext = {
   hoverExpand: boolean;
   mobileCollapse?: boolean;
   activeItem?: ActiveItem;
-  setActiveItem: (item?: ActiveItem) => void;
+  setActiveItem: React.Dispatch<React.SetStateAction<ActiveItem | undefined>>;
+};
+
+type PersistHandle =
+  | {
+      type: 'timeout';
+      id: number;
+    }
+  | {
+      type: 'idle';
+      id: number;
+    };
+
+type IdleCallbackWindow = Window & {
+  requestIdleCallback?: (callback: () => void) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+const iconsEqual = (a?: React.ReactNode, b?: React.ReactNode) => {
+  if (React.isValidElement(a) && React.isValidElement(b)) {
+    return a.type === b.type && a.key === b.key;
+  }
+
+  return a === b;
 };
 
 // Context
@@ -92,12 +115,28 @@ const SidebarProvider = React.forwardRef<
     const isMobile = useIsMobile();
     const [openMobile, setOpenMobile] = React.useState(false);
     const [activeItem, setActiveItem] = React.useState<ActiveItem | undefined>();
+    const persistHandleRef = React.useRef<PersistHandle | null>(null);
 
     // Internal state of the sidebar
     const [_open, _setOpen] = React.useState(defaultOpen);
     const open = openProp ?? _open;
+    const clearPendingPersist = React.useCallback(() => {
+      const current = persistHandleRef.current;
+      if (!current) {
+        return;
+      }
+
+      if (current.type === 'timeout') {
+        clearTimeout(current.id);
+      } else if (typeof window !== 'undefined') {
+        (window as IdleCallbackWindow).cancelIdleCallback?.(current.id);
+      }
+
+      persistHandleRef.current = null;
+    }, []);
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
+        clearPendingPersist();
         const openState = typeof value === 'function' ? value(open) : value;
         if (setOpenProp) {
           setOpenProp(openState);
@@ -106,9 +145,27 @@ const SidebarProvider = React.forwardRef<
         }
 
         // Set cookie to remember sidebar state
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+          const runPersist = () => {
+            document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+            persistHandleRef.current = null;
+          };
+
+          const idleWindow = window as IdleCallbackWindow;
+          const idleCallback = idleWindow.requestIdleCallback;
+
+          if (idleCallback) {
+            const id = idleCallback(() => {
+              runPersist();
+            });
+            persistHandleRef.current = { type: 'idle', id };
+          } else {
+            const id = window.setTimeout(runPersist, 250);
+            persistHandleRef.current = { type: 'timeout', id };
+          }
+        }
       },
-      [setOpenProp, open]
+      [clearPendingPersist, setOpenProp, open]
     );
 
     // Toggle sidebar
@@ -130,6 +187,8 @@ const SidebarProvider = React.forwardRef<
     }, [toggleSidebar]);
 
     const state = open ? 'expanded' : 'collapsed';
+
+    React.useEffect(() => () => clearPendingPersist(), [clearPendingPersist]);
 
     const contextValue = React.useMemo<SidebarContext>(
       () => ({
@@ -279,7 +338,7 @@ const Sidebar = React.forwardRef<
             className={cn(
               'flex h-full w-full flex-col bg-sidebar overflow-x-hidden',
               variant === 'floating' && 'rounded-lg border border-sidebar-border shadow-sm',
-              variant === 'inset' && 'rounded-lg shadow-sm',
+              variant === 'inset' && 'rounded-lg',
               hoverExpand && 'group-data-[collapsible=icon]:hover:opacity-100',
               'group-data-[collapsible=icon]:opacity-100 group-data-[collapsible=icon]:transition-all duration-200',
               hoverExpand && 'group-data-[collapsible=icon]:hover:overflow-y-auto'
@@ -473,7 +532,7 @@ const SidebarMenuItem = React.forwardRef<
     tooltip?: string | React.ComponentProps<typeof TooltipContent>;
   }
 >(({ className, defaultOpen, icon, title, href, isActive, tooltip, children, as, ...props }, ref) => {
-  const { isMobile, state, hoverExpand, setActiveItem } = useSidebar();
+  const { isMobile, state, hoverExpand, setActiveItem, toggleSidebar } = useSidebar();
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
   const hasChildren = React.Children.count(children) > 0;
 
@@ -487,13 +546,27 @@ const SidebarMenuItem = React.forwardRef<
 
   // Update active item in context when this item becomes active
   React.useEffect(() => {
-    if (typeof title === 'string' && isActive) {
-      setActiveItem({
+    if (!isActive || typeof title !== 'string') {
+      return;
+    }
+
+    setActiveItem((previous) => {
+      if (
+        previous &&
+        previous.title === title &&
+        previous.href === href &&
+        !previous.parent &&
+        iconsEqual(previous.icon, icon)
+      ) {
+        return previous;
+      }
+
+      return {
         title,
         href,
         icon,
-      });
-    }
+      };
+    });
   }, [isActive, title, href, icon, setActiveItem]);
 
   // Open the menu if it has an active child
@@ -504,6 +577,12 @@ const SidebarMenuItem = React.forwardRef<
   }, [hasActiveChild, isOpen]);
 
   if (!hasChildren) {
+    const isSidebarTriggerIcon =
+      icon &&
+      React.isValidElement(icon) &&
+      (icon.type === SidebarTrigger ||
+        (icon as React.ReactElement & { type?: { displayName?: string } }).type?.displayName === 'SidebarTrigger');
+
     const buttonContent = (
       <>
         {icon}
@@ -524,6 +603,12 @@ const SidebarMenuItem = React.forwardRef<
           'data-[type=user]:group-data-[collapsible=icon]:!h-12 data-[type=user]:group-data-[collapsible=icon]:!w-12 data-[type=user]:group-data-[collapsible=icon]:!p-1 data-[type=user]:group-data-[collapsible=icon]:justify-center',
           className
         )}
+        onClick={(event) => {
+          // If icon is a SidebarTrigger and there's no href, clicking the outer button should toggle.
+          if (isSidebarTriggerIcon && !href && event.target === event.currentTarget) {
+            toggleSidebar();
+          }
+        }}
       >
         {buttonContent}
       </button>
@@ -585,7 +670,7 @@ const SidebarMenuItem = React.forwardRef<
           <AnimatePresence>
             {isOpen && (
               <motion.div
-                initial={{ height: 0, opacity: 0 }}
+                initial={false}
                 animate={{
                   height: 'auto',
                   opacity: 1,
@@ -657,18 +742,37 @@ const SidebarSubItem = React.forwardRef<
 
   // Update active item in context when this item becomes active
   React.useEffect(() => {
-    if (isActive) {
-      setActiveItem({
+    if (!isActive) {
+      return;
+    }
+
+    const parentPayload = parentTitle
+      ? {
+          title: parentTitle,
+          icon: parentIcon,
+        }
+      : undefined;
+
+    setActiveItem((previous) => {
+      if (
+        previous &&
+        previous.title === title &&
+        previous.href === href &&
+        ((previous.parent &&
+          parentPayload &&
+          previous.parent.title === parentPayload.title &&
+          iconsEqual(previous.parent.icon, parentPayload.icon)) ||
+          (!previous.parent && !parentPayload))
+      ) {
+        return previous;
+      }
+
+      return {
         title,
         href,
-        parent: parentTitle
-          ? {
-              title: parentTitle,
-              icon: parentIcon,
-            }
-          : undefined,
-      });
-    }
+        parent: parentPayload,
+      };
+    });
   }, [isActive, title, href, parentTitle, parentIcon, setActiveItem]);
 
   return (
