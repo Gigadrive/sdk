@@ -189,7 +189,7 @@ export class AuthManager {
       }
       server.listen(parseInt(port), () => {
         console.log(`Please open this URL in your browser to log in:\n${authUrl.toString()}\n`);
-        console.log(`Waiting for login callback on ${OAUTH_CONFIG.redirectUri}...`);
+        console.log('Waiting for login callback...');
         void open(authUrl.toString()); // Automatically open the browser
       });
 
