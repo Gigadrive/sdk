@@ -1,6 +1,4 @@
-// src/config/oauth.ts
-
-import { env } from '../env';
+import { env } from '@/env';
 
 interface OAuthClientConfig {
   clientId: string;

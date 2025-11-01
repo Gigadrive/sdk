@@ -1,14 +1,11 @@
-// src/auth/manager.ts
-
-import * as crypto from 'node:crypto'; // Use node:crypto for built-in crypto module
-import * as fs from 'node:fs'; // Use node:fs for file operations
-import * as http from 'node:http'; // Use node:http for built-in http server
-import * as os from 'node:os'; // Use node:os for home directory
-import * as path from 'node:path'; // Use node:path for cross-platform path handling
-import { URL, URLSearchParams } from 'node:url'; // Ensure URL and URLSearchParams are imported for Node.js environment
-import open from 'open'; // npm install open
-
-import { OAUTH_CONFIG } from '../config/oauth'; // Adjust path as necessary
+import { OAUTH_CONFIG } from '@/config/oauth';
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as http from 'node:http';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { URL, URLSearchParams } from 'node:url';
+import open from 'open';
 
 // Type definitions for OAuth responses
 interface OAuthTokens {
