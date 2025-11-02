@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import { build } from './commands/build';
 import { debug } from './commands/debug';
 import { login } from './commands/login';
-import { whoami } from './commands/whoami';
 import { platform } from './commands/platform';
+import { whoami } from './commands/whoami';
 import { error, log, setVerbose } from './util/log';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
