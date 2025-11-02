@@ -1,3 +1,4 @@
+import { error, log } from '@/util/log';
 import { exec } from '@gigadrive/build-utils';
 import type { Command } from 'commander';
 import fs from 'fs';
@@ -23,7 +24,7 @@ export const build = (parent: Command) => {
       const packageJsonPath = path.join(cwd, 'package.json');
 
       if (!fs.existsSync(packageJsonPath)) {
-        console.log('No package.json found');
+        error('No package.json found');
         return;
       }
 
@@ -34,14 +35,14 @@ export const build = (parent: Command) => {
 
       // If build script is not defined, return null
       if (!buildScript) {
-        console.log('No build script found in package.json');
+        error('No build script found in package.json');
         return;
       }
 
       const packageManager = await getPackageManager({ cwd });
 
       if (!packageManager) {
-        console.log('No package manager found');
+        error('No package manager found');
         return;
       }
 
@@ -50,7 +51,7 @@ export const build = (parent: Command) => {
         cwd,
         env,
         onOutput: (chunk) => {
-          console.log(chunk);
+          log(chunk);
         },
       });
 
@@ -59,7 +60,7 @@ export const build = (parent: Command) => {
         cwd,
         env,
         onOutput: (chunk) => {
-          console.log(chunk);
+          log(chunk);
         },
       });
     });

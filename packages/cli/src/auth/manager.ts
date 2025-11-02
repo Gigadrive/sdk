@@ -1,5 +1,5 @@
 import { getOAuthConfig } from '@/config/oauth';
-import { sha256 } from '@gigadrive/commons';
+import { error, log, success } from '@/util/log';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -55,14 +55,12 @@ async function ensureAuthDirectory(): Promise<void> {
 
 /**
  * Generates PKCE (Proof Key for Code Exchange) values.
- * @returns {Promise<{ codeVerifier: string; codeChallenge: string }>} The PKCE code verifier and challenge.
+ * code_challenge = BASE64URL(SHA256(ASCII(code_verifier))) per RFC 7636
  */
-async function generatePKCE(): Promise<{
-  codeVerifier: string;
-  codeChallenge: string;
-}> {
-  const codeVerifier = base64URLEncode(Buffer.from(crypto.randomBytes(32)));
-  const codeChallenge = base64URLEncode(Buffer.from(await sha256(codeVerifier)));
+function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
+  const codeVerifier = base64URLEncode(crypto.randomBytes(64));
+  const challengeBytes = crypto.createHash('sha256').update(codeVerifier, 'utf8').digest();
+  const codeChallenge = base64URLEncode(challengeBytes);
   return { codeVerifier, codeChallenge };
 }
 
@@ -138,10 +136,10 @@ export class AuthManager {
     try {
       const { file } = getAuthStoragePaths();
       await fs.promises.unlink(file);
-      console.log('Logged out. Auth data removed from local storage.');
+      log('Logged out. Auth data removed from local storage.');
     } catch {
       // File doesn't exist, which is fine
-      console.log('Logged out.');
+      log('Logged out.');
     }
   }
 
@@ -154,7 +152,7 @@ export class AuthManager {
     // Clear any existing tokens to ensure a fresh login experience
     await this.logout();
 
-    const { codeVerifier, codeChallenge } = await generatePKCE();
+    const { codeVerifier, codeChallenge } = generatePKCE();
     this.codeVerifier = codeVerifier;
     this.state = crypto.randomBytes(16).toString('hex');
 
@@ -189,8 +187,8 @@ export class AuthManager {
         authUrl.searchParams.append('code_challenge_method', 'S256');
         authUrl.searchParams.append('state', loginState);
 
-        console.log(`Please open this URL in your browser to log in:\n${authUrl.toString()}\n`);
-        console.log('Waiting for login callback...');
+        log(`Please open this URL in your browser to log in:\n${authUrl.toString()}\n`);
+        log('Waiting for login callback...');
         void open(authUrl.toString()); // Automatically open the browser
       });
 
@@ -276,7 +274,7 @@ export class AuthManager {
           accessToken: this.accessToken,
           tokenExpirationTime: this.tokenExpirationTime,
         });
-        console.log('Login successful!');
+        success('Login successful!');
         return true;
       } else {
         console.error('Error: No refresh token received from Gigadrive IDP.');
@@ -303,7 +301,7 @@ export class AuthManager {
     const storedData = await this._loadStoredAuthData();
     const OAUTH_CONFIG = await getOAuthConfig();
     if (!storedData?.refreshToken) {
-      console.log('No refresh token available for refresh. Please log in.');
+      error('No refresh token available for refresh. Please log in.');
       return false;
     }
 
@@ -388,7 +386,7 @@ export class AuthManager {
     }
 
     // 3. If refresh failed, the user needs to log in again
-    console.log('No valid access token available. Please log in first.');
+    error('No valid access token available. Please log in first.');
     return null;
   }
 
@@ -400,7 +398,7 @@ export class AuthManager {
     const OAUTH_CONFIG = await getOAuthConfig();
     const currentToken = await this.getAccessToken();
     if (!currentToken) {
-      console.log('Not authenticated. Please log in.');
+      error('Not authenticated. Please log in.');
       return null;
     }
 
