@@ -4,6 +4,10 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  gigadrive: link:packages/cli
+  sdk-monorepo: 'link:'
+
 importers:
 
   .:
@@ -188,6 +192,9 @@ importers:
       consola:
         specifier: ^3.4.2
         version: 3.4.2
+      dotenv:
+        specifier: ^16.6.1
+        version: 16.6.1
       ignore:
         specifier: ^7.0.5
         version: 7.0.5

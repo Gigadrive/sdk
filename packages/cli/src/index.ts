@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { build } from './commands/build';
 import { debug } from './commands/debug';
 import { login } from './commands/login';
+import { whoami } from './commands/whoami';
 import { platform } from './commands/platform';
 import { error, log, setVerbose } from './util/log';
 
@@ -39,6 +40,7 @@ const main = async () => {
   debug(program);
   build(program);
   login(program);
+  whoami(program);
 
   try {
     await program.parseAsync(process.argv);
@@ -82,6 +84,6 @@ process.on('exit', () => {
 
 main()
   .then((exitCode) => {
-    process.exitCode = exitCode;
+    process.exit(exitCode);
   })
   .catch(handleUnexpected);

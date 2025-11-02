@@ -19,7 +19,8 @@
   ],
   "scripts": {
     "build": "tsup",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "dev": "pnpm build && node dist/index.mjs"
   },
   "dependencies": {
     "@gigadrive/build-utils": "workspace:*",
@@ -31,6 +32,7 @@
     "arg": "^5.0.2",
     "commander": "^13.1.0",
     "consola": "^3.4.2",
+    "dotenv": "^16.6.1",
     "ignore": "^7.0.5",
     "open": "^10.2.0",
     "react": "^18.3.1",
@@ -42,6 +44,9 @@
     "@types/react": "^18.3.24",
     "esbuild": "^0.25.10",
     "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "publishConfig": {
     "access": "public"

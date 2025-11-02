@@ -1,4 +1,4 @@
-import { OAUTH_CONFIG } from '@/config/oauth';
+import { getOAuthConfig } from '@/config/oauth';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -130,7 +130,7 @@ export class AuthManager {
       await ensureAuthDirectory();
       const { file } = getAuthStoragePaths();
       await fs.promises.writeFile(file, JSON.stringify(authData, null, 2), 'utf8');
-      console.log('Auth data saved to local storage.');
+      console.debug('Auth data saved to local storage.');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error saving auth data to local storage:', errorMessage);
@@ -154,7 +154,7 @@ export class AuthManager {
   }
 
   /**
-   * Initiates the OAuth login flow with Clerk via a web portal.
+   * Initiates the OAuth login flow with the IDP via a web portal.
    * Opens a browser for user authentication and listens for the redirect.
    * @returns {Promise<boolean>} True if login was successful, false otherwise.
    */
@@ -166,56 +166,73 @@ export class AuthManager {
     this.codeVerifier = codeVerifier;
     this.state = crypto.randomBytes(16).toString('hex');
 
-    // Construct Clerk's authorization URL
-    const authUrl = new URL(OAUTH_CONFIG.authorizeUrl);
-    authUrl.searchParams.append('client_id', OAUTH_CONFIG.clientId);
-    authUrl.searchParams.append('redirect_uri', OAUTH_CONFIG.redirectUri);
-    authUrl.searchParams.append('response_type', 'code');
-    authUrl.searchParams.append('scope', OAUTH_CONFIG.scope);
-    authUrl.searchParams.append('code_challenge', codeChallenge);
-    authUrl.searchParams.append('code_challenge_method', 'S256');
-    authUrl.searchParams.append('state', this.state);
+    const OAUTH_CONFIG = await getOAuthConfig();
+    const loginState = this.state;
+    if (!loginState) {
+      throw new Error('Internal error: login state not initialized');
+    }
 
     // Start a local HTTP server to catch the redirect callback
     const server = http.createServer();
+    let usedRedirectUri = '';
     const serverPromise = new Promise<string>((resolve, reject) => {
-      const port = new URL(OAUTH_CONFIG.redirectUri).port;
-      if (!port) {
-        reject(new Error('Redirect URI must specify a port for the local server.'));
-        return;
-      }
-      server.listen(parseInt(port), () => {
+      const redirectPath = '/callback';
+
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address();
+        if (!address || typeof address !== 'object') {
+          reject(new Error('Failed to determine callback server address'));
+          return;
+        }
+        const port = address.port;
+        usedRedirectUri = `http://127.0.0.1:${port}${redirectPath}`;
+
+        // Build the authorization URL now that we have a redirect URI
+        const authUrl = new URL(OAUTH_CONFIG.authorizeUrl);
+        authUrl.searchParams.append('client_id', OAUTH_CONFIG.clientId);
+        authUrl.searchParams.append('redirect_uri', usedRedirectUri);
+        authUrl.searchParams.append('response_type', 'code');
+        authUrl.searchParams.append('scope', OAUTH_CONFIG.scope);
+        authUrl.searchParams.append('code_challenge', codeChallenge);
+        authUrl.searchParams.append('code_challenge_method', 'S256');
+        authUrl.searchParams.append('state', loginState);
+
         console.log(`Please open this URL in your browser to log in:\n${authUrl.toString()}\n`);
         console.log('Waiting for login callback...');
         void open(authUrl.toString()); // Automatically open the browser
       });
 
       server.on('request', (req, res) => {
-        const reqUrl = new URL(req.url || '', OAUTH_CONFIG.redirectUri); // Handle req.url possibly being undefined
-        if (reqUrl.pathname === new URL(OAUTH_CONFIG.redirectUri).pathname) {
+        const base = usedRedirectUri || 'http://127.0.0.1/callback';
+        const reqUrl = new URL(req.url || '', base);
+        if (reqUrl.pathname === '/callback') {
           const authCode = reqUrl.searchParams.get('code');
           const receivedState = reqUrl.searchParams.get('state');
           const error = reqUrl.searchParams.get('error');
 
-          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.writeHead(200, { 'Content-Type': 'text/html', Connection: 'close' });
           if (error) {
             res.end('<h1>Login Failed!</h1><p>Error: ' + error + '</p><p>You can close this tab.</p>');
-            server.close(() => reject(new Error(`OAuth error: ${error}`)));
+            reject(new Error(`OAuth error: ${error}`));
+            server.close();
             return;
           }
 
           if (receivedState !== this.state) {
             res.end('<h1>Login Failed!</h1><p>State mismatch. Possible CSRF attack.</p><p>You can close this tab.</p>');
-            server.close(() => reject(new Error('State mismatch')));
+            reject(new Error('State mismatch'));
+            server.close();
             return;
           }
 
           if (authCode) {
             res.end('<h1>Login Successful!</h1><p>You can close this tab.</p>');
-            server.close(() => resolve(authCode));
+            resolve(authCode);
+            server.close();
           } else {
             res.end('<h1>Login Failed!</h1><p>No authorization code received.</p><p>You can close this tab.</p>');
-            server.close(() => reject(new Error('No authorization code received')));
+            reject(new Error('No authorization code received'));
+            server.close();
           }
         } else {
           res.writeHead(404).end('Not Found');
@@ -231,7 +248,7 @@ export class AuthManager {
     try {
       const authCode = await serverPromise; // Wait for the auth code from the local server
 
-      // Exchange the authorization code for tokens with Clerk's token endpoint
+      // Exchange the authorization code for tokens with the IDP's token endpoint
       const tokenResponse = await fetch(OAUTH_CONFIG.tokenUrl, {
         method: 'POST',
         headers: {
@@ -241,7 +258,7 @@ export class AuthManager {
           grant_type: 'authorization_code',
           client_id: OAUTH_CONFIG.clientId,
           code: authCode,
-          redirect_uri: OAUTH_CONFIG.redirectUri,
+          ...(usedRedirectUri ? { redirect_uri: usedRedirectUri } : {}),
           code_verifier: this.codeVerifier || '', // Use the stored codeVerifier
         }).toString(),
       });
@@ -267,10 +284,10 @@ export class AuthManager {
           accessToken: this.accessToken,
           tokenExpirationTime: this.tokenExpirationTime,
         });
-        console.log('Login successful! Access token acquired.');
+        console.log('Login successful!');
         return true;
       } else {
-        console.error('Error: No refresh token received from Clerk.');
+        console.error('Error: No refresh token received from Gigadrive IDP.');
         return false;
       }
     } catch (error: unknown) {
@@ -292,6 +309,7 @@ export class AuthManager {
    */
   private async refreshAccessToken(): Promise<boolean> {
     const storedData = await this._loadStoredAuthData();
+    const OAUTH_CONFIG = await getOAuthConfig();
     if (!storedData?.refreshToken) {
       console.log('No refresh token available for refresh. Please log in.');
       return false;
@@ -312,7 +330,7 @@ export class AuthManager {
 
       if (!tokenResponse.ok) {
         const errorData = (await tokenResponse.json().catch(() => null)) as OAuthError | null;
-        // Handle common refresh token errors from Clerk
+        // Handle common refresh token errors from the IDP
         if (
           tokenResponse.status === 400 &&
           errorData &&
@@ -336,10 +354,10 @@ export class AuthManager {
       this.accessToken = tokens.access_token;
       this.tokenExpirationTime = Date.now() + (tokens.expires_in || 3600) * 1000;
 
-      // Check for refresh token rotation (Clerk might issue a new refresh token)
+      // Check for refresh token rotation (IDP might issue a new refresh token)
       const newRefreshToken = tokens.refresh_token || storedData.refreshToken;
       if (tokens.refresh_token && tokens.refresh_token !== storedData.refreshToken) {
-        console.log('New refresh token received and updated.');
+        console.debug('New refresh token received and updated.');
       }
 
       // Update stored auth data with new tokens
@@ -349,7 +367,7 @@ export class AuthManager {
         tokenExpirationTime: this.tokenExpirationTime,
       });
 
-      console.log('Access token refreshed successfully!');
+      console.debug('Access token refreshed successfully!');
       return true;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -372,7 +390,7 @@ export class AuthManager {
     }
 
     // 2. If no valid in-memory token, attempt to refresh using the stored refresh token
-    console.log('Access token expired or not available. Attempting to refresh...');
+    console.debug('Access token expired or not available. Attempting to refresh...');
     if (await this.refreshAccessToken()) {
       return this.accessToken;
     }
@@ -380,6 +398,48 @@ export class AuthManager {
     // 3. If refresh failed, the user needs to log in again
     console.log('No valid access token available. Please log in first.');
     return null;
+  }
+
+  /**
+   * Fetches the current user's information from the configured userinfo endpoint.
+   * Attempts a single token refresh and retry on 401/403 responses.
+   */
+  public async getUserInfo(): Promise<Record<string, unknown> | null> {
+    const OAUTH_CONFIG = await getOAuthConfig();
+    const currentToken = await this.getAccessToken();
+    if (!currentToken) {
+      console.log('Not authenticated. Please log in.');
+      return null;
+    }
+
+    const fetchUserInfo = async (token: string) =>
+      fetch(OAUTH_CONFIG.userinfoUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+    let response = await fetchUserInfo(currentToken);
+
+    if (response.status === 401 || response.status === 403) {
+      // Try refreshing the token once and retry
+      const refreshed = await this.refreshAccessToken();
+      if (!refreshed || !this.accessToken) {
+        return null;
+      }
+      response = await fetchUserInfo(this.accessToken);
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Failed to fetch user info: ${response.status} ${response.statusText}${body ? ` - ${body}` : ''}`
+      );
+    }
+
+    const data = (await response.json()) as Record<string, unknown>;
+    return data;
   }
 }
 

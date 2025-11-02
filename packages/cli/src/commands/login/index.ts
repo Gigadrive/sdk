@@ -6,7 +6,7 @@ export const login = (program: Command) => {
     .command('login')
     .description('Login to the platform')
     .action(async () => {
-      console.log('Initiating Clerk login...');
+      console.log('Initiating login...');
       const success = await authManager.login();
       if (success) {
         console.log('You are now logged in!');

@@ -1,5 +1,10 @@
 packages:
   - packages/*
   - local/*
+
 onlyBuiltDependencies:
   - esbuild
+
+overrides:
+  gigadrive: link:packages/cli
+  sdk-monorepo: 'link:'
