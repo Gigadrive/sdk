@@ -1,4 +1,5 @@
 import { getOAuthConfig } from '@/config/oauth';
+import { sha256 } from '@gigadrive/commons';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -56,12 +57,12 @@ async function ensureAuthDirectory(): Promise<void> {
  * Generates PKCE (Proof Key for Code Exchange) values.
  * @returns {Promise<{ codeVerifier: string; codeChallenge: string }>} The PKCE code verifier and challenge.
  */
-function generatePKCE(): {
+async function generatePKCE(): Promise<{
   codeVerifier: string;
   codeChallenge: string;
-} {
-  const codeVerifier = base64URLEncode(crypto.randomBytes(32));
-  const codeChallenge = base64URLEncode(sha256(Buffer.from(codeVerifier)));
+}> {
+  const codeVerifier = base64URLEncode(Buffer.from(crypto.randomBytes(32)));
+  const codeChallenge = base64URLEncode(Buffer.from(await sha256(codeVerifier)));
   return { codeVerifier, codeChallenge };
 }
 
@@ -72,15 +73,6 @@ function generatePKCE(): {
  */
 function base64URLEncode(buffer: Buffer): string {
   return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-/**
- * Calculates the SHA256 hash of a buffer.
- * @param {Buffer} buffer The buffer to hash.
- * @returns {Buffer} The SHA256 hash as a buffer.
- */
-function sha256(buffer: Buffer): Buffer {
-  return crypto.createHash('sha256').update(buffer).digest();
 }
 
 /**
@@ -162,7 +154,7 @@ export class AuthManager {
     // Clear any existing tokens to ensure a fresh login experience
     await this.logout();
 
-    const { codeVerifier, codeChallenge } = generatePKCE();
+    const { codeVerifier, codeChallenge } = await generatePKCE();
     this.codeVerifier = codeVerifier;
     this.state = crypto.randomBytes(16).toString('hex');
 
