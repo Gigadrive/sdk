@@ -46,7 +46,8 @@ function getAuthStoragePaths(): { directory: string; file: string } {
 async function ensureAuthDirectory(): Promise<void> {
   const { directory } = getAuthStoragePaths();
   try {
-    await fs.promises.mkdir(directory, { recursive: true });
+    await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 });
+    await fs.promises.chmod(directory, 0o700);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Failed to create auth directory: ${errorMessage}`);
@@ -119,7 +120,8 @@ export class AuthManager {
     try {
       await ensureAuthDirectory();
       const { file } = getAuthStoragePaths();
-      await fs.promises.writeFile(file, JSON.stringify(authData, null, 2), 'utf8');
+      await fs.promises.writeFile(file, JSON.stringify(authData, null, 2), { encoding: 'utf8', mode: 0o600 });
+      await fs.promises.chmod(file, 0o600);
       console.debug('Auth data saved to local storage.');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
