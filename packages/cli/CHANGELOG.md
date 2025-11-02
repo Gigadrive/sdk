@@ -1,5 +1,11 @@
 # gigadrive
 
+## 2.0.0
+
+### Major Changes
+
+- - add CLI login with `gigadrive login` command, as well as `gigadrive whoami` to show the currently authenticated user information ([#182](https://github.com/Gigadrive/sdk/pull/182))
+
 ## 1.1.2
 
 ### Patch Changes
