@@ -1,7 +1,9 @@
 import { Command } from 'commander';
 import { build } from './commands/build';
 import { debug } from './commands/debug';
+import { login } from './commands/login';
 import { platform } from './commands/platform';
+import { whoami } from './commands/whoami';
 import { error, log, setVerbose } from './util/log';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -37,6 +39,8 @@ const main = async () => {
   platform(program);
   debug(program);
   build(program);
+  login(program);
+  whoami(program);
 
   try {
     await program.parseAsync(process.argv);
@@ -80,6 +84,6 @@ process.on('exit', () => {
 
 main()
   .then((exitCode) => {
-    process.exitCode = exitCode;
+    process.exit(exitCode);
   })
   .catch(handleUnexpected);
