@@ -30,7 +30,7 @@
     "@t3-oss/env-core": "^0.13.8",
     "archiver": "^7.0.1",
     "arg": "^5.0.2",
-    "commander": "^13.1.0",
+    "commander": "^14.0.2",
     "consola": "^3.4.2",
     "dotenv": "^16.6.1",
     "ignore": "^7.0.5",
