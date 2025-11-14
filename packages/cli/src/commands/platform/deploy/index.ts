@@ -1,3 +1,6 @@
+import { authManager } from '@/auth/manager';
+import { debug, error, log, spinner, success, warn } from '@/util/log';
+import { createZipArchive } from '@/util/zip';
 import { formatFileSize, objectToQueryString } from '@gigadrive/commons';
 import type { NormalizedConfig } from '@gigadrive/network-config';
 import { findConfig, parseConfig } from '@gigadrive/network-config';
@@ -5,8 +8,6 @@ import type { Command } from 'commander';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { debug, error, log, spinner, success, warn } from '../../../util/log';
-import { createZipArchive } from '../../../util/zip';
 
 export const deploy = (parent: Command) => {
   parent
@@ -14,6 +15,13 @@ export const deploy = (parent: Command) => {
     .description('Deploy the current project')
     .action(async () => {
       debug('Starting deploy command');
+
+      const info = await authManager.getUserInfo();
+      if (!info) {
+        console.log('You are not logged in. Run "gigadrive login" to authenticate.');
+        return;
+      }
+
       const configPath = findConfig(process.cwd());
 
       if (!configPath) {
@@ -43,7 +51,7 @@ export const deploy = (parent: Command) => {
 
       debug('Creating deployment');
       const deploymentId = await createDeployment({
-        applicationId: 'test', // TODO
+        applicationId: '019a7ec8-5a2c-7526-b032-fa96a35121f5', // TODO
       });
 
       debug(`Deployment ID: ${deploymentId}`);
@@ -294,12 +302,13 @@ const uploadArchive = async (deploymentId: string, logs: DeploymentLog[], config
 
 const createDeployment = async ({ applicationId }: { applicationId: string }) => {
   debug(`Creating deployment for application: ${applicationId}`);
-  const res = await fetch(`http://localhost:3000/${applicationId}/deployments`, {
+  const res = await fetch(`http://localhost:4004/deployments`, {
     method: 'POST',
     headers: {
+      Authorization: `Bearer ${await authManager.getAccessToken()}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ applicationId }),
     duplex: 'half',
   });
 
@@ -317,10 +326,11 @@ const createDeployment = async ({ applicationId }: { applicationId: string }) =>
 
 const startMultipartUpload = async (deploymentId: string) => {
   debug(`Starting multipart upload for deployment: ${deploymentId}`);
-  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/pre-signed-url/start`, {
-    method: 'GET',
+  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/upload/start`, {
+    method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${await authManager.getAccessToken()}`,
+      Accept: 'application/json',
     },
   });
 
@@ -338,15 +348,14 @@ const startMultipartUpload = async (deploymentId: string) => {
 
 const getPresignedUrl = async (deploymentId: string, uploadId: string, partNumber: number) => {
   debug(`Getting presigned URL for deployment: ${deploymentId}, upload: ${uploadId}, part: ${partNumber}`);
-  const res = await fetch(
-    `http://localhost:3000/deployments/${deploymentId}/pre-signed-url/part?uploadId=${uploadId}&partNumber=${partNumber}`,
-    {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/upload/part`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${await authManager.getAccessToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ uploadId, partNumber }),
+  });
 
   if (!res.ok) {
     const errorText = await res.text();
@@ -366,9 +375,10 @@ const completeUpload = async (
   parts: { partNumber: number; etag: string }[]
 ) => {
   debug(`Completing upload for deployment: ${deploymentId}, upload: ${uploadId}, parts: ${parts.length}`);
-  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/pre-signed-url/complete`, {
+  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/upload/complete`, {
     method: 'POST',
     headers: {
+      Authorization: `Bearer ${await authManager.getAccessToken()}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -392,6 +402,7 @@ const getDeploymentStatus = async (deploymentId: string) => {
   const res = await fetch(`http://localhost:3000/deployments/${deploymentId}`, {
     method: 'GET',
     headers: {
+      Authorization: `Bearer ${await authManager.getAccessToken()}`,
       'Content-Type': 'application/json',
     },
   });
