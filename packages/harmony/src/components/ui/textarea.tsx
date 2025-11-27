@@ -20,7 +20,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           <textarea
             id={id}
             className={cn(
-              'flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:focus-visible:ring-offset-background',
+              'flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:focus-visible:ring-offset-background bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.05),transparent)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2)]',
               label !== undefined && label !== '' && 'pt-4',
               error !== undefined &&
                 'border-destructive focus:border-destructive dark:border-destructive dark:focus:border-destructive',
