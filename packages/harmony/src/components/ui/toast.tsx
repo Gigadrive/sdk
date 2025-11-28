@@ -42,7 +42,7 @@ const Toaster: React.FC<ToasterProps> = ({ ...props }) => {
       toastOptions={{
         classNames: {
           toast:
-            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:shadow-lg rounded-lg w-[380px]',
+            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2),0_4px_6px_-1px_rgba(0,0,0,0.1)] group-[.toaster]:bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.15),transparent)] rounded-lg w-[380px]',
           title: 'text-base',
           description: 'text-sm text-muted-foreground',
           actionButton: 'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
@@ -67,7 +67,7 @@ const Toaster: React.FC<ToasterProps> = ({ ...props }) => {
 // Helper function to create toast content
 const createToastContent = (toastData: Omit<Toast, 'id'>) => {
   let toastClass =
-    'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:shadow-lg rounded-lg p-4 w-[380px]';
+    'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2),0_4px_6px_-1px_rgba(0,0,0,0.1)] group-[.toaster]:bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.15),transparent)] rounded-lg p-4 w-[380px]';
 
   // Add type-specific styling
   if (toastData.type) {
