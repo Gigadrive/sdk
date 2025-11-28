@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.6.1
+
+### Patch Changes
+
+- remove gradient style from Card component ([#262](https://github.com/Gigadrive/sdk/pull/262))
+
 ## 3.6.0
 
 ### Minor Changes
