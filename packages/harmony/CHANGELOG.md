@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 3.6.0
+
+### Minor Changes
+
+- update components with improved styling ([#260](https://github.com/Gigadrive/sdk/pull/260))
+
 ## 3.5.1
 
 ### Patch Changes
