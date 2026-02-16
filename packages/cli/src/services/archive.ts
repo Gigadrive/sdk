@@ -13,14 +13,14 @@ import { ArchiveCreateError } from '../errors';
 
 const IGNORE_FILE_NAMES = ['.gigadriveignore', '.vercelignore', '.dockerignore', '.nowignore'];
 
-const readIgnoreFile = (ignorePath: string): Effect.Effect<string[], never, never> =>
+const readIgnoreFile = (ignorePath: string): Effect.Effect<string[]> =>
   Effect.tryPromise({
     try: async () => {
       await fsPromises.access(ignorePath);
       const content = await fsPromises.readFile(ignorePath, 'utf8');
       return content.split('\n').filter((line: string) => line.trim() !== '');
     },
-    catch: () => [] as never,
+    catch: () => new ArchiveCreateError({ message: `Failed to read ignore file: ${ignorePath}` }),
   }).pipe(Effect.catchAll(() => Effect.succeed([] as string[])));
 
 const collectIgnorePatterns = (dir: string, baseDir: string, ignoreRules: Ignore): Effect.Effect<void> =>

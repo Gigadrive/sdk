@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { DeploymentId, DeploymentLog, DeploymentStatus } from '../../../domain';
-import { DeploymentFailedError } from '../../../errors';
+import { DeploymentFailedError, UploadPartError } from '../../../errors';
 import { ArchiveService } from '../../../services/archive';
 import { DeploymentApiService } from '../../../services/deployment-api';
 import { ProjectConfigService } from '../../../services/project-config';
@@ -29,7 +29,7 @@ export const deployCommand = Command.make('deploy', {}, () =>
 
     // Create and upload archive
     yield* Console.log('Creating archive...');
-    const archivePath = path.join(process.env.TEMP || os.tmpdir(), `project-${Date.now()}.zip`);
+    const archivePath = path.join(os.tmpdir(), `project-${Date.now()}.zip`);
     const archive = yield* archiveService.createZipArchive(config.userArchive?.rootOverwrite || cwd, archivePath, {
       whitelist: config.userArchive?.fileWhitelist,
       useIgnoreFiles: false,
@@ -108,11 +108,11 @@ const uploadArchive = (deploymentId: DeploymentId, archivePath: string, fileSize
                 readStream.on('end', () => resolve(Buffer.concat(chunks)));
                 readStream.on('error', reject);
               }),
-            catch: (error) => ({
-              _tag: 'UploadPartError' as const,
-              message: `Failed to read chunk ${partNumber}: ${error instanceof Error ? error.message : String(error)}`,
-              partNumber,
-            }),
+            catch: (error) =>
+              new UploadPartError({
+                message: `Failed to read chunk ${partNumber}: ${error instanceof Error ? error.message : String(error)}`,
+                partNumber,
+              }),
           });
 
           yield* Effect.log(`Uploading part ${partNumber}/${numChunks}`, { size: buffer.length });
