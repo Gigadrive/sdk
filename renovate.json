@@ -1,0 +1,109 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    "group:monorepos",
+    "group:recommended",
+    "replacements:all",
+    "workarounds:all"
+  ],
+  "labels": ["dependencies"],
+  "rangeStrategy": "auto",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true
+  },
+  "packageRules": [
+    {
+      "description": "Automerge non-major updates",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Do not automerge major updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Group all non-major dependencies",
+      "groupName": "all non-major dependencies",
+      "groupSlug": "all-minor-patch",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "matchPackageNames": ["*"]
+    },
+    {
+      "description": "Group all major dependencies",
+      "groupName": "all major dependencies",
+      "groupSlug": "all-major",
+      "matchUpdateTypes": ["major"],
+      "matchPackageNames": ["*"]
+    },
+    {
+      "description": "Group ESLint-related packages",
+      "groupName": "eslint",
+      "matchPackageNames": ["eslint", "@eslint/*", "eslint-*", "typescript-eslint", "@typescript-eslint/*"],
+      "automerge": true
+    },
+    {
+      "description": "Group Prettier-related packages",
+      "groupName": "prettier",
+      "matchPackageNames": ["prettier", "prettier-plugin-*"],
+      "automerge": true
+    },
+    {
+      "description": "Group Vitest and Vite packages",
+      "groupName": "vitest",
+      "matchPackageNames": ["vitest", "@vitest/*", "vite", "@vitejs/*"],
+      "automerge": true
+    },
+    {
+      "description": "Group Changesets packages",
+      "groupName": "changesets",
+      "matchPackageNames": ["@changesets/*", "@svitejs/changesets-*"],
+      "automerge": true
+    },
+    {
+      "description": "Group Radix UI packages",
+      "groupName": "radix-ui",
+      "matchPackageNames": ["@radix-ui/*", "radix-ui"],
+      "automerge": true
+    },
+    {
+      "description": "Group Storybook packages",
+      "groupName": "storybook",
+      "matchPackageNames": ["storybook", "@storybook/*"],
+      "automerge": true
+    },
+    {
+      "description": "Group dnd-kit packages",
+      "groupName": "dnd-kit",
+      "matchPackageNames": ["@dnd-kit/*"],
+      "automerge": true
+    },
+    {
+      "description": "Group Tailwind CSS packages",
+      "groupName": "tailwindcss",
+      "matchPackageNames": ["tailwindcss", "@tailwindcss/*", "tailwind-merge", "tailwindcss-animate"],
+      "automerge": true
+    },
+    {
+      "description": "Group Rsbuild and Rslib packages",
+      "groupName": "rsbuild",
+      "matchPackageNames": ["@rsbuild/*", "@rslib/*"],
+      "automerge": true
+    },
+    {
+      "description": "Group GitHub Actions minor and patch updates",
+      "groupName": "github-actions",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "description": "Ignore workspace packages",
+      "matchPackageNames": ["@local/*", "@gigadrive/*"],
+      "enabled": false
+    }
+  ],
+  "ignoreDeps": ["sdk-monorepo", "gigadrive"]
+}
