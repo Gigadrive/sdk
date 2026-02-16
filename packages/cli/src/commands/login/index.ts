@@ -1,42 +1,24 @@
-import { authManager } from '@/auth/manager';
-import { error, log, success } from '@/util/log';
-import type { Command } from 'commander';
+import { Command } from '@effect/cli';
+import { Console, Effect } from 'effect';
+import { AuthService } from '../../services/auth';
 
-export const login = (program: Command) => {
-  program
-    .command('login')
-    .description('Login to the platform')
-    .action(async () => {
-      log('Initiating login...');
-      const result = await authManager.login();
-      if (result) {
-        // Fetch user info for a friendly success message
-        try {
-          const info = (await authManager.getUserInfo()) ?? {};
-          const isNonEmptyString = (value: unknown): value is string =>
-            typeof value === 'string' && value.trim() !== '';
-          const nameField = (info as Record<string, unknown>).name;
-          const givenNameField = (info as Record<string, unknown>).given_name;
-          const familyNameField = (info as Record<string, unknown>).family_name;
-          const preferredUsernameField = (info as Record<string, unknown>).preferred_username;
-          const emailField = (info as Record<string, unknown>).email;
+export const loginCommand = Command.make('login', {}, () =>
+  Effect.gen(function* () {
+    yield* Console.log('Initiating login...');
 
-          const inferredName =
-            (isNonEmptyString(nameField) && nameField) ||
-            (isNonEmptyString(givenNameField) && isNonEmptyString(familyNameField)
-              ? `${givenNameField} ${familyNameField}`
-              : undefined) ||
-            (isNonEmptyString(preferredUsernameField) && preferredUsernameField) ||
-            (isNonEmptyString(emailField) && emailField) ||
-            'your account';
+    const auth = yield* AuthService;
+    yield* auth.login;
 
-          success(`You are now logged in as ${inferredName}.`);
-        } catch {
-          // Fallback if userinfo fails
-          success('You are now logged in.');
-        }
-      } else {
-        error('Login failed. Please try again.');
-      }
-    });
-};
+    const info = yield* auth.getUserInfo.pipe(Effect.catchAll(() => Effect.succeed({} as Record<string, unknown>)));
+
+    const name = auth.inferUserName(info);
+    yield* Console.log(`You are now logged in as ${name}.`);
+  }).pipe(
+    Effect.catchTags({
+      LoginFlowError: (err: { message: string }) => Console.error(`Login failed: ${err.message}`),
+      TokenExchangeError: (err: { message: string }) => Console.error(`Login failed: ${err.message}`),
+      OAuthDiscoveryError: (err: { message: string }) => Console.error(`Login failed: ${err.message}`),
+      AuthStorageWriteError: (err: { message: string }) => Console.error(`Failed to save credentials: ${err.message}`),
+    })
+  )
+);
