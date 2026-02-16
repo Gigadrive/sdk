@@ -13,6 +13,16 @@ import {
 import { AuthStorageService } from './auth-storage';
 import { OAuthConfigService } from './oauth-config';
 
+// Simple HTML escaping to prevent reflected XSS when rendering user input
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\//g, '&#x2F;');
+
 // ---------------------------------------------------------------------------
 // PKCE helpers (exported for testing)
 // ---------------------------------------------------------------------------
@@ -146,7 +156,8 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
             res.writeHead(200, { 'Content-Type': 'text/html', Connection: 'close' });
 
             if (oauthError) {
-              res.end(`<h1>Login Failed!</h1><p>Error: ${oauthError}</p><p>You can close this tab.</p>`);
+              const safeOauthError = escapeHtml(oauthError);
+              res.end(`<h1>Login Failed!</h1><p>Error: ${safeOauthError}</p><p>You can close this tab.</p>`);
               server.close();
               resume(Effect.fail(new LoginFlowError({ message: `OAuth error: ${oauthError}` })));
               return;
