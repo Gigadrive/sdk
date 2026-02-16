@@ -184,6 +184,7 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
           });
 
           server.on('error', (err: Error) => {
+            server.close();
             resume(Effect.fail(new LoginFlowError({ message: `Local server error: ${err.message}` })));
           });
         });
@@ -200,14 +201,14 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
       const { authCode, redirectUri } = yield* startCallbackServer(config, codeChallenge, state);
       const tokens = yield* exchangeCodeForTokens(config, authCode, redirectUri, codeVerifier);
 
-      accessToken = tokens.access_token;
-      tokenExpirationTime = Date.now() + (tokens.expires_in || 3600) * 1000;
-
       if (!tokens.refresh_token) {
         return yield* Effect.fail(
           new TokenExchangeError({ message: 'No refresh token received from identity provider' })
         );
       }
+
+      accessToken = tokens.access_token;
+      tokenExpirationTime = Date.now() + (tokens.expires_in || 3600) * 1000;
 
       yield* storage.save({
         refreshToken: tokens.refresh_token,
