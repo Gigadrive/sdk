@@ -79,8 +79,21 @@ export class AuthStorageService extends Effect.Service<AuthStorageService>()('Au
 
     const remove = Effect.gen(function* () {
       yield* fs.remove(authFile).pipe(
-        Effect.mapError(() => new AuthStorageWriteError({ message: 'Failed to remove auth file' })),
-        Effect.catchTag('AuthStorageWriteError', () => Effect.void)
+        Effect.mapError((error) => {
+          const cause = error instanceof Error ? error : (error as { error?: Error }).error;
+          const code = cause && typeof cause === 'object' && 'code' in cause ? (cause as { code: string }).code : '';
+          return { isNotFound: code === 'ENOENT' || String(error).includes('ENOENT'), original: error };
+        }),
+        Effect.catchAll((mapped) =>
+          mapped.isNotFound
+            ? Effect.void
+            : Effect.fail(
+                new AuthStorageWriteError({
+                  message: 'Failed to remove auth file',
+                  cause: String(mapped.original),
+                })
+              )
+        )
       );
       yield* Effect.log('Auth data removed from local storage');
     });

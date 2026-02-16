@@ -138,6 +138,10 @@ export class ArchiveCreateError extends Schema.TaggedError<ArchiveCreateError>()
   cause: Schema.optional(Schema.String),
 }) {}
 
+export class DeploymentAuthError extends Schema.TaggedError<DeploymentAuthError>()('DeploymentAuthError', {
+  message: Schema.String,
+}) {}
+
 export class DeploymentFailedError extends Schema.TaggedError<DeploymentFailedError>()('DeploymentFailedError', {
   message: Schema.String,
 }) {}

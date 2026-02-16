@@ -99,10 +99,11 @@ export const buildCommand = Command.make('build', {}, () =>
     yield* Console.log('Build completed successfully.');
   }).pipe(
     Effect.catchTags({
-      PackageJsonNotFoundError: (err) => Console.error(err.message),
-      BuildScriptNotFoundError: (err) => Console.error(err.message),
-      PackageManagerNotFoundError: (err) => Console.error(err.message),
-      ExecError: (err) => Console.error(`${err.message}: ${err.cause ?? err.command}`),
+      PackageJsonNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      BuildScriptNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      PackageManagerNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      ExecError: (err) =>
+        Console.error(`${err.message}: ${err.cause ?? err.command}`).pipe(Effect.andThen(Effect.fail(err))),
     })
   )
 );

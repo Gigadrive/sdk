@@ -1,6 +1,7 @@
 import { ConfigProvider, Effect, Layer, Logger, LogLevel } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DeploymentId, UploadId } from '../domain';
+import { AuthService } from './auth';
 import { DeploymentApiService } from './deployment-api';
 
 // ---------------------------------------------------------------------------
@@ -12,9 +13,20 @@ const BASE_URL = 'https://api.example.com';
 const makeTestLayer = () => {
   const configLayer = Layer.setConfigProvider(ConfigProvider.fromMap(new Map([['GIGADRIVE_API_BASE_URL', BASE_URL]])));
 
+  // Provide a mock AuthService that returns a static test token
+  const mockAuthService = Layer.succeed(AuthService, {
+    login: Effect.succeed(true as const),
+    logout: Effect.void,
+    getAccessToken: Effect.succeed('test-auth-token'),
+    getUserInfo: Effect.succeed({}),
+    refreshAccessToken: Effect.succeed(true as const),
+    inferUserName: () => 'test-user',
+    _tag: 'AuthService',
+  });
+
   // configLayer must wrap DeploymentApiService.Default so that Config.*
   // values resolved during layer construction see our overrides.
-  return Layer.provide(DeploymentApiService.Default, configLayer).pipe(
+  return Layer.provide(DeploymentApiService.Default, Layer.mergeAll(configLayer, mockAuthService)).pipe(
     Layer.provideMerge(Logger.minimumLogLevel(LogLevel.None))
   );
 };

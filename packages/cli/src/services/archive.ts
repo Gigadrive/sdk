@@ -114,10 +114,7 @@ const getFilesToInclude = (
               yield* walkDir(fullPath);
             }
           } else {
-            if (
-              !ignoreRules.ignores(relativePath) ||
-              (ignoreRules.ignores(relativePath) && ignoreRules.test(relativePath).unignored)
-            ) {
+            if (!ignoreRules.ignores(relativePath)) {
               filesToInclude.push(fullPath);
             }
           }
@@ -187,6 +184,7 @@ export class ArchiveService extends Effect.Service<ArchiveService>()('ArchiveSer
             const archive = archiver('zip', { zlib: { level: 9 } });
 
             output.on('close', () => resolve());
+            output.on('error', reject);
             archive.on('error', reject);
             archive.pipe(output);
 

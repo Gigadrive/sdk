@@ -7,7 +7,7 @@ structured error handling, and composable dependency injection.
 
 ## Quick Reference
 
-```
+```text
 packages/cli/
   src/
     index.ts                    # Entry point — CLI wiring + layer composition
@@ -49,7 +49,7 @@ The CLI is structured around these Effect concepts:
 
 ### Dependency Graph
 
-```
+```text
 AuthService
   ├── OAuthConfigService (OIDC discovery, env config)
   └── AuthStorageService (file-based token persistence)

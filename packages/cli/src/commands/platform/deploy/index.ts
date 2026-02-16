@@ -47,24 +47,30 @@ export const deployCommand = Command.make('deploy', {}, () =>
     yield* pollDeployment(deploymentId);
   }).pipe(
     Effect.catchTags({
-      ConfigNotFoundError: (err) => Console.error(err.message),
-      ConfigParseError: (err) => Console.error(`Config parse error: ${err.message}`),
+      ConfigNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      ConfigParseError: (err) =>
+        Console.error(`Config parse error: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
       ConfigValidationError: (err) =>
         Effect.gen(function* () {
           for (const e of err.errors) {
             yield* Console.error(e);
           }
           yield* Console.error(err.message);
-        }),
-      DeploymentCreateError: (err) => Console.error(`Deployment creation failed: ${err.message}`),
-      ArchiveCreateError: (err) => Console.error(`Archive creation failed: ${err.message}`),
-      UploadStartError: (err) => Console.error(`Upload failed: ${err.message}`),
-      UploadPartError: (err) => Console.error(`Upload failed: ${err.message}`),
-      UploadCompleteError: (err) => Console.error(`Upload failed: ${err.message}`),
-      PresignedUrlError: (err) => Console.error(`Upload failed: ${err.message}`),
-      DeploymentFailedError: (err) => Console.error(err.message),
+        }).pipe(Effect.andThen(Effect.fail(err))),
+      DeploymentCreateError: (err) =>
+        Console.error(`Deployment creation failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      ArchiveCreateError: (err) =>
+        Console.error(`Archive creation failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      UploadStartError: (err) => Console.error(`Upload failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      UploadPartError: (err) => Console.error(`Upload failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      UploadCompleteError: (err) =>
+        Console.error(`Upload failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      PresignedUrlError: (err) => Console.error(`Upload failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      DeploymentAuthError: (err) =>
+        Console.error(`Authentication failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      DeploymentFailedError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
     }),
-    Effect.catchAll((err) => Console.error(`Unexpected error: ${String(err)}`))
+    Effect.catchAll((err) => Console.error(`Unexpected error: ${String(err)}`).pipe(Effect.andThen(Effect.fail(err))))
   )
 );
 

@@ -2,6 +2,7 @@ import { objectToQueryString } from '@gigadrive/commons';
 import { Config, Effect, Schema } from 'effect';
 import type { DeploymentId, DeploymentLogPage, UploadId } from '../domain';
 import {
+  DeploymentAuthError,
   DeploymentCreateError,
   DeploymentLogsFetchError,
   DeploymentStatusError,
@@ -10,6 +11,7 @@ import {
   UploadPartError,
   UploadStartError,
 } from '../errors';
+import { AuthService } from './auth';
 
 // ---------------------------------------------------------------------------
 // API response schemas
@@ -46,16 +48,25 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
 
   effect: Effect.gen(function* () {
     const baseUrl = yield* ApiBaseUrl;
+    const authService = yield* AuthService;
+
+    const getAuthHeaders: Effect.Effect<{ Authorization: string }, DeploymentAuthError> = Effect.gen(function* () {
+      const token: string = yield* authService.getAccessToken.pipe(
+        Effect.mapError((err) => new DeploymentAuthError({ message: `Authentication failed: ${err.message}` }))
+      );
+      return { Authorization: `Bearer ${token}` };
+    });
 
     const createDeployment = Effect.fn('DeploymentApiService.createDeployment')(function* (applicationId: string) {
       yield* Effect.annotateCurrentSpan('applicationId', applicationId);
       yield* Effect.log('Creating deployment', { applicationId });
 
+      const authHeaders = yield* getAuthHeaders;
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(`${baseUrl}/${applicationId}/deployments`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
             body: JSON.stringify({}),
           }),
         catch: (error) =>
@@ -99,11 +110,12 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
     ) {
       yield* Effect.annotateCurrentSpan('deploymentId', deploymentId);
 
+      const authHeaders = yield* getAuthHeaders;
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(`${baseUrl}/deployments/${deploymentId}/pre-signed-url/start`, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
           }),
         catch: (error) =>
           new UploadStartError({
@@ -138,13 +150,14 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       uploadId: UploadId,
       partNumber: number
     ) {
+      const authHeaders = yield* getAuthHeaders;
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(
             `${baseUrl}/deployments/${deploymentId}/pre-signed-url/part?uploadId=${uploadId}&partNumber=${partNumber}`,
             {
               method: 'GET',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...authHeaders },
             }
           ),
         catch: (error) =>
@@ -184,6 +197,7 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       yield* Effect.annotateCurrentSpan('partNumber', partNumber);
       yield* Effect.annotateCurrentSpan('size', data.length);
 
+      const authHeaders = yield* getAuthHeaders;
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(presignedUrl, {
@@ -191,6 +205,7 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
             headers: {
               'Content-Type': 'application/zip',
               'Content-Length': String(data.length),
+              ...authHeaders,
             },
             body: data,
           }),
@@ -228,11 +243,12 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       yield* Effect.annotateCurrentSpan('deploymentId', deploymentId);
       yield* Effect.annotateCurrentSpan('partsCount', parts.length);
 
+      const authHeaders = yield* getAuthHeaders;
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(`${baseUrl}/deployments/${deploymentId}/pre-signed-url/complete`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
             body: JSON.stringify({ uploadId, parts }),
           }),
         catch: (error) =>
@@ -255,11 +271,12 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
     const getDeploymentStatus = Effect.fn('DeploymentApiService.getDeploymentStatus')(function* (
       deploymentId: DeploymentId
     ) {
+      const authHeaders = yield* getAuthHeaders;
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(`${baseUrl}/deployments/${deploymentId}`, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
           }),
         catch: (error) =>
           new DeploymentStatusError({
@@ -291,11 +308,12 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       deploymentId: DeploymentId,
       options?: { offset: number; limit: number; 'createdAt[gt]'?: string }
     ) {
+      const authHeaders = yield* getAuthHeaders;
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(`${baseUrl}/deployments/${deploymentId}/logs${objectToQueryString(options)}`, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
           }),
         catch: (error) =>
           new DeploymentLogsFetchError({

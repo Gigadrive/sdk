@@ -202,11 +202,19 @@ describe('AuthStorageService.save', () => {
 // ---------------------------------------------------------------------------
 
 describe('AuthStorageService.remove', () => {
-  it('should succeed even when remove fails (silently catches)', async () => {
+  it('should fail with AuthStorageWriteError when remove fails with non-ENOENT error', async () => {
     const testLayer = makeTestLayer({ failOnRemove: true });
 
-    // remove silently catches errors, so this should succeed
-    await Effect.runPromise(Effect.provide(AuthStorageService.remove, testLayer));
+    // remove only suppresses ENOENT, other errors should propagate
+    const result = await Effect.runPromise(
+      Effect.provide(AuthStorageService.remove, testLayer).pipe(
+        Effect.catchTag('AuthStorageWriteError', (err) =>
+          Effect.succeed({ _tag: 'caught' as const, message: err.message })
+        )
+      )
+    );
+
+    expect(result).toMatchObject({ _tag: 'caught', message: 'Failed to remove auth file' });
   });
 
   it('should succeed when file exists', async () => {
