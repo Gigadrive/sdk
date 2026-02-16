@@ -44,7 +44,9 @@ const ServicesLive = Layer.mergeAll(
   DeploymentApiService.Default
 ).pipe(Layer.provideMerge(AuthService.Default));
 
-const AppLive = Layer.mergeAll(ServicesLive, NodeContext.layer, Logger.minimumLogLevel(LogLevel.Info));
+const AppLive = Layer.mergeAll(ServicesLive, Logger.minimumLogLevel(LogLevel.Info)).pipe(
+  Layer.provideMerge(NodeContext.layer)
+);
 
 // ---------------------------------------------------------------------------
 // Run

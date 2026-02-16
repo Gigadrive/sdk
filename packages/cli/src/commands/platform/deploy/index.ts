@@ -1,9 +1,8 @@
 import { Command } from '@effect/cli';
+import { FileSystem, Path } from '@effect/platform';
 import { formatFileSize } from '@gigadrive/commons';
-import { Console, Duration, Effect, Schedule } from 'effect';
-import * as fs from 'node:fs';
+import { Console, Duration, Effect, Schedule, Stream } from 'effect';
 import * as os from 'node:os';
-import * as path from 'node:path';
 import type { DeploymentId, DeploymentLog, DeploymentStatus } from '../../../domain';
 import { DeploymentFailedError, UploadPartError } from '../../../errors';
 import { ArchiveService } from '../../../services/archive';
@@ -15,6 +14,7 @@ export const deployCommand = Command.make('deploy', {}, () =>
     const projectConfig = yield* ProjectConfigService;
     const deploymentApi = yield* DeploymentApiService;
     const archiveService = yield* ArchiveService;
+    const pathService = yield* Path.Path;
 
     const cwd = process.cwd();
 
@@ -29,7 +29,7 @@ export const deployCommand = Command.make('deploy', {}, () =>
 
     // Create and upload archive
     yield* Console.log('Creating archive...');
-    const archivePath = path.join(os.tmpdir(), `project-${Date.now()}.zip`);
+    const archivePath = pathService.join(os.tmpdir(), `project-${Date.now()}.zip`);
     const archive = yield* archiveService.createZipArchive(config.userArchive?.rootOverwrite || cwd, archivePath, {
       whitelist: config.userArchive?.fileWhitelist,
       useIgnoreFiles: false,
@@ -75,6 +75,7 @@ export const deployCommand = Command.make('deploy', {}, () =>
 const uploadArchive = (deploymentId: DeploymentId, archivePath: string, fileSize: number) =>
   Effect.gen(function* () {
     const deploymentApi = yield* DeploymentApiService;
+    const fs = yield* FileSystem.FileSystem;
 
     const uploadId = yield* deploymentApi.startMultipartUpload(deploymentId);
 
@@ -83,40 +84,33 @@ const uploadArchive = (deploymentId: DeploymentId, archivePath: string, fileSize
 
     yield* Effect.log('Starting multipart upload', { uploadId, numChunks, fileSize });
 
-    // Upload all chunks
+    // Upload all chunks — each chunk is streamed from disk independently
     const parts = yield* Effect.all(
       Array.from({ length: numChunks }, (_, i) => {
         const partNumber = i + 1;
         const start = i * FILE_CHUNK_SIZE;
-        const end = partNumber < numChunks ? (i + 1) * FILE_CHUNK_SIZE : undefined;
+        const bytesToRead = partNumber < numChunks ? FILE_CHUNK_SIZE : fileSize - start;
 
         return Effect.gen(function* () {
           const presignedUrl = yield* deploymentApi.getPresignedUrl(deploymentId, uploadId, partNumber);
 
-          // Read chunk
-          const buffer = yield* Effect.tryPromise({
-            try: () =>
-              new Promise<Buffer>((resolve, reject) => {
-                const readStream = fs.createReadStream(archivePath, {
-                  start,
-                  end: end !== undefined ? end - 1 : undefined,
-                });
-                const chunks: Buffer[] = [];
-                readStream.on('data', (chunk: Buffer | string) => {
-                  chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-                });
-                readStream.on('end', () => resolve(Buffer.concat(chunks)));
-                readStream.on('error', reject);
-              }),
-            catch: (error) =>
-              new UploadPartError({
-                message: `Failed to read chunk ${partNumber}: ${error instanceof Error ? error.message : String(error)}`,
-                partNumber,
-              }),
-          });
+          // Stream only this chunk from disk to keep memory bounded
+          const chunkData = yield* Stream.runCollect(fs.stream(archivePath, { offset: start, bytesToRead })).pipe(
+            Effect.map((chunks) => {
+              const arrays = Array.from(chunks);
+              return Buffer.concat(arrays);
+            }),
+            Effect.mapError(
+              (error) =>
+                new UploadPartError({
+                  message: `Failed to read chunk ${partNumber}: ${String(error)}`,
+                  partNumber,
+                })
+            )
+          );
 
-          yield* Effect.log(`Uploading part ${partNumber}/${numChunks}`, { size: buffer.length });
-          return yield* deploymentApi.uploadPart(presignedUrl, buffer, partNumber);
+          yield* Effect.log(`Uploading part ${partNumber}/${numChunks}`, { size: chunkData.length });
+          return yield* deploymentApi.uploadPart(presignedUrl, chunkData, partNumber);
         });
       }),
       { concurrency: 3 }

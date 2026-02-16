@@ -1,7 +1,6 @@
+import { FileSystem, Path } from '@effect/platform';
 import { exec } from '@gigadrive/build-utils';
 import { Effect } from 'effect';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import type { PackageManager } from '../domain';
 import { ExecError, PackageManagerNotFoundError } from '../errors';
 
@@ -13,11 +12,20 @@ export class PackageManagerService extends Effect.Service<PackageManagerService>
   accessors: true,
 
   effect: Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* Path.Path;
+
     const detect = Effect.fn('PackageManagerService.detect')(function* (cwd: string) {
       yield* Effect.annotateCurrentSpan('cwd', cwd);
 
-      const packageJsonPath = path.join(cwd, 'package.json');
-      const exists = yield* Effect.sync(() => fs.existsSync(packageJsonPath));
+      const packageJsonPath = pathService.join(cwd, 'package.json');
+      const exists = yield* fs
+        .exists(packageJsonPath)
+        .pipe(
+          Effect.mapError(
+            () => new PackageManagerNotFoundError({ message: 'Failed to check for package.json', directory: cwd })
+          )
+        );
       if (!exists) {
         return yield* Effect.fail(
           new PackageManagerNotFoundError({
@@ -36,7 +44,9 @@ export class PackageManagerService extends Effect.Service<PackageManagerService>
       ];
 
       for (const { file, pm } of lockChecks) {
-        const lockExists = yield* Effect.sync(() => fs.existsSync(path.join(cwd, file)));
+        const lockExists = yield* fs
+          .exists(pathService.join(cwd, file))
+          .pipe(Effect.catchAll(() => Effect.succeed(false)));
         if (lockExists) {
           yield* Effect.log('Package manager detected from lock file', { packageManager: pm, lockFile: file });
           return pm;

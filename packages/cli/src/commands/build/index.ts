@@ -1,28 +1,41 @@
 import { Command } from '@effect/cli';
+import { FileSystem, Path } from '@effect/platform';
 import { exec } from '@gigadrive/build-utils';
 import { Console, Effect } from 'effect';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { BuildScriptNotFoundError, ExecError, PackageJsonNotFoundError } from '../../errors';
 import { PackageManagerService } from '../../services/package-manager';
 
 export const buildCommand = Command.make('build', {}, () =>
   Effect.gen(function* () {
     const pmService = yield* PackageManagerService;
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* Path.Path;
     const cwd = process.cwd();
 
     yield* Effect.log('Starting build', { cwd });
 
     // Validate package.json exists
-    const packageJsonPath = path.join(cwd, 'package.json');
-    const packageJsonExists = yield* Effect.sync(() => fs.existsSync(packageJsonPath));
+    const packageJsonPath = pathService.join(cwd, 'package.json');
+    const packageJsonExists = yield* fs
+      .exists(packageJsonPath)
+      .pipe(
+        Effect.mapError(
+          () => new PackageJsonNotFoundError({ message: 'Failed to check for package.json', directory: cwd })
+        )
+      );
     if (!packageJsonExists) {
       return yield* Effect.fail(new PackageJsonNotFoundError({ message: 'No package.json found', directory: cwd }));
     }
 
     // Read and validate build script
+    const packageJsonContent = yield* fs
+      .readFileString(packageJsonPath, 'utf-8')
+      .pipe(
+        Effect.mapError(() => new PackageJsonNotFoundError({ message: 'Failed to read package.json', directory: cwd }))
+      );
+
     const packageJson = yield* Effect.try({
-      try: () => JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as { scripts?: { build?: string } },
+      try: () => JSON.parse(packageJsonContent) as { scripts?: { build?: string } },
       catch: () => new PackageJsonNotFoundError({ message: 'Failed to read package.json', directory: cwd }),
     });
 
