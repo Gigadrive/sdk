@@ -92,7 +92,8 @@ All three must pass.
 | Types/interfaces    | PascalCase       | `CommandInput`, `RegionConfig` |
 | Constants           | UPPER_SNAKE_CASE | `AVAILABLE_REGIONS`            |
 | Test files          | kebab-case       | `deep-merge.test.ts`           |
-| React components    | PascalCase       | `Button.tsx`, `AlertDialog`    |
+| React components    | PascalCase       | `AlertDialog`, `Button`        |
+| Component files     | kebab-case       | `alert-dialog.tsx`             |
 
 ### Imports
 
