@@ -5,17 +5,23 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 env:
   TURBO_REMOTE_ONLY: 'true'
   TURBO_TEAM: gigadrive
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
-
 jobs:
   release:
     name: Release
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    timeout-minutes: 20
 
     permissions:
       contents: write
@@ -23,7 +29,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -31,19 +37,10 @@ jobs:
       - name: Fetch git tags
         run: git fetch origin 'refs/tags/*:refs/tags/*'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup
+        uses: ./.github/actions/setup
 
-      - name: Setup Node
-        uses: useblacksmith/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Packages
+      - name: Build
         run: pnpm build
 
       - name: Create Release Pull Request or Publish to npm
@@ -68,12 +65,20 @@ jobs:
 
   summary:
     name: Summary (release)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2204
     timeout-minutes: 5
+    if: always()
     needs:
       - release
     permissions:
       contents: read
     steps:
-      - name: Check All
-        run: echo OK
+      - name: Check all jobs
+        env:
+          RELEASE: ${{ needs.release.result }}
+        run: |
+          if [[ "$RELEASE" != "success" ]]; then
+            echo "Release job failed or was cancelled."
+            exit 1
+          fi
+          echo "All jobs passed."

@@ -1,4 +1,4 @@
-name: Run Tests
+name: CI
 
 on:
   push:
@@ -6,81 +6,94 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
+env:
+  TURBO_TEAM: gigadrive
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+
 jobs:
   test:
-    name: Run Vitest Tests
+    name: Tests
     runs-on: blacksmith-4vcpu-ubuntu-2204
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node
-        uses: useblacksmith/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup
+        uses: ./.github/actions/setup
 
       - name: Build
         run: pnpm build
 
-      - name: Run tests
+      - name: Tests
         run: pnpm test
 
   lint:
-    name: Run ESLint
+    name: ESLint
     runs-on: blacksmith-4vcpu-ubuntu-2204
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup
+        uses: ./.github/actions/setup
 
-      - name: Setup Node
-        uses: useblacksmith/setup-node@v5
+      - name: Restore ESLint cache
+        uses: useblacksmith/cache@v5
         with:
-          node-version: 22
-          cache: pnpm
+          path: .eslintcache
+          key: eslint-${{ runner.os }}-${{ hashFiles('eslint.config.*', '.eslintrc*', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            eslint-${{ runner.os }}-
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run ESLint
+      - name: ESLint
         run: pnpm lint
 
   format:
-    name: Run Prettier
+    name: Prettier
     runs-on: blacksmith-4vcpu-ubuntu-2204
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup
+        uses: ./.github/actions/setup
 
-      - name: Setup Node
-        uses: useblacksmith/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run Prettier
+      - name: Prettier
         run: pnpm format
+
+  summary:
+    name: Summary (CI)
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 5
+    if: always()
+    needs: [test, lint, format]
+    permissions:
+      contents: read
+    steps:
+      - name: Check all jobs
+        env:
+          TEST: ${{ needs.test.result }}
+          LINT: ${{ needs.lint.result }}
+          FORMAT: ${{ needs.format.result }}
+        run: |
+          if [[ "$TEST" != "success" || "$LINT" != "success" || "$FORMAT" != "success" ]]; then
+            echo "One or more jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All jobs passed."
