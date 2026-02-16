@@ -14,13 +14,15 @@ import { AuthStorageService } from './auth-storage';
 import { OAuthConfigService } from './oauth-config';
 
 // ---------------------------------------------------------------------------
-// PKCE helpers
+// PKCE helpers (exported for testing)
 // ---------------------------------------------------------------------------
 
-const base64URLEncode = (buffer: Buffer): string =>
+/** @internal */
+export const base64URLEncode = (buffer: Buffer): string =>
   buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
-const generatePKCE = () => {
+/** @internal */
+export const generatePKCE = () => {
   const codeVerifier = base64URLEncode(crypto.randomBytes(64));
   const challengeBytes = crypto.createHash('sha256').update(codeVerifier, 'utf8').digest();
   const codeChallenge = base64URLEncode(challengeBytes);
