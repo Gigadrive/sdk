@@ -1,89 +1,58 @@
-import { Command } from 'commander';
-import { build } from './commands/build';
-import { debug } from './commands/debug';
-import { login } from './commands/login';
-import { platform } from './commands/platform';
-import { whoami } from './commands/whoami';
-import { error, log, setVerbose } from './util/log';
+import { Command } from '@effect/cli';
+import { NodeContext, NodeRuntime } from '@effect/platform-node';
+import { Effect, Layer, LogLevel, Logger } from 'effect';
+import { buildCommand } from './commands/build';
+import { debugCommand } from './commands/debug';
+import { loginCommand } from './commands/login';
+import { platformCommand } from './commands/platform';
+import { whoamiCommand } from './commands/whoami';
+import { ArchiveService } from './services/archive';
+import { AuthService } from './services/auth';
+import { AuthStorageService } from './services/auth-storage';
+import { DeploymentApiService } from './services/deployment-api';
+import { OAuthConfigService } from './services/oauth-config';
+import { PackageManagerService } from './services/package-manager';
+import { ProjectConfigService } from './services/project-config';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-let { isTTY } = process.stdout;
-//process.stdin.resume();
+// ---------------------------------------------------------------------------
+// Root command with subcommands
+// ---------------------------------------------------------------------------
 
-const main = async () => {
-  if (process.env.FORCE_TTY === '1') {
-    isTTY = true;
-    process.stdout.isTTY = true;
-    process.stdin.isTTY = true;
-  }
+const gigadrive = Command.make('gigadrive', {}, () => Effect.void).pipe(
+  Command.withSubcommands([loginCommand, whoamiCommand, buildCommand, debugCommand, platformCommand])
+);
 
-  let exitCode = 0;
+// ---------------------------------------------------------------------------
+// CLI application
+// ---------------------------------------------------------------------------
 
-  const program = new Command();
-
-  program.option('-v, --verbose', 'Enable verbose logging', false);
-
-  program.hook('preSubcommand', (thisCommand) => {
-    setVerbose((thisCommand.opts().verbose as boolean) === true);
-
-    if (thisCommand.opts().verbose) {
-      log('Using verbose mode');
-    }
-  });
-
-  program.hook('preAction', (thisCommand) => {
-    setVerbose((thisCommand.opts().verbose as boolean) === true);
-  });
-
-  // register commands
-  platform(program);
-  debug(program);
-  build(program);
-  login(program);
-  whoami(program);
-
-  try {
-    await program.parseAsync(process.argv);
-  } catch (err) {
-    error(err as string | number | boolean | object);
-    exitCode = 1;
-  }
-
-  return exitCode;
-};
-
-const handleRejection = (err: unknown) => {
-  if (err) {
-    if (err instanceof Error) {
-      handleUnexpected(err);
-    } else {
-      console.error(`An unexpected rejection occurred\n  ${JSON.stringify(err)}`);
-    }
-  } else {
-    console.error('An unexpected empty rejection occurred');
-  }
-
-  process.exit(1);
-};
-
-const handleUnexpected = (error: Error) => {
-  const { message } = error;
-
-  console.error(`An unexpected error occurred\n  ${message}`);
-
-  process.exit(1);
-};
-
-process.on('unhandledRejection', handleRejection);
-process.on('uncaughtException', handleUnexpected);
-
-process.on('exit', () => {
-  const terminal = process.stderr.isTTY ? process.stderr : process.stdout.isTTY ? process.stdout : undefined;
-  terminal?.write('\u001B[?25h');
+const cli = Command.run(gigadrive, {
+  name: 'Gigadrive CLI',
+  version: '2.0.0',
 });
 
-main()
-  .then((exitCode) => {
-    process.exit(exitCode);
-  })
-  .catch(handleUnexpected);
+// ---------------------------------------------------------------------------
+// Service layers — flat composition via mergeAll + provideMerge
+// ---------------------------------------------------------------------------
+
+const BaseServices = Layer.mergeAll(
+  OAuthConfigService.Default,
+  AuthStorageService.Default,
+  ProjectConfigService.Default,
+  PackageManagerService.Default,
+  ArchiveService.Default
+).pipe(Layer.provideMerge(AuthService.Default));
+
+const DeploymentApiLive = Layer.provide(DeploymentApiService.Default, BaseServices);
+
+const ServicesLive = Layer.mergeAll(BaseServices, DeploymentApiLive);
+
+const AppLive = Layer.mergeAll(ServicesLive, Logger.minimumLogLevel(LogLevel.Info)).pipe(
+  Layer.provideMerge(NodeContext.layer)
+);
+
+// ---------------------------------------------------------------------------
+// Run
+// ---------------------------------------------------------------------------
+
+NodeRuntime.runMain(Effect.provide(cli(process.argv), AppLive));

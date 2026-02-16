@@ -1,446 +1,197 @@
-import { formatFileSize, objectToQueryString } from '@gigadrive/commons';
-import type { NormalizedConfig } from '@gigadrive/network-config';
-import { findConfig, parseConfig } from '@gigadrive/network-config';
-import type { Command } from 'commander';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { debug, error, log, spinner, success, warn } from '../../../util/log';
-import { createZipArchive } from '../../../util/zip';
+import { Command } from '@effect/cli';
+import { FileSystem, Path } from '@effect/platform';
+import { formatFileSize } from '@gigadrive/commons';
+import { Console, Duration, Effect, Schedule, Stream } from 'effect';
+import * as os from 'node:os';
+import type { DeploymentId, DeploymentLog, DeploymentStatus } from '../../../domain';
+import { DeploymentFailedError, UploadPartError } from '../../../errors';
+import { ArchiveService } from '../../../services/archive';
+import { DeploymentApiService } from '../../../services/deployment-api';
+import { ProjectConfigService } from '../../../services/project-config';
 
-export const deploy = (parent: Command) => {
-  parent
-    .command('deploy')
-    .description('Deploy the current project')
-    .action(async () => {
-      debug('Starting deploy command');
-      const configPath = findConfig(process.cwd());
+export const deployCommand = Command.make('deploy', {}, () =>
+  Effect.gen(function* () {
+    const projectConfig = yield* ProjectConfigService;
+    const deploymentApi = yield* DeploymentApiService;
+    const archiveService = yield* ArchiveService;
+    const pathService = yield* Path.Path;
 
-      if (!configPath) {
-        debug('No config file found');
-        throw new Error('The current project folder does not have a valid config file.');
-      }
+    const cwd = process.cwd();
 
-      debug(`Found config at: ${configPath}`);
-      const config = await parseConfig(configPath, process.cwd());
-      debug('Parsed config', config);
+    // Resolve and validate config
+    yield* Effect.log('Starting deploy command');
+    const { config } = yield* projectConfig.resolve(cwd);
 
-      if (config.warnings.length > 0) {
-        debug(`Found ${config.warnings.length} warnings in config`);
-        config.warnings.forEach((message) => {
-          warn(message);
-        });
-      }
+    // Create deployment
+    yield* Console.log('Creating deployment...');
+    const deploymentId = yield* deploymentApi.createDeployment('test'); // TODO: real application ID
+    yield* Console.log(`Deployment ID: ${deploymentId}`);
 
-      if (config.errors.length > 0) {
-        debug(`Found ${config.errors.length} errors in config`);
-        config.errors.forEach((message) => {
-          error(message);
-        });
-
-        throw new Error('The current project folder does not have a valid config file.');
-      }
-
-      debug('Creating deployment');
-      const deploymentId = await createDeployment({
-        applicationId: 'test', // TODO
-      });
-
-      debug(`Deployment ID: ${deploymentId}`);
-
-      debug('Starting deployment process');
-      await handleDeployment(deploymentId, config);
+    // Create and upload archive
+    yield* Console.log('Creating archive...');
+    const archivePath = pathService.join(os.tmpdir(), `project-${Date.now()}.zip`);
+    const archive = yield* archiveService.createZipArchive(config.userArchive?.rootOverwrite || cwd, archivePath, {
+      whitelist: config.userArchive?.fileWhitelist,
+      useIgnoreFiles: false,
+      useManagedIgnore: false,
     });
-};
+    yield* Console.log(`Archive created (${formatFileSize(archive.size)})`);
 
-const handleDeployment = async (deploymentId: string, config: NormalizedConfig) => {
-  debug('Deployment process initialized');
-  let status: DeploymentStatus = 'PENDING';
-  const logs: DeploymentLog[] = [];
+    // Upload archive
+    yield* Console.log('Uploading archive...');
+    yield* uploadArchive(deploymentId, archivePath, archive.size);
+    yield* Console.log('Upload complete.');
+    yield* Console.log('The deployment pipeline is now being provisioned. This may take a few seconds.');
 
-  // Log deployment ID
-  addLog('Deployment ID: ' + deploymentId, 'INFO', logs);
-
-  // Start upload
-  try {
-    debug('Starting upload process');
-    await uploadArchive(deploymentId, logs, config);
-    debug('Upload completed successfully');
-    addLog('Upload complete.', 'INFO', logs);
-    addLog('The deployment pipeline is now being provisioned. This may take a few seconds.', 'INFO', logs);
-  } catch (err) {
-    debug(`Upload failed with error: ${(err as Error).message}`);
-    addLog(`Upload failed: ${(err as Error).message}`, 'ERROR', logs);
-    status = 'FAILED';
-    error('The deployment failed. Please check the logs for more information.');
-    process.exit(1);
-  }
-
-  // Start status polling
-  const statusInterval = setInterval(() => {
-    void (async () => {
-      try {
-        debug(`Fetching deployment status for ${deploymentId}`);
-        const newStatus = await getDeploymentStatus(deploymentId);
-        debug(`Current status: ${status}, New status: ${newStatus}`);
-
-        if (newStatus === 'ACTIVE' || newStatus === 'FAILED') {
-          debug(`Final status reached: ${newStatus}, clearing interval`);
-          clearInterval(statusInterval);
-          clearInterval(logsInterval);
-
-          if (newStatus === 'ACTIVE') {
-            success(`Deployed to https://${deploymentId}.gigadrivedev.com`);
-          } else {
-            error('The deployment failed. Please check the logs for more information.');
+    // Poll for status and logs
+    yield* pollDeployment(deploymentId);
+  }).pipe(
+    Effect.catchTags({
+      ConfigNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      ConfigParseError: (err) =>
+        Console.error(`Config parse error: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      ConfigValidationError: (err) =>
+        Effect.gen(function* () {
+          for (const e of err.errors) {
+            yield* Console.error(e);
           }
+          yield* Console.error(err.message);
+        }).pipe(Effect.andThen(Effect.fail(err))),
+      DeploymentCreateError: (err) =>
+        Console.error(`Deployment creation failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      ArchiveCreateError: (err) =>
+        Console.error(`Archive creation failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      UploadStartError: (err) => Console.error(`Upload failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      UploadPartError: (err) => Console.error(`Upload failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      UploadCompleteError: (err) =>
+        Console.error(`Upload failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      PresignedUrlError: (err) => Console.error(`Upload failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      DeploymentAuthError: (err) =>
+        Console.error(`Authentication failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      DeploymentFailedError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+    })
+  )
+);
 
-          return;
-        }
+// ---------------------------------------------------------------------------
+// Upload archive helper
+// ---------------------------------------------------------------------------
 
-        if (newStatus !== status) {
-          debug(`Updating status from ${status} to ${newStatus}`);
-          status = newStatus;
-          spinner(`Status: ${status.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}`);
-        }
-      } catch (err) {
-        debug(`Error fetching status: ${(err as Error).message}`);
-      }
-    })();
-  }, 1000);
+const uploadArchive = (deploymentId: DeploymentId, archivePath: string, fileSize: number) =>
+  Effect.gen(function* () {
+    const deploymentApi = yield* DeploymentApiService;
+    const fs = yield* FileSystem.FileSystem;
 
-  // Start logs polling
-  const logsInterval = setInterval(() => {
-    void (async () => {
-      try {
-        debug(`Fetching logs for ${deploymentId}, current log count: ${logs.length}`);
-        const newLogs = await getLogs(deploymentId, {
-          offset: logs.length,
-          limit: 100,
-          'createdAt[gt]': logs[logs.length - 1]?.createdAt,
+    const uploadId = yield* deploymentApi.startMultipartUpload(deploymentId);
+
+    const FILE_CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+    const numChunks = Math.ceil(fileSize / FILE_CHUNK_SIZE);
+
+    yield* Effect.log('Starting multipart upload', { uploadId, numChunks, fileSize });
+
+    // Upload all chunks — each chunk is streamed from disk independently
+    const parts = yield* Effect.all(
+      Array.from({ length: numChunks }, (_, i) => {
+        const partNumber = i + 1;
+        const start = i * FILE_CHUNK_SIZE;
+        const bytesToRead = partNumber < numChunks ? FILE_CHUNK_SIZE : fileSize - start;
+
+        return Effect.gen(function* () {
+          const presignedUrl = yield* deploymentApi.getPresignedUrl(deploymentId, uploadId, partNumber);
+
+          // Stream only this chunk from disk to keep memory bounded
+          const chunkData = yield* Stream.runCollect(fs.stream(archivePath, { offset: start, bytesToRead })).pipe(
+            Effect.map((chunks) => {
+              const arrays = Array.from(chunks);
+              return Buffer.concat(arrays);
+            }),
+            Effect.mapError(
+              (error) =>
+                new UploadPartError({
+                  message: `Failed to read chunk ${partNumber}: ${String(error)}`,
+                  partNumber,
+                })
+            )
+          );
+
+          yield* Effect.log(`Uploading part ${partNumber}/${numChunks}`, { size: chunkData.length });
+          return yield* deploymentApi.uploadPart(presignedUrl, chunkData, partNumber);
         });
+      }),
+      { concurrency: 3 }
+    );
 
-        debug(`Fetched ${newLogs.items.length} new logs`);
+    yield* deploymentApi.completeUpload(deploymentId, uploadId, parts);
+  });
 
-        // Display new logs
-        for (const logEntry of newLogs.items) {
-          logs.push(logEntry);
+// ---------------------------------------------------------------------------
+// Poll deployment status + logs
+// ---------------------------------------------------------------------------
 
-          if (logEntry.type === 'ERROR') {
-            error(logEntry.message);
-          } else if (logEntry.type === 'WARN') {
-            warn(logEntry.message);
-          } else {
-            log(logEntry.message);
+const pollDeployment = (deploymentId: DeploymentId) =>
+  Effect.gen(function* () {
+    const deploymentApi = yield* DeploymentApiService;
+    let lastStatus: DeploymentStatus = 'PENDING';
+    let logOffset = 0;
+
+    yield* Console.log('Status: Pending');
+
+    // Poll in a loop until terminal status
+    yield* Effect.repeat(
+      Effect.gen(function* () {
+        // Check status
+        const newStatus = yield* deploymentApi
+          .getDeploymentStatus(deploymentId)
+          .pipe(Effect.catchTag('DeploymentStatusError', () => Effect.succeed(lastStatus)));
+
+        if (newStatus !== lastStatus) {
+          lastStatus = newStatus;
+          const label = newStatus.charAt(0) + newStatus.slice(1).toLowerCase();
+          yield* Console.log(`Status: ${label}`);
+        }
+
+        // Fetch logs
+        const logsPage = yield* deploymentApi
+          .getLogs(deploymentId, { offset: logOffset, limit: 100 })
+          .pipe(Effect.catchTag('DeploymentLogsFetchError', () => Effect.succeed(null)));
+
+        if (logsPage) {
+          for (const logEntry of logsPage.items) {
+            logOffset++;
+            yield* printLog(logEntry);
           }
         }
-      } catch (err) {
-        debug(`Error fetching logs: ${(err as Error).message}`);
-      }
-    })();
-  }, 1000);
 
-  // Initial status display
-  spinner(`Status: ${status.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}`);
-};
-
-const addLog = (message: string, type: 'INFO' | 'ERROR' | 'WARN', logs: DeploymentLog[]) => {
-  debug(`Adding log: [${type}] ${message}`);
-  logs.push({
-    id: String(logs.length),
-    message,
-    type,
-    createdAt: new Date().toISOString(),
-  });
-
-  if (type === 'ERROR') {
-    error(message);
-  } else if (type === 'WARN') {
-    warn(message);
-  } else {
-    log(message);
-  }
-};
-
-const uploadArchive = async (deploymentId: string, logs: DeploymentLog[], config: NormalizedConfig) => {
-  debug('Starting uploadArchive');
-  addLog('Creating archive...', 'INFO', logs);
-
-  const archivePath = path.join(process.env.TEMP || os.tmpdir(), `project-${Date.now()}.zip`);
-  debug(`Archive path: ${archivePath}`);
-
-  if (fs.existsSync(archivePath)) {
-    debug(`Archive already exists, removing: ${archivePath}`);
-    fs.unlinkSync(archivePath);
-  }
-
-  debug('Creating zip archive');
-
-  await createZipArchive(config.userArchive?.rootOverwrite || process.cwd(), archivePath, {
-    whitelist: config.userArchive?.fileWhitelist,
-    useIgnoreFiles: false,
-    useManagedIgnore: false,
-  });
-
-  const fileStats = fs.statSync(archivePath);
-  const fileSize = fileStats.size;
-  debug(`Archive created, size: ${fileSize} bytes (${formatFileSize(fileSize)})`);
-
-  addLog(`Archive created (${formatFileSize(fileSize)})`, 'INFO', logs);
-
-  addLog('Uploading archive...', 'INFO', logs);
-
-  debug(`Starting multipart upload for deployment: ${deploymentId}`);
-  const uploadId = await startMultipartUpload(deploymentId);
-
-  debug(`Upload ID: ${uploadId}`);
-
-  debug('Uploading archive...');
-
-  const fileChunkSize = 10 * 1024 * 1024; // 10 MB
-  const numChunks = Math.ceil(fileSize / fileChunkSize);
-  debug(`File size: ${fileSize}, chunk size: ${fileChunkSize}, number of chunks: ${numChunks}`);
-
-  const promises = [];
-  let start: number, end: number;
-
-  for (let index = 1; index < numChunks + 1; index++) {
-    start = (index - 1) * fileChunkSize;
-    end = index * fileChunkSize;
-    debug(`Processing chunk ${index}/${numChunks}, start: ${start}, end: ${end}`);
-
-    const presignedUrl = await getPresignedUrl(deploymentId, uploadId, index);
-    debug('Presigned URL for part', index, presignedUrl);
-
-    const promise = new Promise<Response>((resolve, reject) => {
-      void (async () => {
-        try {
-          debug(`Reading chunk ${index} data`);
-          const readStream = fs.createReadStream(archivePath, {
-            start,
-            end: index < numChunks ? end - 1 : undefined,
-          });
-
-          const chunks: Buffer[] = [];
-          readStream.on('data', (chunk: Buffer | string) => {
-            chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-          });
-
-          await new Promise<void>((resolveRead) => {
-            readStream.on('end', () => resolveRead());
-            readStream.on('error', reject);
-          });
-
-          const buffer = Buffer.concat(chunks);
-
-          debug(`Uploading chunk ${index} to presigned URL (${buffer.length} bytes)`);
-          const response = await fetch(presignedUrl, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/zip',
-              'Content-Length': String(buffer.length),
-            },
-            body: buffer,
-          });
-          resolve(response);
-        } catch (err) {
-          reject(err instanceof Error ? err : new Error(String(err)));
+        // Check terminal states
+        if (newStatus === 'ACTIVE') {
+          yield* Console.log(`Deployed to https://${deploymentId}.gigadrivedev.com`);
+          return yield* Effect.fail('done' as const);
         }
-      })();
-    });
 
-    promises.push(promise);
-  }
-
-  const finishedParts: { partNumber: number; etag: string }[] = [];
-
-  try {
-    debug(`Waiting for all ${promises.length} upload promises to complete`);
-    const responses = await Promise.all(promises);
-    debug('All upload promises completed');
-
-    for (let index = 0; index < responses.length; index++) {
-      const res = responses[index];
-      debug(`Checking response for part ${index + 1}, status: ${res.status}`);
-
-      if (!res.ok) {
-        debug(`Failed to upload part ${index + 1}: ${res.statusText} ${await res.text()}`);
-        throw new Error(`Failed to upload part ${index + 1}: ${res.statusText}`);
-      }
-
-      const etag = res.headers.get('ETag');
-      if (!etag) {
-        debug(`Failed to get ETag for part ${index + 1}`);
-        throw new Error(`Failed to get ETag for part ${index + 1}`);
-      }
-
-      debug(`Part ${index + 1} uploaded successfully, ETag: ${etag}`);
-      finishedParts.push({
-        partNumber: index + 1,
-        etag: etag,
-      });
-    }
-
-    debug(`Completing upload with ${finishedParts.length} parts`);
-    await completeUpload(deploymentId, uploadId, finishedParts);
-    debug('Upload completed successfully');
-  } catch (err) {
-    const error = err as Error;
-    debug(`Upload error: ${error.message}`);
-    addLog(`Upload error: ${error.message}`, 'ERROR', logs);
-    throw error;
-  }
-};
-
-const createDeployment = async ({ applicationId }: { applicationId: string }) => {
-  debug(`Creating deployment for application: ${applicationId}`);
-  const res = await fetch(`http://localhost:3000/${applicationId}/deployments`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({}),
-    duplex: 'half',
+        if (newStatus === 'FAILED') {
+          return yield* Effect.fail(
+            new DeploymentFailedError({
+              message: 'The deployment failed. Please check the logs for more information.',
+            })
+          );
+        }
+      }),
+      Schedule.addDelay(Schedule.forever, () => Duration.seconds(1))
+    ).pipe(
+      Effect.catchAll((err) => {
+        if (err === 'done') return Effect.void;
+        return Effect.fail(err);
+      })
+    );
   });
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    debug(`Failed to create deployment: ${errorText}`);
-    throw new Error('Failed to create deployment: ' + errorText);
+const printLog = (logEntry: DeploymentLog) => {
+  switch (logEntry.type) {
+    case 'ERROR':
+      return Console.error(logEntry.message);
+    case 'WARN':
+      return Console.warn(logEntry.message);
+    default:
+      return Console.log(logEntry.message);
   }
-
-  const deployment = (await res.json()) as { id: string };
-  debug(`Deployment created with ID: ${deployment.id}`);
-
-  return deployment.id;
 };
-
-const startMultipartUpload = async (deploymentId: string) => {
-  debug(`Starting multipart upload for deployment: ${deploymentId}`);
-  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/pre-signed-url/start`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    debug(`Failed to start multipart upload: ${errorText}`);
-    throw new Error('Failed to start multipart upload: ' + errorText);
-  }
-
-  const upload = (await res.json()) as { uploadId: string };
-  debug(`Multipart upload started with ID: ${upload.uploadId}`);
-
-  return upload.uploadId;
-};
-
-const getPresignedUrl = async (deploymentId: string, uploadId: string, partNumber: number) => {
-  debug(`Getting presigned URL for deployment: ${deploymentId}, upload: ${uploadId}, part: ${partNumber}`);
-  const res = await fetch(
-    `http://localhost:3000/deployments/${deploymentId}/pre-signed-url/part?uploadId=${uploadId}&partNumber=${partNumber}`,
-    {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    debug(`Failed to get pre-signed URL: ${errorText}`);
-    throw new Error('Failed to get pre-signed URL: ' + errorText);
-  }
-
-  const upload = (await res.json()) as { url: string };
-  debug(`Got presigned URL for part ${partNumber}`);
-
-  return upload.url;
-};
-
-const completeUpload = async (
-  deploymentId: string,
-  uploadId: string,
-  parts: { partNumber: number; etag: string }[]
-) => {
-  debug(`Completing upload for deployment: ${deploymentId}, upload: ${uploadId}, parts: ${parts.length}`);
-  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/pre-signed-url/complete`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      uploadId,
-      parts,
-    }),
-    duplex: 'half',
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    debug(`Failed to complete upload: ${errorText}`);
-    throw new Error('Failed to complete upload: ' + errorText);
-  }
-
-  debug('Upload completed successfully');
-};
-
-const getDeploymentStatus = async (deploymentId: string) => {
-  debug(`Getting deployment status for: ${deploymentId}`);
-  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    debug(`Failed to get deployment status: ${errorText}`);
-    throw new Error('Failed to get deployment status: ' + errorText);
-  }
-
-  const deployment = (await res.json()) as { status: DeploymentStatus };
-  debug(`Deployment status: ${deployment.status}`);
-
-  return deployment.status;
-};
-
-const getLogs = async (
-  deploymentId: string,
-  options?: {
-    offset: number;
-    limit: number;
-    'createdAt[gt]'?: string;
-  }
-) => {
-  debug(`Getting logs for deployment: ${deploymentId}, options:`, options ?? 'No options');
-  const res = await fetch(`http://localhost:3000/deployments/${deploymentId}/logs${objectToQueryString(options)}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    debug(`Failed to get logs: ${errorText}`);
-    throw new Error('Failed to get logs: ' + errorText);
-  }
-
-  const logs = (await res.json()) as {
-    totalItems: number;
-    limit: number;
-    offset: number;
-    items: DeploymentLog[];
-  };
-
-  debug(`Got ${logs.items.length} logs, total: ${logs.totalItems}`);
-  return logs;
-};
-
-type DeploymentStatus = 'PENDING' | 'BUILDING' | 'PROVISIONING' | 'FAILED' | 'ACTIVE' | 'SUSPENDED';
-
-type DeploymentLog = { id: string; message: string; type: 'INFO' | 'ERROR' | 'WARN'; createdAt: string };

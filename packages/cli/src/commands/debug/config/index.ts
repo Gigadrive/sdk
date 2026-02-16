@@ -1,23 +1,26 @@
-import { findConfig, parseConfig } from '@gigadrive/network-config';
-import { Command } from 'commander';
-import { log } from 'console';
-import { debug } from '../../../util/log';
+import { Command } from '@effect/cli';
+import { Console, Effect } from 'effect';
+import { ProjectConfigService } from '../../../services/project-config';
 
-export const config = (parent: Command) => {
-  parent
-    .command('config')
-    .description('Provide debug info about the project configuration in the current directory')
-    .action(async () => {
-      const configPath = findConfig(process.cwd());
+export const debugConfigCommand = Command.make('config', {}, () =>
+  Effect.gen(function* () {
+    const projectConfig = yield* ProjectConfigService;
+    const cwd = process.cwd();
+    const { config, configPath } = yield* projectConfig.resolve(cwd);
 
-      if (!configPath) {
-        debug('No config file found');
-        throw new Error('The current project folder does not have a valid config file.');
-      }
-
-      const config = await parseConfig(configPath, process.cwd());
-
-      log(`Config file found at: ${configPath}`);
-      log(JSON.stringify(config, null, 2));
-    });
-};
+    yield* Console.log(`Config file found at: ${configPath}`);
+    yield* Console.log(JSON.stringify(config, null, 2));
+  }).pipe(
+    Effect.catchTags({
+      ConfigNotFoundError: (err) => Console.error(err.message),
+      ConfigParseError: (err) => Console.error(`Config parse error: ${err.message}`),
+      ConfigValidationError: (err) =>
+        Effect.gen(function* () {
+          for (const e of err.errors) {
+            yield* Console.error(e);
+          }
+          yield* Console.error(err.message);
+        }),
+    })
+  )
+);

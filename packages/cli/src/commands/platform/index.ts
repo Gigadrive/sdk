@@ -1,9 +1,7 @@
-import type { Command } from 'commander';
-import { deploy } from './deploy';
+import { Command } from '@effect/cli';
+import { Effect } from 'effect';
+import { deployCommand } from './deploy';
 
-export const platform = (program: Command) => {
-  const platform = program.command('platform').description('Manage the platform');
+const platformBase = Command.make('platform', {}, () => Effect.void);
 
-  // register subcommands
-  deploy(platform);
-};
+export const platformCommand = platformBase.pipe(Command.withSubcommands([deployCommand]));
