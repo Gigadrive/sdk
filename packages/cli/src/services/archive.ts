@@ -154,7 +154,7 @@ export class ArchiveService extends Effect.Service<ArchiveService>()('ArchiveSer
 
       const filesToInclude = options.whitelist
         ? yield* Effect.tryPromise({
-            try: () => Promise.all(options.whitelist!.map((file) => getFilesForPattern(inputDir, file))),
+            try: () => Promise.all(options.whitelist!.map((file) => getFilesForPattern(file, inputDir))),
             catch: (error) =>
               new ArchiveCreateError({
                 message: 'Failed to resolve whitelist patterns',

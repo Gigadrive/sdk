@@ -69,6 +69,12 @@ export class PackageJsonNotFoundError extends Schema.TaggedError<PackageJsonNotF
   }
 ) {}
 
+export class PackageJsonParseError extends Schema.TaggedError<PackageJsonParseError>()('PackageJsonParseError', {
+  message: Schema.String,
+  directory: Schema.String,
+  cause: Schema.optional(Schema.String),
+}) {}
+
 export class BuildScriptNotFoundError extends Schema.TaggedError<BuildScriptNotFoundError>()(
   'BuildScriptNotFoundError',
   {

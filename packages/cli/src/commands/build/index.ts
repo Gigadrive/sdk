@@ -36,7 +36,12 @@ export const buildCommand = Command.make('build', {}, () =>
 
     const packageJson = yield* Effect.try({
       try: () => JSON.parse(packageJsonContent) as { scripts?: { build?: string } },
-      catch: () => new PackageJsonNotFoundError({ message: 'Failed to read package.json', directory: cwd }),
+      catch: (error) =>
+        new PackageJsonParseError({
+          message: 'Failed to parse package.json',
+          directory: cwd,
+          cause: error instanceof Error ? error.message : String(error),
+        }),
     });
 
     if (!packageJson.scripts?.build) {
@@ -100,6 +105,7 @@ export const buildCommand = Command.make('build', {}, () =>
   }).pipe(
     Effect.catchTags({
       PackageJsonNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      PackageJsonParseError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
       BuildScriptNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
       PackageManagerNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
       ExecError: (err) =>

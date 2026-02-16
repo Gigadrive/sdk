@@ -122,7 +122,9 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
         server.listen(0, '127.0.0.1', () => {
           const address = server.address();
           if (!address || typeof address !== 'object') {
-            resume(Effect.fail(new LoginFlowError({ message: 'Failed to determine callback server address' })));
+            server.close(() => {
+              resume(Effect.fail(new LoginFlowError({ message: 'Failed to determine callback server address' })));
+            });
             return;
           }
 

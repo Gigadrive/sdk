@@ -69,8 +69,7 @@ export const deployCommand = Command.make('deploy', {}, () =>
       DeploymentAuthError: (err) =>
         Console.error(`Authentication failed: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
       DeploymentFailedError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
-    }),
-    Effect.catchAll((err) => Console.error(`Unexpected error: ${String(err)}`).pipe(Effect.andThen(Effect.fail(err))))
+    })
   )
 );
 

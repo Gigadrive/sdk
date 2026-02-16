@@ -197,7 +197,6 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       yield* Effect.annotateCurrentSpan('partNumber', partNumber);
       yield* Effect.annotateCurrentSpan('size', data.length);
 
-      const authHeaders = yield* getAuthHeaders;
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(presignedUrl, {
@@ -205,7 +204,6 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
             headers: {
               'Content-Type': 'application/zip',
               'Content-Length': String(data.length),
-              ...authHeaders,
             },
             body: data,
           }),
