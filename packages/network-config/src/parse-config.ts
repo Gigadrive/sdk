@@ -57,27 +57,36 @@ export const parseConfig = async (filePath: string, projectFolder: string): Prom
     ) => Promise<NormalizedConfig>,
   };
 
-  let parseResult: NormalizedConfig = await (
+  const parseResult: NormalizedConfig = await (
     parserMap[version] as (config: Record<string, unknown>, projectFolder: string) => Promise<NormalizedConfig>
   )(parsed, projectFolder);
 
-  // TODO: apply transformers
-  parseResult = await parseVercelBuildOutputV3(parseResult, projectFolder);
+  return postProcessConfig(parseResult, projectFolder);
+};
 
-  // if the config does not resolve to any resources, warn the user
-  if (parseResult.entrypoints.length === 0 && (parseResult.assets?.paths?.length || 0) === 0) {
-    parseResult.warnings.push('The current project does not have any functions or assets to deploy.');
-  } else if (
-    parseResult.entrypoints.length === 0 &&
-    (parseResult.assets?.paths?.length || 0) === 0 &&
-    parseResult.routes.length === 0
-  ) {
-    parseResult.errors.push(
+/**
+ * Applies post-processing transformers to a NormalizedConfig:
+ * - Vercel Build Output v3 (merges functions/routes from .vercel/output if present)
+ * - Empty deployment validation
+ * - Filter functions from assets
+ *
+ * @param config - The parsed NormalizedConfig
+ * @param projectFolder - Absolute path to the project root
+ * @returns The post-processed NormalizedConfig
+ */
+export const postProcessConfig = async (config: NormalizedConfig, projectFolder: string): Promise<NormalizedConfig> => {
+  let result = await parseVercelBuildOutputV3(config, projectFolder);
+
+  // Stricter check first: no functions, no assets, AND no routes → error
+  if (result.entrypoints.length === 0 && (result.assets?.paths?.length || 0) === 0 && result.routes.length === 0) {
+    result.errors.push(
       'The current project config does not resolve to any functions, assets or routes and can not be deployed.'
     );
+  } else if (result.entrypoints.length === 0 && (result.assets?.paths?.length || 0) === 0) {
+    result.warnings.push('The current project does not have any functions or assets to deploy.');
   }
 
-  parseResult = filterFunctionsFromAssets(parseResult);
+  result = filterFunctionsFromAssets(result);
 
-  return parseResult;
+  return result;
 };

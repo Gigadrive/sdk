@@ -1,5 +1,11 @@
 import type { NormalizedConfig } from '@gigadrive/network-config';
-import { findConfig, parseConfig } from '@gigadrive/network-config';
+import {
+  detectFramework,
+  findConfig,
+  mergeWithFrameworkDefaults,
+  parseConfig,
+  postProcessConfig,
+} from '@gigadrive/network-config';
 import { Effect } from 'effect';
 import { ConfigNotFoundError, ConfigParseError, ConfigValidationError } from '../errors';
 
@@ -16,25 +22,73 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
       yield* Effect.log('Resolving project config', { cwd });
 
       const configPath = findConfig(cwd);
-      if (!configPath) {
+
+      // Attempt framework auto-detection
+      const detection = yield* detectFramework(cwd).pipe(
+        Effect.catchTag('FrameworkNotDetectedError', () => Effect.succeed(null))
+      );
+
+      if (detection) {
+        yield* Effect.log('Framework auto-detected', {
+          framework: detection.framework.name,
+          slug: detection.framework.slug,
+        });
+      }
+
+      let config: NormalizedConfig;
+      let resolvedConfigPath: string | null = null;
+      let framework: { name: string; slug: string } | undefined;
+
+      if (configPath && detection) {
+        // Case A: config file + framework detected → parse config, merge with framework defaults
+        yield* Effect.log('Config file found, merging with framework defaults', { configPath });
+        resolvedConfigPath = configPath;
+
+        const userConfig: NormalizedConfig = yield* Effect.tryPromise({
+          try: () => parseConfig(configPath, cwd),
+          catch: (error) =>
+            new ConfigParseError({
+              message: 'Failed to parse config file',
+              cause: error instanceof Error ? error.message : String(error),
+            }),
+        });
+
+        config = yield* mergeWithFrameworkDefaults(userConfig, detection.config);
+        framework = { name: detection.framework.name, slug: detection.framework.slug };
+      } else if (configPath) {
+        // Case B: config file only → existing behavior
+        yield* Effect.log('Config file found', { configPath });
+        resolvedConfigPath = configPath;
+
+        config = yield* Effect.tryPromise({
+          try: () => parseConfig(configPath, cwd),
+          catch: (error) =>
+            new ConfigParseError({
+              message: 'Failed to parse config file',
+              cause: error instanceof Error ? error.message : String(error),
+            }),
+        });
+      } else if (detection) {
+        // Case C: no config file, framework detected → use detection + post-process
+        config = yield* Effect.tryPromise({
+          try: () => postProcessConfig(detection.config, cwd),
+          catch: (error) =>
+            new ConfigParseError({
+              message: 'Failed to post-process auto-detected config',
+              cause: error instanceof Error ? error.message : String(error),
+            }),
+        });
+
+        framework = { name: detection.framework.name, slug: detection.framework.slug };
+      } else {
+        // Case D: neither config file nor framework detected
         return yield* Effect.fail(
           new ConfigNotFoundError({
-            message: 'The current project folder does not have a valid config file.',
+            message: 'No config file found and no framework detected.',
             directory: cwd,
           })
         );
       }
-
-      yield* Effect.log('Config file found', { configPath });
-
-      const config: NormalizedConfig = yield* Effect.tryPromise({
-        try: () => parseConfig(configPath, cwd),
-        catch: (error) =>
-          new ConfigParseError({
-            message: 'Failed to parse config file',
-            cause: error instanceof Error ? error.message : String(error),
-          }),
-      });
 
       // Report warnings via structured logging
       for (const warning of config.warnings) {
@@ -51,7 +105,7 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
         );
       }
 
-      return { config, configPath };
+      return { config, configPath: resolvedConfigPath, framework };
     });
 
     return { resolve };

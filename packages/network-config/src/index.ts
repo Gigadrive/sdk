@@ -1,3 +1,4 @@
+export * from './detection';
 export * from './find-config';
 export * from './normalized-config';
 export * from './parse-config';

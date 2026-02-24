@@ -458,6 +458,9 @@ importers:
 
   packages/network-config:
     dependencies:
+      '@effect/platform':
+        specifier: ^0.94.5
+        version: 0.94.5(effect@3.19.17)
       '@gigadrive/build-utils':
         specifier: workspace:*
         version: link:../build-utils
@@ -470,6 +473,9 @@ importers:
       ajv-formats:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.17.1)
+      effect:
+        specifier: ^3.19.17
+        version: 3.19.17
       minimatch:
         specifier: ^10.0.3
         version: 10.1.1

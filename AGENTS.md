@@ -157,3 +157,27 @@ The `harmony` UI library uses Rslib instead (unbundled ESM + CJS with DTS).
 - Several `@typescript-eslint/no-unsafe-*` rules are intentionally disabled.
 - Test files (`*.test.ts`, `*.test.tsx`) are **excluded** from linting entirely.
 - React: `react-in-jsx-scope` is off (JSX transform handles it).
+
+## Design Decisions
+
+### Effect in network-config (detection module)
+
+The `detection/` module in `@gigadrive/network-config` uses **Effect** with `@effect/platform`:
+
+- Functions return `Effect.Effect<T, E, R>` — not Promises
+- File I/O uses `FileSystem.FileSystem` from `@effect/platform` (not `node:fs` directly)
+- Errors use `Schema.TaggedError` (e.g. `ManifestReadError`, `FrameworkNotDetectedError`)
+- Named functions use `Effect.fn("name")` for tracing/observability
+- The CLI provides `NodeContext.layer` which fulfills the `FileSystem` requirement
+- Third-party consumers must provide a FileSystem layer (e.g. `NodeContext.layer`)
+
+### Framework auto-detection
+
+The detection module in `packages/network-config/src/detection/` auto-detects web frameworks:
+
+- Framework definitions are pure data objects in `detection/frameworks/`
+- Detection is language-aware: checks `package.json` for Node, `composer.json` for PHP
+- `postProcessConfig()` in `parse-config.ts` applies Vercel Build Output v3 and must be
+  called on both file-parsed and auto-detected configs
+- When a user config exists alongside a detected framework, framework defaults fill gaps
+  (user config always takes precedence)

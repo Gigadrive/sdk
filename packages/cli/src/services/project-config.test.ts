@@ -1,3 +1,4 @@
+import { FileSystem } from '@effect/platform';
 import { Effect, Layer, Logger, LogLevel } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectConfigService } from './project-config';
@@ -9,21 +10,65 @@ import { ProjectConfigService } from './project-config';
 vi.mock('@gigadrive/network-config', () => ({
   findConfig: vi.fn(),
   parseConfig: vi.fn(),
+  postProcessConfig: vi.fn(),
+  detectFramework: vi.fn(),
+  mergeWithFrameworkDefaults: vi.fn(),
 }));
 
-import { findConfig, parseConfig } from '@gigadrive/network-config';
+import {
+  detectFramework,
+  findConfig,
+  mergeWithFrameworkDefaults,
+  parseConfig,
+  postProcessConfig,
+} from '@gigadrive/network-config';
 
 const mockedFindConfig = vi.mocked(findConfig);
 const mockedParseConfig = vi.mocked(parseConfig);
+const mockedDetectFramework = vi.mocked(detectFramework);
+const mockedPostProcessConfig = vi.mocked(postProcessConfig);
+const mockedMergeWithFrameworkDefaults = vi.mocked(mergeWithFrameworkDefaults);
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const TestLayer = Layer.mergeAll(ProjectConfigService.Default, Logger.minimumLogLevel(LogLevel.None));
+// Provide a stub FileSystem for detectFramework (which requires it in production,
+// but here the whole function is mocked so it's never actually used)
+const StubFileSystem = Layer.succeed(FileSystem.FileSystem, {} as FileSystem.FileSystem);
+
+const TestLayer = Layer.mergeAll(ProjectConfigService.Default, Logger.minimumLogLevel(LogLevel.None)).pipe(
+  Layer.provideMerge(StubFileSystem)
+);
 
 const runEffect = <A, E>(effect: Effect.Effect<A, E, ProjectConfigService>) =>
   Effect.runPromise(Effect.provide(effect, TestLayer));
+
+// Helper: make detectFramework return a "not detected" Effect
+const mockNoFrameworkDetected = () => {
+  mockedDetectFramework.mockReturnValue(
+    Effect.fail({ _tag: 'FrameworkNotDetectedError', message: 'No framework detected', directory: '/project' }) as any
+  );
+};
+
+// Helper: make detectFramework return a detected framework
+const mockFrameworkDetected = (slug = 'nextjs', name = 'Next.js') => {
+  mockedDetectFramework.mockReturnValue(
+    Effect.succeed({
+      framework: { slug, name },
+      packageManager: 'npm',
+      config: {
+        warnings: [`Auto-detected framework: ${name}. Create a gigadrive.yaml to customize.`],
+        errors: [],
+        commands: ['npm install', 'next build'],
+        entrypoints: [{ path: '.next/standalone/server.js', runtime: 'node-22', memory: 256, maxDuration: 30 }],
+        routes: [{ path: '/*', destination: '.next/standalone/server.js', handler: 'SERVERLESS_FUNCTION' }],
+        regions: ['us-east-1'],
+        environmentVariables: { NODE_ENV: 'production' },
+      },
+    }) as any
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -34,8 +79,9 @@ describe('ProjectConfigService.resolve', () => {
     vi.restoreAllMocks();
   });
 
-  it('should fail with ConfigNotFoundError when no config file is found', async () => {
+  it('should fail with ConfigNotFoundError when no config file and no framework detected', async () => {
     mockedFindConfig.mockReturnValue(null as any);
+    mockNoFrameworkDetected();
 
     const result = await runEffect(
       ProjectConfigService.resolve('/project').pipe(
@@ -52,17 +98,18 @@ describe('ProjectConfigService.resolve', () => {
     expect(mockedFindConfig).toHaveBeenCalledWith('/project');
   });
 
-  it('should return config and configPath when config is valid', async () => {
+  it('should return config and configPath when config file is valid and no framework detected', async () => {
     mockedFindConfig.mockReturnValue('/project/gigadrive.yaml');
     mockedParseConfig.mockResolvedValue({
       warnings: [],
       errors: [],
       name: 'test-app',
     } as any);
+    mockNoFrameworkDetected();
 
     const result = await runEffect(ProjectConfigService.resolve('/project'));
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       config: { warnings: [], errors: [], name: 'test-app' },
       configPath: '/project/gigadrive.yaml',
     });
@@ -72,6 +119,7 @@ describe('ProjectConfigService.resolve', () => {
   it('should fail with ConfigParseError when parseConfig throws', async () => {
     mockedFindConfig.mockReturnValue('/project/gigadrive.yaml');
     mockedParseConfig.mockRejectedValue(new Error('YAML syntax error'));
+    mockNoFrameworkDetected();
 
     const result = await runEffect(
       ProjectConfigService.resolve('/project').pipe(
@@ -95,6 +143,7 @@ describe('ProjectConfigService.resolve', () => {
       errors: ['Invalid region', 'Missing name'],
       name: 'test-app',
     } as any);
+    mockNoFrameworkDetected();
 
     const result = await runEffect(
       ProjectConfigService.resolve('/project').pipe(
@@ -117,9 +166,64 @@ describe('ProjectConfigService.resolve', () => {
       errors: [],
       name: 'test-app',
     } as any);
+    mockNoFrameworkDetected();
 
     const result = await runEffect(ProjectConfigService.resolve('/project'));
 
     expect(result.config.warnings).toEqual(['Deprecated option used']);
+  });
+
+  it('should use auto-detected framework config when no config file exists', async () => {
+    mockedFindConfig.mockReturnValue(null as any);
+    mockFrameworkDetected();
+    mockedPostProcessConfig.mockResolvedValue({
+      warnings: ['Auto-detected framework: Next.js. Create a gigadrive.yaml to customize.'],
+      errors: [],
+      commands: ['npm install', 'next build'],
+      entrypoints: [{ path: '.next/standalone/server.js', runtime: 'node-22', memory: 256, maxDuration: 30 }],
+      routes: [],
+      regions: ['us-east-1'],
+      environmentVariables: {},
+    } as any);
+
+    const result = await runEffect(ProjectConfigService.resolve('/project'));
+
+    expect(result.configPath).toBeNull();
+    expect(result.framework).toEqual({ name: 'Next.js', slug: 'nextjs' });
+    expect(mockedPostProcessConfig).toHaveBeenCalled();
+  });
+
+  it('should merge framework defaults with user config when both exist', async () => {
+    mockedFindConfig.mockReturnValue('/project/gigadrive.yaml');
+    mockFrameworkDetected();
+
+    const userConfig = {
+      warnings: [],
+      errors: [],
+      commands: ['npm run build'],
+      entrypoints: [],
+      routes: [],
+      regions: ['us-east-1'],
+      environmentVariables: {},
+    };
+
+    const mergedConfig = {
+      warnings: ['Auto-detected framework: Next.js. Create a gigadrive.yaml to customize.'],
+      errors: [],
+      commands: ['npm run build'],
+      entrypoints: [{ path: '.next/standalone/server.js', runtime: 'node-22', memory: 256, maxDuration: 30 }],
+      routes: [],
+      regions: ['us-east-1'],
+      environmentVariables: { NODE_ENV: 'production' },
+    };
+
+    mockedParseConfig.mockResolvedValue(userConfig as any);
+    mockedMergeWithFrameworkDefaults.mockReturnValue(Effect.succeed(mergedConfig) as any);
+
+    const result = await runEffect(ProjectConfigService.resolve('/project'));
+
+    expect(result.configPath).toBe('/project/gigadrive.yaml');
+    expect(result.framework).toEqual({ name: 'Next.js', slug: 'nextjs' });
+    expect(mockedMergeWithFrameworkDefaults).toHaveBeenCalled();
   });
 });
