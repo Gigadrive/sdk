@@ -1,5 +1,6 @@
 import { Command } from '@effect/cli';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
+import { NetworkConfigLive } from '@gigadrive/network-config';
 import { Effect, Layer, LogLevel, Logger } from 'effect';
 import { buildCommand } from './commands/build';
 import { debugCommand } from './commands/debug';
@@ -35,12 +36,15 @@ const cli = Command.run(gigadrive, {
 // Service layers — flat composition via mergeAll + provideMerge
 // ---------------------------------------------------------------------------
 
+const ProjectConfigLive = Layer.provide(ProjectConfigService.Default, NetworkConfigLive);
+
 const BaseServices = Layer.mergeAll(
   OAuthConfigService.Default,
   AuthStorageService.Default,
-  ProjectConfigService.Default,
   PackageManagerService.Default,
-  ArchiveService.Default
+  ArchiveService.Default,
+  NetworkConfigLive,
+  ProjectConfigLive
 ).pipe(Layer.provideMerge(AuthService.Default));
 
 const DeploymentApiLive = Layer.provide(DeploymentApiService.Default, BaseServices);

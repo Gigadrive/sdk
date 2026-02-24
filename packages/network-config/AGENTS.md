@@ -49,7 +49,7 @@ pnpm vitest run packages/network-config/
 
 - File naming: `<name>.test.ts` co-located next to the source file.
 - Imports: `import { describe, expect, it } from 'vitest';`
-- Some tests use `mock-fs` for filesystem mocking — call `mockFs.restore()` in `afterEach`.
+- Tests use an in-memory `FileSystem` layer (`makeTestFs` from `test-utils.ts`) for filesystem mocking.
 - Test files are excluded from ESLint.
 
 ## Project Layout

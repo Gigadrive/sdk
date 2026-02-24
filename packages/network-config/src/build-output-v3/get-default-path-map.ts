@@ -1,43 +1,48 @@
-import fs from 'fs';
-import path from 'path';
+import { FileSystem } from '@effect/platform';
+import { Effect } from 'effect';
+import path from 'node:path';
 
 /**
  * Creates a mapping of absolute file paths to their relative paths
  * starting from the provided directory.
  *
- * This is the default path map that will be used for Vercel-based functions, when the function does not specify a filePathMap.
+ * This is the default path map that will be used for Vercel-based functions,
+ * when the function does not specify a filePathMap.
  *
  * @param directory - The absolute path of the directory to process
  * @returns A record where keys are absolute file paths and values are relative paths
  */
-export const getDefaultPathMap = (directory: string): Record<string, string> => {
+export const getDefaultPathMap = Effect.fn('getDefaultPathMap')(function* (directory: string) {
+  const fs = yield* FileSystem.FileSystem;
   const result: Record<string, string> = {};
 
-  if (!fs.existsSync(directory)) {
+  const exists = yield* fs.exists(directory).pipe(Effect.catchAll(() => Effect.succeed(false)));
+  if (!exists) {
     return result;
   }
 
-  /**
-   * Recursively processes a directory and adds file mappings to the result
-   *
-   * @param currentPath - The absolute path of the current directory being processed
-   * @param basePath - The relative path accumulated during recursion
-   */
-  const processDirectory = (currentPath: string, basePath: string = '') => {
-    const files = fs.readdirSync(currentPath, { withFileTypes: true });
+  const processDirectory = (
+    currentPath: string,
+    basePath: string = ''
+  ): Effect.Effect<void, never, FileSystem.FileSystem> =>
+    Effect.gen(function* () {
+      const entries = yield* fs.readDirectory(currentPath).pipe(Effect.catchAll(() => Effect.succeed([] as string[])));
 
-    for (const file of files) {
-      const fullPath = path.join(currentPath, file.name);
-      const relativePath = path.join(basePath, file.name);
+      for (const name of entries) {
+        const fullPath = path.join(currentPath, name);
+        const relativePath = basePath ? path.join(basePath, name) : name;
 
-      if (file.isDirectory()) {
-        processDirectory(fullPath, relativePath);
-      } else {
-        result[fullPath] = relativePath;
+        const stat = yield* fs.stat(fullPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
+        if (!stat) continue;
+
+        if (stat.type === 'Directory') {
+          yield* processDirectory(fullPath, relativePath);
+        } else {
+          result[fullPath] = relativePath;
+        }
       }
-    }
-  };
+    });
 
-  processDirectory(directory);
+  yield* processDirectory(directory);
   return result;
-};
+});

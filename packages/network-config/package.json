@@ -37,6 +37,7 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@effect/platform-node": "^0.104.1",
     "@types/node": "^22.18.7",
     "esbuild": "^0.25.10"
   },

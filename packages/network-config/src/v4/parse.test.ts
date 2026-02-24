@@ -1,29 +1,41 @@
+import { NodeContext } from '@effect/platform-node';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import fs from 'fs';
-import path from 'path';
+import { Effect } from 'effect';
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { parseConfig } from '..';
-import { parseRawConfig } from '../parse-raw-config';
+import { parseConfig } from '../parse-config';
 import { AVAILABLE_REGIONS } from '../regions';
-import { getFunctionSettings } from './parse';
+import { NetworkConfigLive } from '../services';
+import { getFunctionSettings } from '../services/v4-config-parser';
+
+/**
+ * Thin compat helper: reads a YAML/JSON file using the real filesystem
+ * for fixture-based tests that need raw parsed config (not NormalizedConfig).
+ */
+async function readFixture(filePath: string): Promise<Record<string, unknown>> {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.json') {
+    return JSON.parse(content) as Record<string, unknown>;
+  }
+  const { parse: parseYaml } = await import('yaml');
+  return parseYaml(content) as Record<string, unknown>;
+}
 
 describe('parse config v4', function () {
   test('check if example matches schema', async function () {
-    // Load the example YAML file
     const exampleFile = path.join(__dirname, 'example.yaml');
-    const config = await parseRawConfig(exampleFile);
+    const config = await readFixture(exampleFile);
 
-    // Load the JSON schema
     const schemaFile = fs.readFileSync(path.join(__dirname, 'schema.json'), 'utf8');
     const schema = JSON.parse(schemaFile);
 
-    // Set up validator
     const ajv = new Ajv({ allErrors: true });
     addFormats(ajv);
     const validate = ajv.compile(schema);
 
-    // Validate the example against the schema
     const valid = validate(config);
 
     if (!valid) {
@@ -64,7 +76,9 @@ describe('parse config v4', function () {
     const exampleFile = path.join(__dirname, 'example.yaml');
     const projectFolder = path.dirname(exampleFile);
 
-    const config = await parseConfig(exampleFile, projectFolder);
+    const config = await Effect.runPromise(
+      parseConfig(exampleFile, projectFolder).pipe(Effect.provide(NetworkConfigLive), Effect.provide(NodeContext.layer))
+    );
 
     expect(config).toMatchObject({
       regions: AVAILABLE_REGIONS,
@@ -74,9 +88,9 @@ describe('parse config v4', function () {
 
   test('getFunctionSettings', async () => {
     const exampleFile = path.join(__dirname, 'example.yaml');
-    const config = await parseRawConfig(exampleFile);
+    const config = await readFixture(exampleFile);
 
-    expect(getFunctionSettings('src/index.ts', config)).toEqual({
+    expect(getFunctionSettings('src/index.ts', config as any)).toEqual({
       runtime: 'bun-1',
       memory: 128,
       max_duration: 15,
@@ -88,7 +102,7 @@ describe('parse config v4', function () {
       },
     });
 
-    expect(getFunctionSettings('src/cron.ts', config)).toEqual({
+    expect(getFunctionSettings('src/cron.ts', config as any)).toEqual({
       runtime: 'bun-1',
       memory: 128,
       max_duration: 15,
@@ -100,8 +114,8 @@ describe('parse config v4', function () {
       },
     });
 
-    expect(getFunctionSettings('app/test.ts', config)).toBeUndefined();
+    expect(getFunctionSettings('app/test.ts', config as any)).toBeUndefined();
 
-    expect(getFunctionSettings('test/index.ts', config)).toBeUndefined();
+    expect(getFunctionSettings('test/index.ts', config as any)).toBeUndefined();
   });
 });

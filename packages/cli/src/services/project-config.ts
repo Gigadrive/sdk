@@ -1,10 +1,10 @@
 import type { NormalizedConfig } from '@gigadrive/network-config';
 import {
   detectFramework,
-  findConfig,
   mergeWithFrameworkDefaults,
   parseConfig,
   postProcessConfig,
+  RawConfigReader,
 } from '@gigadrive/network-config';
 import { Effect } from 'effect';
 import { ConfigNotFoundError, ConfigParseError, ConfigValidationError } from '../errors';
@@ -17,11 +17,13 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
   accessors: true,
 
   effect: Effect.gen(function* () {
+    const rawReader = yield* RawConfigReader;
+
     const resolve = Effect.fn('ProjectConfigService.resolve')(function* (cwd: string) {
       yield* Effect.annotateCurrentSpan('cwd', cwd);
       yield* Effect.log('Resolving project config', { cwd });
 
-      const configPath = findConfig(cwd);
+      const configPath = yield* rawReader.findConfig(cwd);
 
       // Attempt framework auto-detection
       const detection = yield* detectFramework(cwd).pipe(
@@ -44,14 +46,16 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
         yield* Effect.log('Config file found, merging with framework defaults', { configPath });
         resolvedConfigPath = configPath;
 
-        const userConfig: NormalizedConfig = yield* Effect.tryPromise({
-          try: () => parseConfig(configPath, cwd),
-          catch: (error) =>
-            new ConfigParseError({
-              message: 'Failed to parse config file',
-              cause: error instanceof Error ? error.message : String(error),
-            }),
-        });
+        const userConfig: NormalizedConfig = yield* parseConfig(configPath, cwd).pipe(
+          Effect.catchAll((error) =>
+            Effect.fail(
+              new ConfigParseError({
+                message: 'Failed to parse config file',
+                cause: error.message,
+              })
+            )
+          )
+        );
 
         config = yield* mergeWithFrameworkDefaults(userConfig, detection.config);
         framework = { name: detection.framework.name, slug: detection.framework.slug };
@@ -60,24 +64,28 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
         yield* Effect.log('Config file found', { configPath });
         resolvedConfigPath = configPath;
 
-        config = yield* Effect.tryPromise({
-          try: () => parseConfig(configPath, cwd),
-          catch: (error) =>
-            new ConfigParseError({
-              message: 'Failed to parse config file',
-              cause: error instanceof Error ? error.message : String(error),
-            }),
-        });
+        config = yield* parseConfig(configPath, cwd).pipe(
+          Effect.catchAll((error) =>
+            Effect.fail(
+              new ConfigParseError({
+                message: 'Failed to parse config file',
+                cause: error.message,
+              })
+            )
+          )
+        );
       } else if (detection) {
         // Case C: no config file, framework detected → use detection + post-process
-        config = yield* Effect.tryPromise({
-          try: () => postProcessConfig(detection.config, cwd),
-          catch: (error) =>
-            new ConfigParseError({
-              message: 'Failed to post-process auto-detected config',
-              cause: error instanceof Error ? error.message : String(error),
-            }),
-        });
+        config = yield* postProcessConfig(detection.config, cwd).pipe(
+          Effect.catchAll((error) =>
+            Effect.fail(
+              new ConfigParseError({
+                message: 'Failed to post-process auto-detected config',
+                cause: error.message,
+              })
+            )
+          )
+        );
 
         framework = { name: detection.framework.name, slug: detection.framework.slug };
       } else {

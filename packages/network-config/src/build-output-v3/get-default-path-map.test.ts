@@ -1,29 +1,25 @@
-import mockFs from 'mock-fs';
-import { afterEach, describe, expect, test } from 'vitest';
+import { Effect } from 'effect';
+import { describe, expect, it } from 'vitest';
+import { makeTestFs } from '../test-utils';
 import { getDefaultPathMap } from './get-default-path-map';
 
+const run = (files: Record<string, string>, directory: string) =>
+  Effect.runPromise(getDefaultPathMap(directory).pipe(Effect.provide(makeTestFs(files))));
+
 describe('getDefaultPathMap', () => {
-  afterEach(() => {
-    mockFs.restore();
-  });
-
-  test('should return empty object if directory does not exist', () => {
-    mockFs({});
-
-    const result = getDefaultPathMap('/non-existent-dir');
-
+  it('should return empty object if directory does not exist', async () => {
+    const result = await run({}, '/non-existent-dir');
     expect(result).toEqual({});
   });
 
-  test('should map files correctly in a directory', () => {
-    mockFs({
-      '/test-dir': {
-        'file1.txt': 'content',
-        'file2.js': 'content',
+  it('should map files correctly in a directory', async () => {
+    const result = await run(
+      {
+        '/test-dir/file1.txt': 'content',
+        '/test-dir/file2.js': 'content',
       },
-    });
-
-    const result = getDefaultPathMap('/test-dir');
+      '/test-dir'
+    );
 
     expect(result).toEqual({
       '/test-dir/file1.txt': 'file1.txt',
@@ -31,17 +27,14 @@ describe('getDefaultPathMap', () => {
     });
   });
 
-  test('should recursively process nested directories', () => {
-    mockFs({
-      '/test-dir': {
-        'file1.txt': 'content',
-        subdir: {
-          'file2.js': 'content',
-        },
+  it('should recursively process nested directories', async () => {
+    const result = await run(
+      {
+        '/test-dir/file1.txt': 'content',
+        '/test-dir/subdir/file2.js': 'content',
       },
-    });
-
-    const result = getDefaultPathMap('/test-dir');
+      '/test-dir'
+    );
 
     expect(result).toEqual({
       '/test-dir/file1.txt': 'file1.txt',

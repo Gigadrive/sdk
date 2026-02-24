@@ -1,68 +1,56 @@
-import Ajv from 'ajv';
-import addFormats from 'ajv-formats';
-import { parseVercelBuildOutputV3 } from './build-output-v3/parse';
+import { Effect } from 'effect';
+import { ConfigVersionError } from './errors';
 import { filterFunctionsFromAssets } from './filter-functions-from-assets';
 import type { NormalizedConfig } from './normalized-config';
-import { parseRawConfig } from './parse-raw-config';
-import { parseConfigV4 } from './v4/parse';
+import { RawConfigReader } from './services/raw-config-reader';
+import { SchemaValidator } from './services/schema-validator';
+import { V4ConfigParser } from './services/v4-config-parser';
+import { VercelBuildOutputParser } from './services/vercel-build-output-parser';
+import type { ConfigV4 } from './v4';
 import schemaV4 from './v4/schema.json';
 
 export interface Config {
   version: number;
   env?: Record<string, string>;
-  // Add other properties as needed
 }
 
-export const parseConfig = async (filePath: string, projectFolder: string): Promise<NormalizedConfig> => {
-  const parsed = await parseRawConfig(filePath);
+/**
+ * Parses a config file at the given path, validates it against the appropriate
+ * JSON Schema, converts it to a NormalizedConfig, and applies post-processing.
+ *
+ * @param filePath - Absolute path to the config file
+ * @param projectFolder - Absolute path to the project root
+ */
+export const parseConfig = Effect.fn('parseConfig')(function* (filePath: string, projectFolder: string) {
+  const rawReader = yield* RawConfigReader;
+  const validator = yield* SchemaValidator;
+  const v4Parser = yield* V4ConfigParser;
+
+  const parsed = yield* rawReader.readRawConfig(filePath);
   const version = parsed.version as number;
 
   const schemaMap: Record<number, object> = {
-    /*1: schemaV1,
-      2: schemaV2,
-      3: schemaV3,*/
     4: schemaV4,
   };
-
-  // build the path to the config file relative to the project root (strip /tmp/unzipped prefix)
-  const relativePath = filePath.replace('/tmp/unzipped/', '');
 
   const schema = schemaMap[version];
 
   if (!schema) {
-    throw new Error(`Config file at ${relativePath} has an unsupported version: ${version}`);
+    return yield* Effect.fail(
+      new ConfigVersionError({
+        message: `Config file at ${filePath} has an unsupported version: ${version}`,
+        filePath,
+        version,
+      })
+    );
   }
 
-  // validate the config file
-  const ajv = new Ajv();
-  addFormats(ajv);
+  yield* validator.validate(parsed, schema, filePath);
 
-  const validate = ajv.compile(schema);
+  const parseResult: NormalizedConfig = yield* v4Parser.parse(parsed as unknown as ConfigV4, projectFolder);
 
-  const valid = validate(parsed);
-  if (!valid) {
-    throw new Error(`Config file at ${relativePath} is invalid: ${ajv.errorsText(validate.errors)}`);
-  }
-
-  const parserMap: Record<
-    number,
-    (config: Record<string, unknown>, projectFolder: string) => Promise<NormalizedConfig>
-  > = {
-    /*1: parseConfigV1,
-    2: parseConfigV2,
-    3: parseConfigV3,*/
-    4: parseConfigV4 as unknown as (
-      config: Record<string, unknown>,
-      projectFolder: string
-    ) => Promise<NormalizedConfig>,
-  };
-
-  const parseResult: NormalizedConfig = await (
-    parserMap[version] as (config: Record<string, unknown>, projectFolder: string) => Promise<NormalizedConfig>
-  )(parsed, projectFolder);
-
-  return postProcessConfig(parseResult, projectFolder);
-};
+  return yield* postProcessConfig(parseResult, projectFolder);
+});
 
 /**
  * Applies post-processing transformers to a NormalizedConfig:
@@ -74,8 +62,12 @@ export const parseConfig = async (filePath: string, projectFolder: string): Prom
  * @param projectFolder - Absolute path to the project root
  * @returns The post-processed NormalizedConfig
  */
-export const postProcessConfig = async (config: NormalizedConfig, projectFolder: string): Promise<NormalizedConfig> => {
-  let result = await parseVercelBuildOutputV3(config, projectFolder);
+export const postProcessConfig = Effect.fn('postProcessConfig')(function* (
+  config: NormalizedConfig,
+  projectFolder: string
+) {
+  const vercelParser = yield* VercelBuildOutputParser;
+  let result = yield* vercelParser.parse(config, projectFolder);
 
   // Stricter check first: no functions, no assets, AND no routes → error
   if (result.entrypoints.length === 0 && (result.assets?.paths?.length || 0) === 0 && result.routes.length === 0) {
@@ -89,4 +81,4 @@ export const postProcessConfig = async (config: NormalizedConfig, projectFolder:
   result = filterFunctionsFromAssets(result);
 
   return result;
-};
+});
