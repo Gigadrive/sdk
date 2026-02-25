@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.0.1
+
+### Patch Changes
+
+- Move misplaced dependencies: effect and @effect/platform to peerDependencies in network-config, storybook packages to devDependencies in harmony ([#272](https://github.com/Gigadrive/sdk/pull/272))
+
 ## 3.0.0
 
 ### Major Changes
