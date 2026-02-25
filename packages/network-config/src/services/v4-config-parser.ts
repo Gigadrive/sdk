@@ -88,7 +88,7 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
       const regions =
         config.regions?.includes('global') === true
           ? AVAILABLE_REGIONS
-          : (config.regions?.filter((region) => region !== 'global') ?? ['global']);
+          : (config.regions?.filter((region) => region !== 'global') ?? AVAILABLE_REGIONS);
 
       const populateAssetCache = config.populateAssetCache ?? false;
       const environmentVariables = config.env ?? {};

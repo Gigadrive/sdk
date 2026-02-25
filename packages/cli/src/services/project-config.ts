@@ -63,9 +63,17 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
 
       const configPath = yield* rawReader.findConfig(cwd);
 
-      // Attempt framework auto-detection
+      // Attempt framework auto-detection.
+      // When a user config exists, detection is best-effort — manifest read/parse
+      // errors should not block resolution of the explicit config file.
       const detection = yield* detectFramework(cwd).pipe(
-        Effect.catchTag('FrameworkNotDetectedError', () => Effect.succeed(null))
+        Effect.catchTag('FrameworkNotDetectedError', () => Effect.succeed(null)),
+        Effect.catchTag('ManifestReadError', (e) =>
+          Effect.logWarning(`Skipping framework auto-detection: ${e.message}`).pipe(Effect.as(null))
+        ),
+        Effect.catchTag('ManifestParseError', (e) =>
+          Effect.logWarning(`Skipping framework auto-detection: ${e.message}`).pipe(Effect.as(null))
+        )
       );
 
       if (detection) {
