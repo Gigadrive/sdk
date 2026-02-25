@@ -12,6 +12,7 @@ import {
   mergeWithFrameworkDefaults,
   NetworkConfigLive,
   parseConfig,
+  parseConfigRaw,
   postProcessConfig,
   RawConfigReader,
 } from '@gigadrive/network-config';
@@ -88,17 +89,17 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
       let framework: { name: string; slug: string } | undefined;
 
       if (configPath && detection) {
-        // Case A: config file + framework detected → parse config, merge with framework defaults.
-        // Note: parseConfig internally calls postProcessConfig on the user config (Vercel BOv3
-        // merge, empty-deployment check, function/asset dedup). We intentionally do NOT re-run
-        // postProcessConfig on the merged result because the Vercel BOv3 transform and validation
-        // apply to the user's project output, not to framework defaults.
+        // Case A: config file + framework detected → parse raw (no post-processing), merge
+        // with framework defaults, then post-process the merged result. Running postProcessConfig
+        // after the merge ensures validations (empty-deployment check, Vercel BOv3 merge,
+        // function/asset dedup) see the full picture instead of producing stale pre-merge errors.
         yield* Effect.log('Config file found, merging with framework defaults', { configPath });
         resolvedConfigPath = configPath;
 
-        const userConfig: NormalizedConfig = yield* wrapParseErrors(parseConfig(configPath, cwd));
+        const userConfig: NormalizedConfig = yield* wrapParseErrors(parseConfigRaw(configPath, cwd));
+        const merged: NormalizedConfig = yield* mergeWithFrameworkDefaults(userConfig, detection.config);
 
-        config = yield* mergeWithFrameworkDefaults(userConfig, detection.config);
+        config = yield* wrapParseErrors(postProcessConfig(merged, cwd));
         framework = { name: detection.framework.name, slug: detection.framework.slug };
       } else if (configPath) {
         // Case B: config file only → existing behavior

@@ -15,13 +15,16 @@ export interface Config {
 }
 
 /**
- * Parses a config file at the given path, validates it against the appropriate
- * JSON Schema, converts it to a NormalizedConfig, and applies post-processing.
+ * Parses a config file at the given path and validates it against the appropriate
+ * JSON Schema, returning a NormalizedConfig **without** post-processing.
+ *
+ * Use {@link parseConfig} when you also want Vercel BOv3 merging, empty-deployment
+ * checks, and function/asset deduplication applied automatically.
  *
  * @param filePath - Absolute path to the config file
  * @param projectFolder - Absolute path to the project root
  */
-export const parseConfig = Effect.fn('parseConfig')(function* (filePath: string, projectFolder: string) {
+export const parseConfigRaw = Effect.fn('parseConfigRaw')(function* (filePath: string, projectFolder: string) {
   const rawReader = yield* RawConfigReader;
   const validator = yield* SchemaValidator;
   const v4Parser = yield* V4ConfigParser;
@@ -47,8 +50,18 @@ export const parseConfig = Effect.fn('parseConfig')(function* (filePath: string,
 
   yield* validator.validate(parsed, schema, filePath);
 
-  const parseResult: NormalizedConfig = yield* v4Parser.parse(parsed as unknown as ConfigV4, projectFolder);
+  return yield* v4Parser.parse(parsed as unknown as ConfigV4, projectFolder);
+});
 
+/**
+ * Parses a config file at the given path, validates it against the appropriate
+ * JSON Schema, converts it to a NormalizedConfig, and applies post-processing.
+ *
+ * @param filePath - Absolute path to the config file
+ * @param projectFolder - Absolute path to the project root
+ */
+export const parseConfig = Effect.fn('parseConfig')(function* (filePath: string, projectFolder: string) {
+  const parseResult: NormalizedConfig = yield* parseConfigRaw(filePath, projectFolder);
   return yield* postProcessConfig(parseResult, projectFolder);
 });
 

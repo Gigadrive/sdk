@@ -15,6 +15,7 @@ vi.mock('@gigadrive/network-config', async (importOriginal) => {
   return {
     ...original,
     parseConfig: vi.fn(),
+    parseConfigRaw: vi.fn(),
     postProcessConfig: vi.fn(),
     detectFramework: vi.fn(),
     mergeWithFrameworkDefaults: vi.fn(),
@@ -26,10 +27,12 @@ import {
   mergeWithFrameworkDefaults,
   NetworkConfigLive,
   parseConfig,
+  parseConfigRaw,
   postProcessConfig,
 } from '@gigadrive/network-config';
 
 const mockedParseConfig = vi.mocked(parseConfig);
+const mockedParseConfigRaw = vi.mocked(parseConfigRaw);
 const mockedDetectFramework = vi.mocked(detectFramework);
 const mockedPostProcessConfig = vi.mocked(postProcessConfig);
 const mockedMergeWithFrameworkDefaults = vi.mocked(mergeWithFrameworkDefaults);
@@ -254,14 +257,21 @@ describe('ProjectConfigService.resolve', () => {
       environmentVariables: { NODE_ENV: 'production' },
     });
 
-    mockedParseConfig.mockReturnValue(Effect.succeed(userConfig) as never);
+    const postProcessedConfig = makeNormalizedConfig({
+      ...mergedConfig,
+    });
+
+    mockedParseConfigRaw.mockReturnValue(Effect.succeed(userConfig) as never);
     mockedMergeWithFrameworkDefaults.mockReturnValue(Effect.succeed(mergedConfig) as never);
+    mockedPostProcessConfig.mockReturnValue(Effect.succeed(postProcessedConfig) as never);
 
     const result = await runEffect(ProjectConfigService.resolve('/project'));
 
     expect(result.configPath).toBe('/project/gigadrive.yaml');
     expect(result.framework).toEqual({ name: 'Next.js', slug: 'nextjs' });
+    expect(mockedParseConfigRaw).toHaveBeenCalled();
     expect(mockedMergeWithFrameworkDefaults).toHaveBeenCalled();
+    expect(mockedPostProcessConfig).toHaveBeenCalled();
   });
 
   it('should catch FunctionConfigError from postProcessConfig in Case C', async () => {
