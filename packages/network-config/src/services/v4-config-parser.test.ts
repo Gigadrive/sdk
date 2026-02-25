@@ -43,10 +43,10 @@ describe('V4ConfigParser', () => {
     const projectFolder = path.join(__dirname, '../v4');
 
     const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const parser = yield* V4ConfigParser;
-        return yield* parser.parse(config, projectFolder);
-      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(NodeContext.layer))
+      V4ConfigParser.parse(config, projectFolder).pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(NodeContext.layer)
+      )
     );
 
     expect(result.regions).toEqual(AVAILABLE_REGIONS);
@@ -98,10 +98,10 @@ describe('V4ConfigParser', () => {
     };
 
     const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const parser = yield* V4ConfigParser;
-        return yield* parser.parse(config, '/project');
-      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(Layer.merge(testFs, TestPathLayer)))
+      V4ConfigParser.parse(config, '/project').pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(Layer.merge(testFs, TestPathLayer))
+      )
     );
 
     expect(result.assets.paths).toEqual([
@@ -126,10 +126,10 @@ describe('V4ConfigParser', () => {
     };
 
     const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const parser = yield* V4ConfigParser;
-        return yield* parser.parse(config, '/project');
-      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(Layer.merge(testFs, TestPathLayer)))
+      V4ConfigParser.parse(config, '/project').pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(Layer.merge(testFs, TestPathLayer))
+      )
     );
 
     expect(result.assets.paths).toEqual(['public/index.html']);
@@ -170,10 +170,10 @@ describe('V4ConfigParser', () => {
     };
 
     const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const parser = yield* V4ConfigParser;
-        return yield* parser.parse(config, '/project');
-      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(Layer.merge(loopFs, TestPathLayer)))
+      V4ConfigParser.parse(config, '/project').pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(Layer.merge(loopFs, TestPathLayer))
+      )
     );
 
     // The function should terminate (not hang) and collect files up to the depth limit.

@@ -9,6 +9,7 @@ import { parseConfig } from '../parse-config';
 import { AVAILABLE_REGIONS } from '../regions';
 import { NetworkConfigLive } from '../services';
 import { getFunctionSettings } from '../services/v4-config-parser';
+import type { ConfigV4 } from '../v4';
 
 /**
  * Thin compat helper: reads a YAML/JSON file using the real filesystem
@@ -90,7 +91,7 @@ describe('parse config v4', function () {
     const exampleFile = path.join(__dirname, 'example.yaml');
     const config = await readFixture(exampleFile);
 
-    expect(getFunctionSettings('src/index.ts', config as any)).toEqual({
+    expect(getFunctionSettings('src/index.ts', config as ConfigV4)).toEqual({
       runtime: 'bun-1',
       memory: 128,
       max_duration: 15,
@@ -102,7 +103,7 @@ describe('parse config v4', function () {
       },
     });
 
-    expect(getFunctionSettings('src/cron.ts', config as any)).toEqual({
+    expect(getFunctionSettings('src/cron.ts', config as ConfigV4)).toEqual({
       runtime: 'bun-1',
       memory: 128,
       max_duration: 15,
@@ -114,8 +115,8 @@ describe('parse config v4', function () {
       },
     });
 
-    expect(getFunctionSettings('app/test.ts', config as any)).toBeUndefined();
+    expect(getFunctionSettings('app/test.ts', config as ConfigV4)).toBeUndefined();
 
-    expect(getFunctionSettings('test/index.ts', config as any)).toBeUndefined();
+    expect(getFunctionSettings('test/index.ts', config as ConfigV4)).toBeUndefined();
   });
 });

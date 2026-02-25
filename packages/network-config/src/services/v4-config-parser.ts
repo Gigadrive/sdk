@@ -14,217 +14,170 @@ import { AVAILABLE_REGIONS, type Region } from '../regions';
 import type { ConfigV4, ConfigV4FunctionSettings } from '../v4';
 
 /**
- * Gets the runtime, memory and max duration for a given path.
- * @param path
- * @param config
- * @returns The runtime, memory and max duration for the given path. Should return undefined when a path should not be deployed as a function.
- */
-export const getFunctionSettings = (path: string, config: ConfigV4): ConfigV4FunctionSettings | undefined => {
-  let functionSettings: ConfigV4FunctionSettings | undefined;
-
-  for (const [key, value] of Object.entries(config.functions ?? {})) {
-    let regexMatch = false;
-    try {
-      if (safeRegex(key)) {
-        regexMatch = new RegExp(key).test(path);
-      }
-    } catch {
-      // key is not valid regex (e.g. glob pattern like **), skip regex matching
-    }
-
-    if (minimatch(path, key) || regexMatch) {
-      if (functionSettings == null) {
-        functionSettings = {
-          memory: 128,
-          max_duration: 30,
-          schedule: undefined,
-          symlinks: undefined,
-          excludeFiles: undefined,
-          includeFiles: undefined,
-        };
-      }
-
-      if (value.runtime != null) {
-        functionSettings.runtime = value.runtime;
-      }
-
-      if (value.memory != null) {
-        functionSettings.memory = value.memory;
-      }
-
-      if (value.max_duration != null) {
-        functionSettings.max_duration = value.max_duration;
-      }
-
-      if (value.schedule != null) {
-        functionSettings.schedule = value.schedule;
-      }
-
-      if (value.symlinks != null) {
-        functionSettings.symlinks = value.symlinks;
-      }
-
-      if (value.excludeFiles != null) {
-        functionSettings.excludeFiles = value.excludeFiles;
-      }
-
-      if (value.includeFiles != null) {
-        functionSettings.includeFiles = value.includeFiles;
-      }
-    }
-  }
-
-  return functionSettings;
-};
-
-export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigParser', {
-  effect: Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const pathService = yield* Path.Path;
-
-    /**
-     * Parses a ConfigV4 into a NormalizedConfig.
-     *
-     * @param config - The raw V4 config object
-     * @param projectFolder - Absolute path to the project root
-     */
-    const parse = Effect.fn('V4ConfigParser.parse')(function* (config: ConfigV4, projectFolder: string) {
-      const regions =
-        config.regions?.includes('global') === true
-          ? AVAILABLE_REGIONS
-          : (config.regions?.filter((region) => region !== 'global') ?? AVAILABLE_REGIONS);
-
-      const populateAssetCache = config.populateAssetCache ?? false;
-      const environmentVariables = config.env ?? {};
-      const commands = config.build_commands ?? [];
-      const entrypoints: NormalizedConfigEntrypoint[] = [];
-      const errors: string[] = [];
-      const warnings: string[] = [];
-
-      if (config.functions != null) {
-        for (const [fnPath, func] of Object.entries(config.functions)) {
-          const settings = getFunctionSettings(fnPath, config);
-
-          if (settings == null) {
-            return yield* Effect.fail(
-              new FunctionConfigError({
-                message: `Settings invalid for function at path '${fnPath}'`,
-                functionPath: fnPath,
-              })
-            );
-          }
-
-          const matchedFiles = yield* Effect.tryPromise({
-            try: () => getFilesForPattern(fnPath, projectFolder, func.excludeFiles),
-            catch: (error) =>
-              new FunctionConfigError({
-                message: `Failed to resolve files for function pattern '${fnPath}': ${error instanceof Error ? error.message : String(error)}`,
-                functionPath: fnPath,
-              }),
-          });
-
-          for (const file of matchedFiles) {
-            if (entrypoints.find((entrypoint) => entrypoint.path === file)) {
-              continue;
-            }
-
-            if (config.functions != null && Object.keys(config.functions).find((f) => f === file && f !== fnPath)) {
-              continue;
-            }
-
-            entrypoints.push({
-              path: file,
-              runtime: settings.runtime ?? 'node-20',
-              memory: settings.memory ?? 128,
-              maxDuration: settings.max_duration ?? 30,
-              schedule: func.schedule,
-              symlinks: func.symlinks,
-              streaming:
-                settings.runtime == null || settings.runtime.startsWith('node-') || settings.runtime.startsWith('bun-'),
-            });
-          }
-        }
-      }
-
-      const assets: string[] = [];
-
-      if (config.assets != null) {
-        const assetsPath = pathService.join(projectFolder, config.assets);
-        const assetsExist = yield* fs.exists(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(false)));
-
-        if (assetsExist) {
-          const stat = yield* fs.stat(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-          if (stat && stat.type === 'Directory') {
-            const allFiles = yield* collectFilesRecursively(assetsPath);
-
-            const disallowedExtensions = ['.htaccess', '.htpasswd'];
-
-            for (const assetName of allFiles) {
-              if (disallowedExtensions.some((ext) => assetName.toLowerCase().endsWith(ext.toLowerCase()))) {
-                continue;
-              }
-
-              if (getFunctionSettings(`${config.assets}/${assetName}`, config) != null) {
-                continue;
-              }
-
-              assets.push(`${config.assets}/${assetName}`);
-            }
-          }
-        }
-      }
-
-      const routes = config.routes ?? [];
-
-      return {
-        regions: regions as Region[],
-        assets: {
-          paths: assets.sort(),
-          prefixToStrip: (config.assets ?? '') + '/',
-          dynamicRoutes: true,
-          populateCache: populateAssetCache,
-        },
-        environmentVariables,
-        commands,
-        entrypoints,
-        errors,
-        warnings,
-        routes: routes.map((route) => {
-          const handler: NormalizedConfigRouteHandler =
-            route.destination.toLowerCase().startsWith('http://') ||
-            route.destination.toLowerCase().startsWith('https://')
-              ? route.redirect === true
-                ? 'HTTP_REDIRECT'
-                : 'HTTP_PROXY'
-              : route.redirect === true
-                ? 'HTTP_REDIRECT'
-                : 'SERVERLESS_FUNCTION';
-
-          return {
-            path: route.source,
-            destination: route.destination,
-            handler,
-            headers: route.headers ?? {},
-            methods: route.methods ?? ['ANY'],
-            positiveRequirements: route.has,
-            negativeRequirements: route.missing,
-            status: route.statusCode,
-          } as NormalizedConfigRoute;
-        }),
-      } as NormalizedConfig;
-    });
-
-    return { parse };
-  }),
-}) {}
-
-/**
  * Maximum directory nesting depth for asset collection.
  * Guards against symlink-induced infinite recursion where constructed paths
  * grow monotonically (e.g. `/assets/link/link/link/...`).
  */
 const MAX_ASSET_DEPTH = 100;
+
+const DISALLOWED_ASSET_EXTENSIONS = ['.htaccess', '.htpasswd'];
+
+const DEFAULT_FUNCTION_SETTINGS: Required<Pick<ConfigV4FunctionSettings, 'memory' | 'max_duration'>> &
+  Pick<ConfigV4FunctionSettings, 'schedule' | 'symlinks' | 'excludeFiles' | 'includeFiles'> = {
+  memory: 128,
+  max_duration: 30,
+  schedule: undefined,
+  symlinks: undefined,
+  excludeFiles: undefined,
+  includeFiles: undefined,
+};
+
+// -- Pure helpers (no Effect needed) ----------------------------------------------------------
+
+/**
+ * Tests whether a path matches a function pattern via glob or safe regex.
+ */
+const matchesPattern = (path: string, pattern: string): boolean => {
+  if (minimatch(path, pattern)) return true;
+
+  try {
+    if (safeRegex(pattern)) {
+      return new RegExp(pattern).test(path);
+    }
+  } catch {
+    // pattern is not valid regex (e.g. glob like **), skip
+  }
+
+  return false;
+};
+
+/**
+ * Resolves merged function settings for a given path by iterating all function
+ * patterns in the config. Later patterns override earlier ones.
+ *
+ * @returns The merged settings, or undefined when no pattern matches the path.
+ */
+export const getFunctionSettings = (path: string, config: ConfigV4): ConfigV4FunctionSettings | undefined => {
+  let settings: ConfigV4FunctionSettings | undefined;
+
+  for (const [pattern, value] of Object.entries(config.functions ?? {})) {
+    if (!matchesPattern(path, pattern)) continue;
+
+    settings = { ...DEFAULT_FUNCTION_SETTINGS, ...settings, ...value };
+  }
+
+  return settings;
+};
+
+/**
+ * Determines the route handler type based on destination and redirect flag.
+ */
+const resolveRouteHandler = (destination: string, redirect?: boolean): NormalizedConfigRouteHandler => {
+  const isExternal =
+    destination.toLowerCase().startsWith('http://') || destination.toLowerCase().startsWith('https://');
+
+  if (redirect === true) return 'HTTP_REDIRECT';
+  return isExternal ? 'HTTP_PROXY' : 'SERVERLESS_FUNCTION';
+};
+
+/**
+ * Resolves the region list from config, expanding 'global' to all available regions.
+ */
+const resolveRegions = (configRegions?: string[] | null): Region[] => {
+  if (configRegions?.includes('global') === true) return AVAILABLE_REGIONS as Region[];
+  return (configRegions?.filter((r) => r !== 'global') ?? AVAILABLE_REGIONS) as Region[];
+};
+
+/**
+ * Maps a V4 route definition to a NormalizedConfigRoute.
+ */
+const mapRoute = (route: NonNullable<ConfigV4['routes']>[number]): NormalizedConfigRoute => ({
+  path: route.source,
+  destination: route.destination,
+  handler: resolveRouteHandler(route.destination, route.redirect),
+  headers: route.headers ?? {},
+  methods: route.methods ?? ['ANY'],
+  positiveRequirements: route.has,
+  negativeRequirements: route.missing,
+  status: route.statusCode,
+});
+
+// -- Effectful helpers ------------------------------------------------------------------------
+
+/**
+ * Resolves function entrypoints from the config's `functions` section.
+ */
+const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: ConfigV4, projectFolder: string) {
+  const entrypoints: NormalizedConfigEntrypoint[] = [];
+  if (config.functions == null) return entrypoints;
+
+  for (const [fnPath, func] of Object.entries(config.functions)) {
+    const settings = getFunctionSettings(fnPath, config);
+
+    if (settings == null) {
+      yield* new FunctionConfigError({
+        message: `Settings invalid for function at path '${fnPath}'`,
+        functionPath: fnPath,
+      });
+    }
+
+    const matchedFiles = yield* Effect.tryPromise({
+      try: () => getFilesForPattern(fnPath, projectFolder, func.excludeFiles),
+      catch: (error) =>
+        new FunctionConfigError({
+          message: `Failed to resolve files for function pattern '${fnPath}': ${error instanceof Error ? error.message : String(error)}`,
+          functionPath: fnPath,
+        }),
+    });
+
+    for (const file of matchedFiles) {
+      if (entrypoints.some((ep) => ep.path === file)) continue;
+      if (Object.keys(config.functions).some((f) => f === file && f !== fnPath)) continue;
+
+      entrypoints.push({
+        path: file,
+        runtime: settings!.runtime ?? 'node-20',
+        memory: settings!.memory ?? 128,
+        maxDuration: settings!.max_duration ?? 30,
+        schedule: func.schedule,
+        symlinks: func.symlinks,
+        streaming:
+          settings!.runtime == null || settings!.runtime.startsWith('node-') || settings!.runtime.startsWith('bun-'),
+      });
+    }
+  }
+
+  return entrypoints;
+});
+
+/**
+ * Collects static asset paths from the configured assets directory.
+ */
+const collectAssets = Effect.fn('collectAssets')(function* (config: ConfigV4, projectFolder: string) {
+  if (config.assets == null) return [] as string[];
+
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+
+  const assetsPath = pathService.join(projectFolder, config.assets);
+  const assetsExist = yield* fs.exists(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(false)));
+  if (!assetsExist) return [] as string[];
+
+  const stat = yield* fs.stat(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
+  if (!stat || stat.type !== 'Directory') return [] as string[];
+
+  const allFiles = yield* collectFilesRecursively(assetsPath);
+  const assets: string[] = [];
+
+  for (const assetName of allFiles) {
+    if (DISALLOWED_ASSET_EXTENSIONS.some((ext) => assetName.toLowerCase().endsWith(ext.toLowerCase()))) continue;
+    if (getFunctionSettings(`${config.assets}/${assetName}`, config) != null) continue;
+
+    assets.push(`${config.assets}/${assetName}`);
+  }
+
+  return assets;
+});
 
 /**
  * Recursively collects all file paths relative to the base directory.
@@ -263,3 +216,40 @@ const collectFilesRecursively: (
     return result;
   }
 );
+
+// -- Service ----------------------------------------------------------------------------------
+
+export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigParser', {
+  accessors: true,
+
+  effect: Effect.gen(function* () {
+    /**
+     * Parses a ConfigV4 into a NormalizedConfig.
+     *
+     * @param config - The raw V4 config object
+     * @param projectFolder - Absolute path to the project root
+     */
+    const parse = Effect.fn('V4ConfigParser.parse')(function* (config: ConfigV4, projectFolder: string) {
+      const entrypoints = yield* parseEntrypoints(config, projectFolder);
+      const assets = yield* collectAssets(config, projectFolder);
+
+      return {
+        regions: resolveRegions(config.regions),
+        assets: {
+          paths: assets.sort(),
+          prefixToStrip: (config.assets ?? '') + '/',
+          dynamicRoutes: true,
+          populateCache: config.populateAssetCache ?? false,
+        },
+        environmentVariables: config.env ?? {},
+        commands: config.build_commands ?? [],
+        entrypoints,
+        errors: [],
+        warnings: [],
+        routes: (config.routes ?? []).map(mapRoute),
+      } as NormalizedConfig;
+    });
+
+    return { parse };
+  }),
+}) {}
