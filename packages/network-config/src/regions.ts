@@ -1,4 +1,4 @@
-// Define all available runtimes in a single array
+// Define all available regions in a single array
 const REGION_DEFINITIONS = [
   'us-east-1',
   'us-east-2',
@@ -19,8 +19,8 @@ const REGION_DEFINITIONS = [
   'sa-east-1',
 ] as const;
 
-// Generate the Runtime type from the array
+// Generate the Region type from the array
 export type Region = (typeof REGION_DEFINITIONS)[number];
 
-// Export the available runtimes
+// Export the available regions
 export const AVAILABLE_REGIONS: Region[] = [...REGION_DEFINITIONS];

@@ -101,7 +101,7 @@ export interface ConfigV4 extends Config {
   env: Record<string, string>;
 
   /**
-   * Optioanlly, specify additional services like databases to deploy.
+   * Optionally, specify additional services like databases to deploy.
    */
   services?: {
     /**

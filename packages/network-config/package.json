@@ -27,14 +27,18 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@effect/platform": "^0.94.5",
     "@gigadrive/build-utils": "workspace:*",
     "@gigadrive/commons": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "effect": "^3.19.17",
     "minimatch": "^10.0.3",
+    "safe-regex2": "^5.0.0",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@effect/platform-node": "^0.104.1",
     "@types/node": "^22.18.7",
     "esbuild": "^0.25.10"
   },

@@ -280,7 +280,7 @@
   "$defs": {
     "runtimes": {
       "type": "string",
-      "enum": ["php-83", "php-82", "php-81", "php-80", "node-20", "node-18", "node-16", "bun-1"]
+      "enum": ["php-84", "php-83", "php-81", "node-22", "node-20", "node-18", "node-16", "bun-1"]
     },
     "matchRequirements": {
       "description": "An array of requirements that are needed to match",

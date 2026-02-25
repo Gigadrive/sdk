@@ -1,7 +1,51 @@
-import type { NormalizedConfig } from '@gigadrive/network-config';
-import { findConfig, parseConfig } from '@gigadrive/network-config';
+import type {
+  ConfigFileEmptyError,
+  ConfigFileNotFoundError,
+  ConfigFileParseError,
+  ConfigSchemaValidationError,
+  ConfigVersionError,
+  FunctionConfigError,
+  NormalizedConfig,
+} from '@gigadrive/network-config';
+import {
+  detectFramework,
+  mergeWithFrameworkDefaults,
+  NetworkConfigLive,
+  parseConfig,
+  parseConfigRaw,
+  postProcessConfig,
+  RawConfigReader,
+} from '@gigadrive/network-config';
 import { Effect } from 'effect';
 import { ConfigNotFoundError, ConfigParseError, ConfigValidationError } from '../errors';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps parseConfig errors into the CLI's ConfigParseError type.
+ */
+type ParseConfigErrors =
+  | ConfigFileNotFoundError
+  | ConfigFileEmptyError
+  | ConfigFileParseError
+  | ConfigVersionError
+  | ConfigSchemaValidationError
+  | FunctionConfigError;
+
+const wrapParseErrors = <R>(effect: Effect.Effect<NormalizedConfig, ParseConfigErrors, R>) =>
+  effect.pipe(
+    Effect.catchTags({
+      ConfigFileNotFoundError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
+      ConfigFileEmptyError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
+      ConfigFileParseError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.cause })),
+      ConfigVersionError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
+      ConfigSchemaValidationError: (e) =>
+        Effect.fail(new ConfigParseError({ message: e.message, cause: e.validationErrors.join(', ') })),
+      FunctionConfigError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.functionPath })),
+    })
+  );
 
 // ---------------------------------------------------------------------------
 // ProjectConfigService
@@ -9,32 +53,75 @@ import { ConfigNotFoundError, ConfigParseError, ConfigValidationError } from '..
 
 export class ProjectConfigService extends Effect.Service<ProjectConfigService>()('ProjectConfigService', {
   accessors: true,
+  dependencies: [NetworkConfigLive],
 
   effect: Effect.gen(function* () {
+    const rawReader = yield* RawConfigReader;
+
     const resolve = Effect.fn('ProjectConfigService.resolve')(function* (cwd: string) {
       yield* Effect.annotateCurrentSpan('cwd', cwd);
       yield* Effect.log('Resolving project config', { cwd });
 
-      const configPath = findConfig(cwd);
-      if (!configPath) {
+      const configPath = yield* rawReader.findConfig(cwd);
+
+      // Attempt framework auto-detection.
+      // ManifestReadError / ManifestParseError indicate genuine problems (the
+      // manifest file exists but is unreadable or malformed), so we surface them
+      // as ConfigParseError instead of silently swallowing them.
+      const detection = yield* detectFramework(cwd).pipe(
+        Effect.catchTag('FrameworkNotDetectedError', () => Effect.succeed(null)),
+        Effect.catchTag('ManifestReadError', (e) =>
+          Effect.fail(new ConfigParseError({ message: `Framework detection failed: ${e.message}`, cause: e.filePath }))
+        ),
+        Effect.catchTag('ManifestParseError', (e) =>
+          Effect.fail(new ConfigParseError({ message: `Framework detection failed: ${e.message}`, cause: e.filePath }))
+        )
+      );
+
+      if (detection) {
+        yield* Effect.log('Framework auto-detected', {
+          framework: detection.framework.name,
+          slug: detection.framework.slug,
+        });
+      }
+
+      let config: NormalizedConfig;
+      let resolvedConfigPath: string | null = null;
+      let framework: { name: string; slug: string } | undefined;
+
+      if (configPath && detection) {
+        // Case A: config file + framework detected → parse raw (no post-processing), merge
+        // with framework defaults, then post-process the merged result. Running postProcessConfig
+        // after the merge ensures validations (empty-deployment check, Vercel BOv3 merge,
+        // function/asset dedup) see the full picture instead of producing stale pre-merge errors.
+        yield* Effect.log('Config file found, merging with framework defaults', { configPath });
+        resolvedConfigPath = configPath;
+
+        const userConfig: NormalizedConfig = yield* wrapParseErrors(parseConfigRaw(configPath, cwd));
+        const merged: NormalizedConfig = yield* mergeWithFrameworkDefaults(userConfig, detection.config);
+
+        config = yield* wrapParseErrors(postProcessConfig(merged, cwd));
+        framework = { name: detection.framework.name, slug: detection.framework.slug };
+      } else if (configPath) {
+        // Case B: config file only → existing behavior
+        yield* Effect.log('Config file found', { configPath });
+        resolvedConfigPath = configPath;
+
+        config = yield* wrapParseErrors(parseConfig(configPath, cwd));
+      } else if (detection) {
+        // Case C: no config file, framework detected → use detection + post-process
+        config = yield* wrapParseErrors(postProcessConfig(detection.config, cwd));
+
+        framework = { name: detection.framework.name, slug: detection.framework.slug };
+      } else {
+        // Case D: neither config file nor framework detected
         return yield* Effect.fail(
           new ConfigNotFoundError({
-            message: 'The current project folder does not have a valid config file.',
+            message: 'No config file found and no framework detected.',
             directory: cwd,
           })
         );
       }
-
-      yield* Effect.log('Config file found', { configPath });
-
-      const config: NormalizedConfig = yield* Effect.tryPromise({
-        try: () => parseConfig(configPath, cwd),
-        catch: (error) =>
-          new ConfigParseError({
-            message: 'Failed to parse config file',
-            cause: error instanceof Error ? error.message : String(error),
-          }),
-      });
 
       // Report warnings via structured logging
       for (const warning of config.warnings) {
@@ -51,7 +138,7 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
         );
       }
 
-      return { config, configPath };
+      return { config, configPath: resolvedConfigPath, framework };
     });
 
     return { resolve };
