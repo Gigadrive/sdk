@@ -155,4 +155,28 @@ describe('mergeWithFrameworkDefaults', () => {
     const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, framework));
     expect(result.assets).toEqual(frameworkAssets);
   });
+
+  it('should use user excludeFiles when non-empty', async () => {
+    const user = makeConfig({ excludeFiles: ['vendor/', 'tmp/'] });
+    const framework = makeConfig({ excludeFiles: ['tests/', 'storage/'] });
+
+    const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, framework));
+    expect(result.excludeFiles).toEqual(['vendor/', 'tmp/']);
+  });
+
+  it('should use framework excludeFiles when user has none', async () => {
+    const user = makeConfig({});
+    const framework = makeConfig({ excludeFiles: ['tests/', 'storage/', '.ddev', 'node_modules/'] });
+
+    const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, framework));
+    expect(result.excludeFiles).toEqual(['tests/', 'storage/', '.ddev', 'node_modules/']);
+  });
+
+  it('should use framework excludeFiles when user has empty array', async () => {
+    const user = makeConfig({ excludeFiles: [] });
+    const framework = makeConfig({ excludeFiles: ['tests/', '.ddev'] });
+
+    const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, framework));
+    expect(result.excludeFiles).toEqual(['tests/', '.ddev']);
+  });
 });

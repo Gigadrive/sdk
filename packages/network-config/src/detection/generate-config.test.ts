@@ -109,4 +109,22 @@ describe('generateConfig', () => {
     const result = await Effect.runPromise(generateConfig(mockFramework, 'npm'));
     expect(result.environmentVariables).toEqual({ NODE_ENV: 'production' });
   });
+
+  it('should include excludeFiles when provided', async () => {
+    const frameworkWithExcludes: FrameworkDefinition = {
+      ...mockFramework,
+      getDefaultConfig: () => ({
+        ...mockFramework.getDefaultConfig('npm'),
+        excludeFiles: ['tests/', 'storage/', '.ddev', 'node_modules/'],
+      }),
+    };
+
+    const result = await Effect.runPromise(generateConfig(frameworkWithExcludes, 'npm'));
+    expect(result.excludeFiles).toEqual(['tests/', 'storage/', '.ddev', 'node_modules/']);
+  });
+
+  it('should not set excludeFiles when not provided', async () => {
+    const result = await Effect.runPromise(generateConfig(mockFramework, 'npm'));
+    expect(result.excludeFiles).toBeUndefined();
+  });
 });

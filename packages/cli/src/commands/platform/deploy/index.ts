@@ -32,6 +32,7 @@ export const deployCommand = Command.make('deploy', {}, () =>
     const archivePath = pathService.join(os.tmpdir(), `project-${Date.now()}.zip`);
     const archive = yield* archiveService.createZipArchive(config.userArchive?.rootOverwrite || cwd, archivePath, {
       whitelist: config.userArchive?.fileWhitelist,
+      excludeFiles: config.excludeFiles,
       useIgnoreFiles: false,
       useManagedIgnore: false,
     });

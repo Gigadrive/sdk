@@ -9,17 +9,20 @@ import { FrameworkNotDetectedError } from './types';
 
 /**
  * Evaluates whether a single detection item matches the project.
+ *
+ * @param cachedReadDeps - Memoized version of readDependencies keyed by `projectFolder\0language`
  */
 const matchesDetectionItem = Effect.fn('matchesDetectionItem')(function* (
   item: FrameworkDetectionItem,
   projectFolder: string,
-  framework: FrameworkDefinition
+  framework: FrameworkDefinition,
+  cachedReadDeps: (key: string) => Effect.Effect<Set<string>, never, FileSystem.FileSystem>
 ) {
   const fs = yield* FileSystem.FileSystem;
 
-  // Check matchPackage
+  // Check matchPackage (uses memoized reader to avoid re-reading the same manifest)
   if (item.matchPackage != null) {
-    const deps = yield* readDependencies(projectFolder, framework.language);
+    const deps = yield* cachedReadDeps(`${projectFolder}\0${framework.language}`);
 
     if (!deps.has(item.matchPackage)) {
       return false;
@@ -53,10 +56,11 @@ const matchesDetectionItem = Effect.fn('matchesDetectionItem')(function* (
  */
 const matchesFramework = Effect.fn('matchesFramework')(function* (
   framework: FrameworkDefinition,
-  projectFolder: string
+  projectFolder: string,
+  cachedReadDeps: (key: string) => Effect.Effect<Set<string>, never, FileSystem.FileSystem>
 ) {
   for (const detector of framework.detectors) {
-    const matches = yield* matchesDetectionItem(detector, projectFolder, framework);
+    const matches = yield* matchesDetectionItem(detector, projectFolder, framework, cachedReadDeps);
     if (!matches) {
       return false;
     }
@@ -78,8 +82,17 @@ const matchesFramework = Effect.fn('matchesFramework')(function* (
 export const detectFramework = Effect.fn('detectFramework')(function* (projectFolder: string) {
   yield* Effect.logDebug(`Detecting framework in ${projectFolder}`);
 
+  // Memoize dependency reads so each manifest (package.json, composer.json) is read at most once.
+  // Uses \0 (null byte) as delimiter to avoid conflicts with ':' in Windows paths (e.g. C:\...)
+  const cachedReadDeps = yield* Effect.cachedFunction((key: string) => {
+    const sepIndex = key.lastIndexOf('\0');
+    const folder = key.slice(0, sepIndex);
+    const language = key.slice(sepIndex + 1) as 'node' | 'php';
+    return readDependencies(folder, language);
+  });
+
   for (const framework of FRAMEWORK_DEFINITIONS) {
-    const matches = yield* matchesFramework(framework, projectFolder);
+    const matches = yield* matchesFramework(framework, projectFolder, cachedReadDeps);
 
     if (matches) {
       yield* Effect.log(`Detected framework: ${framework.name}`, { slug: framework.slug });

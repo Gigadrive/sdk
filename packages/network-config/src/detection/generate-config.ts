@@ -65,6 +65,7 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
       methods: ['ANY' as const],
       headers: {},
     })),
+    excludeFiles: defaults.excludeFiles && defaults.excludeFiles.length > 0 ? [...defaults.excludeFiles] : undefined,
     warnings: [`Auto-detected framework: ${framework.name}. Create a gigadrive.yaml to customize.`],
     errors: [],
   };

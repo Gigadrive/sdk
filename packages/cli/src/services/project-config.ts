@@ -42,7 +42,11 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
       let framework: { name: string; slug: string } | undefined;
 
       if (configPath && detection) {
-        // Case A: config file + framework detected → parse config, merge with framework defaults
+        // Case A: config file + framework detected → parse config, merge with framework defaults.
+        // Note: parseConfig internally calls postProcessConfig on the user config (Vercel BOv3
+        // merge, empty-deployment check, function/asset dedup). We intentionally do NOT re-run
+        // postProcessConfig on the merged result because the Vercel BOv3 transform and validation
+        // apply to the user's project output, not to framework defaults.
         yield* Effect.log('Config file found, merging with framework defaults', { configPath });
         resolvedConfigPath = configPath;
 

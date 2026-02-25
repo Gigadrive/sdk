@@ -9,6 +9,7 @@ import type { NormalizedConfig } from '../normalized-config';
  * - entrypoints: use user's if non-empty, otherwise framework's
  * - routes: use user's if non-empty, otherwise framework's
  * - assets: use user's if defined with paths, otherwise framework's
+ * - excludeFiles: use user's if non-empty, otherwise framework's
  * - regions: always use user's (always populated from parsing)
  * - environmentVariables: deep merge (framework base, user overrides)
  * - services: always use user's (frameworks don't define services)
@@ -39,6 +40,11 @@ export const mergeWithFrameworkDefaults = Effect.fn('mergeWithFrameworkDefaults'
       ...frameworkConfig.environmentVariables,
       ...userConfig.environmentVariables,
     },
+
+    excludeFiles:
+      userConfig.excludeFiles && userConfig.excludeFiles.length > 0
+        ? userConfig.excludeFiles
+        : frameworkConfig.excludeFiles,
 
     services: userConfig.services,
     userArchive: userConfig.userArchive,

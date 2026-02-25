@@ -141,6 +141,7 @@ export class ArchiveService extends Effect.Service<ArchiveService>()('ArchiveSer
       outputFile: string,
       options: {
         whitelist?: string[];
+        excludeFiles?: string[];
         useIgnoreFiles?: boolean;
         useManagedIgnore?: boolean;
       } = {}
@@ -154,14 +155,25 @@ export class ArchiveService extends Effect.Service<ArchiveService>()('ArchiveSer
 
       const filesToInclude = options.whitelist
         ? yield* Effect.tryPromise({
-            try: () => Promise.all(options.whitelist!.map((file) => getFilesForPattern(file, inputDir))),
+            try: () =>
+              Promise.all(
+                options.whitelist!.map((file) => getFilesForPattern(file, inputDir, options.excludeFiles ?? []))
+              ),
             catch: (error) =>
               new ArchiveCreateError({
                 message: 'Failed to resolve whitelist patterns',
                 cause: error instanceof Error ? error.message : String(error),
               }),
           })
-        : yield* getFilesToInclude(fs, pathService, inputDir, ignoreRules).pipe(Effect.map((files) => [files]));
+        : yield* Effect.gen(function* () {
+            // Add excludeFiles patterns (from framework detection or user config) to ignore rules
+            if (options.excludeFiles && options.excludeFiles.length > 0) {
+              ignoreRules.add(options.excludeFiles);
+            }
+            return yield* getFilesToInclude(fs, pathService, inputDir, ignoreRules).pipe(
+              Effect.map((files) => [files])
+            );
+          });
 
       // Remove existing archive if present
       const archiveExists = yield* fs.exists(outputFile).pipe(Effect.catchAll(() => Effect.succeed(false)));

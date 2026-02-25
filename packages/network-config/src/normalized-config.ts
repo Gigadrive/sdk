@@ -85,6 +85,14 @@ export interface NormalizedConfig {
   };
 
   /**
+   * Glob or regex patterns for files to exclude from the deployment archive.
+   * Sourced from framework auto-detection (e.g. `tests/`, `node_modules/`) or
+   * user config. Patterns are matched via minimatch and RegExp against relative
+   * paths in the project directory.
+   */
+  excludeFiles?: string[];
+
+  /**
    * Warning codes to be printed to the output during deployment.
    */
   warnings: string[];
