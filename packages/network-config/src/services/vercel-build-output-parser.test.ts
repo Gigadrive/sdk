@@ -50,6 +50,24 @@ describe('VercelBuildOutputParser', () => {
     expect(result).toEqual(emptyConfig);
   });
 
+  it('should return parseResult unchanged when config version is missing', async () => {
+    const result = await runParser(
+      { '/project/.vercel/output/config.json': JSON.stringify({ routes: [] }) },
+      emptyConfig,
+      '/project'
+    );
+    expect(result).toEqual(emptyConfig);
+  });
+
+  it('should return parseResult unchanged when config version is not a number', async () => {
+    const result = await runParser(
+      { '/project/.vercel/output/config.json': JSON.stringify({ version: '3' }) },
+      emptyConfig,
+      '/project'
+    );
+    expect(result).toEqual(emptyConfig);
+  });
+
   it('should not mutate the input parseResult errors array', async () => {
     const inputConfig: NormalizedConfig = {
       ...emptyConfig,

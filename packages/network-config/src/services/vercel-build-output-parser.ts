@@ -39,7 +39,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
     ) {
       const config = yield* rawConfigReader.readConfigFile<Config>(pathService.join(projectFolder, CONFIG_PATH));
 
-      if (!config || config.version < 3) {
+      if (!config || typeof config.version !== 'number' || config.version < 3) {
         return parseResult;
       }
 
