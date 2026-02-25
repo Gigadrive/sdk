@@ -4,7 +4,13 @@ import { detectPackageManager } from './detect-package-manager';
 import { FRAMEWORK_DEFINITIONS } from './frameworks';
 import { generateConfig } from './generate-config';
 import { readDependencies } from './read-dependencies';
-import type { DetectionResult, FrameworkDefinition, FrameworkDetectionItem } from './types';
+import type {
+  DetectionResult,
+  FrameworkDefinition,
+  FrameworkDetectionItem,
+  ManifestParseError,
+  ManifestReadError,
+} from './types';
 import { FrameworkNotDetectedError } from './types';
 
 /**
@@ -16,7 +22,9 @@ const matchesDetectionItem = Effect.fn('matchesDetectionItem')(function* (
   item: FrameworkDetectionItem,
   projectFolder: string,
   framework: FrameworkDefinition,
-  cachedReadDeps: (key: string) => Effect.Effect<Set<string>, never, FileSystem.FileSystem>
+  cachedReadDeps: (
+    key: string
+  ) => Effect.Effect<Set<string>, ManifestReadError | ManifestParseError, FileSystem.FileSystem>
 ) {
   const fs = yield* FileSystem.FileSystem;
 
@@ -57,7 +65,9 @@ const matchesDetectionItem = Effect.fn('matchesDetectionItem')(function* (
 const matchesFramework = Effect.fn('matchesFramework')(function* (
   framework: FrameworkDefinition,
   projectFolder: string,
-  cachedReadDeps: (key: string) => Effect.Effect<Set<string>, never, FileSystem.FileSystem>
+  cachedReadDeps: (
+    key: string
+  ) => Effect.Effect<Set<string>, ManifestReadError | ManifestParseError, FileSystem.FileSystem>
 ) {
   for (const detector of framework.detectors) {
     const matches = yield* matchesDetectionItem(detector, projectFolder, framework, cachedReadDeps);

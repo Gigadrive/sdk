@@ -1,7 +1,7 @@
 import { FileSystem } from '@effect/platform';
 import { Effect } from 'effect';
 import type { FrameworkLanguage } from './types';
-import { ManifestReadError } from './types';
+import { ManifestNotFoundError, ManifestParseError, ManifestReadError } from './types';
 
 /**
  * Manifest file configuration for each supported language.
@@ -22,7 +22,7 @@ const readManifest = Effect.fn('readManifest')(function* (filePath: string) {
 
   const exists = yield* fs.exists(filePath).pipe(Effect.catchAll(() => Effect.succeed(false)));
   if (!exists) {
-    return yield* Effect.fail(new ManifestReadError({ message: 'Manifest not found', filePath }));
+    return yield* Effect.fail(new ManifestNotFoundError({ message: 'Manifest not found', filePath }));
   }
 
   const content = yield* fs
@@ -31,7 +31,7 @@ const readManifest = Effect.fn('readManifest')(function* (filePath: string) {
 
   const parsed = yield* Effect.try({
     try: () => JSON.parse(content) as Record<string, unknown>,
-    catch: () => new ManifestReadError({ message: 'Failed to parse manifest JSON', filePath }),
+    catch: () => new ManifestParseError({ message: 'Failed to parse manifest JSON', filePath }),
   });
 
   return parsed;
@@ -54,7 +54,9 @@ export const readDependencies = Effect.fn('readDependencies')(function* (
   const config = MANIFEST_CONFIG[language];
   const filePath = `${projectFolder}/${config.file}`;
 
-  const manifest = yield* readManifest(filePath).pipe(Effect.catchTag('ManifestReadError', () => Effect.succeed(null)));
+  const manifest = yield* readManifest(filePath).pipe(
+    Effect.catchTag('ManifestNotFoundError', () => Effect.succeed(null))
+  );
 
   if (!manifest) {
     return new Set<string>();

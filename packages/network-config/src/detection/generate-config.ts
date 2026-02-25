@@ -61,7 +61,7 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
     routes: defaults.routes.map((route) => ({
       path: route.source,
       destination: route.destination,
-      handler: 'SERVERLESS_FUNCTION' as const,
+      handler: defaults.streaming ? ('SERVERLESS_FUNCTION_STREAMING' as const) : ('SERVERLESS_FUNCTION' as const),
       methods: ['ANY' as const],
       headers: {},
     })),

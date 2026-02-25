@@ -6,7 +6,17 @@ import type { Runtime } from '../runtime';
 // Tagged Errors
 // ---------------------------------------------------------------------------
 
+export class ManifestNotFoundError extends Schema.TaggedError<ManifestNotFoundError>()('ManifestNotFoundError', {
+  message: Schema.String,
+  filePath: Schema.String,
+}) {}
+
 export class ManifestReadError extends Schema.TaggedError<ManifestReadError>()('ManifestReadError', {
+  message: Schema.String,
+  filePath: Schema.String,
+}) {}
+
+export class ManifestParseError extends Schema.TaggedError<ManifestParseError>()('ManifestParseError', {
   message: Schema.String,
   filePath: Schema.String,
 }) {}

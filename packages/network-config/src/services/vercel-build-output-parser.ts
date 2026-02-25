@@ -65,7 +65,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
       const result: Partial<NormalizedConfig> = {
         entrypoints: [],
         routes: [],
-        regions: [],
+        regions: [...parseResult.regions],
       };
 
       for (const functionConfigPath of functionConfigs) {
@@ -98,7 +98,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
         } = functionConfig;
 
         const translatedRegions = regions.length > 0 ? regions.map(translateVercelRegion) : ['us-east-1'];
-        result.regions = Array.from(new Set([...parseResult.regions, ...translatedRegions])) as Region[];
+        result.regions = Array.from(new Set([...(result.regions ?? []), ...translatedRegions])) as Region[];
 
         const environmentVariables: Record<string, string> = {};
         if (environment && typeof environment === 'object') {

@@ -22,7 +22,14 @@ export const getFunctionSettings = (path: string, config: ConfigV4): ConfigV4Fun
   let functionSettings: ConfigV4FunctionSettings | undefined;
 
   for (const [key, value] of Object.entries(config.functions ?? {})) {
-    if (minimatch(path, key) || new RegExp(key).test(path)) {
+    let regexMatch = false;
+    try {
+      regexMatch = new RegExp(key).test(path);
+    } catch {
+      // key is not valid regex (e.g. glob pattern like **), skip regex matching
+    }
+
+    if (minimatch(path, key) || regexMatch) {
       if (functionSettings == null) {
         functionSettings = {
           memory: 128,

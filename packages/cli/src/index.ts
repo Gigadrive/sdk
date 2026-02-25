@@ -36,15 +36,13 @@ const cli = Command.run(gigadrive, {
 // Service layers — flat composition via mergeAll + provideMerge
 // ---------------------------------------------------------------------------
 
-const ProjectConfigLive = Layer.provide(ProjectConfigService.Default, NetworkConfigLive);
-
 const BaseServices = Layer.mergeAll(
   OAuthConfigService.Default,
   AuthStorageService.Default,
   PackageManagerService.Default,
   ArchiveService.Default,
   NetworkConfigLive,
-  ProjectConfigLive
+  ProjectConfigService.Default
 ).pipe(Layer.provideMerge(AuthService.Default));
 
 const DeploymentApiLive = Layer.provide(DeploymentApiService.Default, BaseServices);

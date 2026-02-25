@@ -58,15 +58,13 @@ describe('readDependencies', () => {
     expect(result).toEqual(new Set());
   });
 
-  it('should return empty set when manifest is invalid JSON', async () => {
+  it('should fail with ManifestParseError when manifest is invalid JSON', async () => {
     const fs = makeTestFs({
       '/project/package.json': 'not valid json{{{',
     });
 
-    // ManifestReadError from JSON parsing is caught and returns empty set
-    const result = await Effect.runPromise(readDependencies('/project', 'node').pipe(Effect.provide(fs)));
-
-    expect(result).toEqual(new Set());
+    const result = await Effect.runPromiseExit(readDependencies('/project', 'node').pipe(Effect.provide(fs)));
+    expect(result._tag).toBe('Failure');
   });
 
   it('should merge dependencies and devDependencies for node', async () => {

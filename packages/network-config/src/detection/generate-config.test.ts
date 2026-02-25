@@ -96,13 +96,27 @@ describe('generateConfig', () => {
     expect(result.assets).toBeUndefined();
   });
 
-  it('should generate routes with SERVERLESS_FUNCTION handler', async () => {
+  it('should generate routes with SERVERLESS_FUNCTION_STREAMING handler when streaming is true', async () => {
     const result = await Effect.runPromise(generateConfig(mockFramework, 'npm'));
     expect(result.routes).toHaveLength(1);
     expect(result.routes[0].path).toBe('/*');
     expect(result.routes[0].destination).toBe('dist/main.js');
-    expect(result.routes[0].handler).toBe('SERVERLESS_FUNCTION');
+    expect(result.routes[0].handler).toBe('SERVERLESS_FUNCTION_STREAMING');
     expect(result.routes[0].methods).toEqual(['ANY']);
+  });
+
+  it('should generate routes with SERVERLESS_FUNCTION handler when streaming is false', async () => {
+    const nonStreamingFramework: FrameworkDefinition = {
+      ...mockFramework,
+      getDefaultConfig: () => ({
+        ...mockFramework.getDefaultConfig('npm'),
+        streaming: false,
+      }),
+    };
+
+    const result = await Effect.runPromise(generateConfig(nonStreamingFramework, 'npm'));
+    expect(result.routes).toHaveLength(1);
+    expect(result.routes[0].handler).toBe('SERVERLESS_FUNCTION');
   });
 
   it('should include environment variables', async () => {

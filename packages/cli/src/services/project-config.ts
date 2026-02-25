@@ -1,7 +1,16 @@
-import type { NormalizedConfig } from '@gigadrive/network-config';
+import type {
+  ConfigFileEmptyError,
+  ConfigFileNotFoundError,
+  ConfigFileParseError,
+  ConfigSchemaValidationError,
+  ConfigVersionError,
+  FunctionConfigError,
+  NormalizedConfig,
+} from '@gigadrive/network-config';
 import {
   detectFramework,
   mergeWithFrameworkDefaults,
+  NetworkConfigLive,
   parseConfig,
   postProcessConfig,
   RawConfigReader,
@@ -10,11 +19,40 @@ import { Effect } from 'effect';
 import { ConfigNotFoundError, ConfigParseError, ConfigValidationError } from '../errors';
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps parseConfig errors into the CLI's ConfigParseError type.
+ */
+type ParseConfigErrors =
+  | ConfigFileNotFoundError
+  | ConfigFileEmptyError
+  | ConfigFileParseError
+  | ConfigVersionError
+  | ConfigSchemaValidationError
+  | FunctionConfigError;
+
+const wrapParseErrors = <R>(effect: Effect.Effect<NormalizedConfig, ParseConfigErrors, R>) =>
+  effect.pipe(
+    Effect.catchTags({
+      ConfigFileNotFoundError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
+      ConfigFileEmptyError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
+      ConfigFileParseError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.cause })),
+      ConfigVersionError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
+      ConfigSchemaValidationError: (e) =>
+        Effect.fail(new ConfigParseError({ message: e.message, cause: e.validationErrors.join(', ') })),
+      FunctionConfigError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.functionPath })),
+    })
+  );
+
+// ---------------------------------------------------------------------------
 // ProjectConfigService
 // ---------------------------------------------------------------------------
 
 export class ProjectConfigService extends Effect.Service<ProjectConfigService>()('ProjectConfigService', {
   accessors: true,
+  dependencies: [NetworkConfigLive],
 
   effect: Effect.gen(function* () {
     const rawReader = yield* RawConfigReader;
@@ -50,16 +88,7 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
         yield* Effect.log('Config file found, merging with framework defaults', { configPath });
         resolvedConfigPath = configPath;
 
-        const userConfig: NormalizedConfig = yield* parseConfig(configPath, cwd).pipe(
-          Effect.catchAll((error) =>
-            Effect.fail(
-              new ConfigParseError({
-                message: 'Failed to parse config file',
-                cause: error.message,
-              })
-            )
-          )
-        );
+        const userConfig: NormalizedConfig = yield* wrapParseErrors(parseConfig(configPath, cwd));
 
         config = yield* mergeWithFrameworkDefaults(userConfig, detection.config);
         framework = { name: detection.framework.name, slug: detection.framework.slug };
@@ -68,27 +97,16 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
         yield* Effect.log('Config file found', { configPath });
         resolvedConfigPath = configPath;
 
-        config = yield* parseConfig(configPath, cwd).pipe(
-          Effect.catchAll((error) =>
-            Effect.fail(
-              new ConfigParseError({
-                message: 'Failed to parse config file',
-                cause: error.message,
-              })
-            )
-          )
-        );
+        config = yield* wrapParseErrors(parseConfig(configPath, cwd));
       } else if (detection) {
         // Case C: no config file, framework detected → use detection + post-process
         config = yield* postProcessConfig(detection.config, cwd).pipe(
-          Effect.catchAll((error) =>
-            Effect.fail(
-              new ConfigParseError({
-                message: 'Failed to post-process auto-detected config',
-                cause: error.message,
-              })
-            )
-          )
+          Effect.catchTags({
+            ConfigFileParseError: (e) =>
+              Effect.fail(
+                new ConfigParseError({ message: 'Failed to post-process auto-detected config', cause: e.message })
+              ),
+          })
         );
 
         framework = { name: detection.framework.name, slug: detection.framework.slug };
