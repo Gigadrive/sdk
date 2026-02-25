@@ -1,4 +1,4 @@
-import { FileSystem } from '@effect/platform';
+import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
 import { detectPackageManager } from './detect-package-manager';
 import { FRAMEWORK_DEFINITIONS } from './frameworks';
@@ -24,9 +24,10 @@ const matchesDetectionItem = Effect.fn('matchesDetectionItem')(function* (
   framework: FrameworkDefinition,
   cachedReadDeps: (
     key: string
-  ) => Effect.Effect<Set<string>, ManifestReadError | ManifestParseError, FileSystem.FileSystem>
+  ) => Effect.Effect<Set<string>, ManifestReadError | ManifestParseError, FileSystem.FileSystem | Path.Path>
 ) {
   const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
 
   // Check matchPackage (uses memoized reader to avoid re-reading the same manifest)
   if (item.matchPackage != null) {
@@ -39,7 +40,7 @@ const matchesDetectionItem = Effect.fn('matchesDetectionItem')(function* (
 
   // Check path existence
   if (item.path != null) {
-    const filePath = `${projectFolder}/${item.path}`;
+    const filePath = pathService.join(projectFolder, item.path);
     const exists = yield* fs.exists(filePath).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
     if (!exists) {
@@ -50,7 +51,14 @@ const matchesDetectionItem = Effect.fn('matchesDetectionItem')(function* (
     if (item.matchContent != null) {
       const content = yield* fs.readFileString(filePath).pipe(Effect.catchAll(() => Effect.succeed('')));
 
-      if (!new RegExp(item.matchContent).test(content)) {
+      let regexMatch = false;
+      try {
+        regexMatch = new RegExp(item.matchContent).test(content);
+      } catch {
+        // Invalid regex pattern in framework definition — treat as no match
+      }
+
+      if (!regexMatch) {
         return false;
       }
     }
@@ -67,7 +75,7 @@ const matchesFramework = Effect.fn('matchesFramework')(function* (
   projectFolder: string,
   cachedReadDeps: (
     key: string
-  ) => Effect.Effect<Set<string>, ManifestReadError | ManifestParseError, FileSystem.FileSystem>
+  ) => Effect.Effect<Set<string>, ManifestReadError | ManifestParseError, FileSystem.FileSystem | Path.Path>
 ) {
   for (const detector of framework.detectors) {
     const matches = yield* matchesDetectionItem(detector, projectFolder, framework, cachedReadDeps);

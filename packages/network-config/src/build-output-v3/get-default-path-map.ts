@@ -1,6 +1,5 @@
-import { FileSystem } from '@effect/platform';
+import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
-import path from 'node:path';
 
 /**
  * Creates a mapping of absolute file paths to their relative paths
@@ -14,6 +13,7 @@ import path from 'node:path';
  */
 export const getDefaultPathMap = Effect.fn('getDefaultPathMap')(function* (directory: string) {
   const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
   const result: Record<string, string> = {};
 
   const exists = yield* fs.exists(directory).pipe(Effect.catchAll(() => Effect.succeed(false)));
@@ -21,22 +21,27 @@ export const getDefaultPathMap = Effect.fn('getDefaultPathMap')(function* (direc
     return result;
   }
 
+  const MAX_DEPTH = 100;
+
   const processDirectory = (
     currentPath: string,
-    basePath: string = ''
+    basePath: string = '',
+    depth: number = 0
   ): Effect.Effect<void, never, FileSystem.FileSystem> =>
     Effect.gen(function* () {
+      if (depth > MAX_DEPTH) return;
+
       const entries = yield* fs.readDirectory(currentPath).pipe(Effect.catchAll(() => Effect.succeed([] as string[])));
 
       for (const name of entries) {
-        const fullPath = path.join(currentPath, name);
-        const relativePath = basePath ? path.join(basePath, name) : name;
+        const fullPath = pathService.join(currentPath, name);
+        const relativePath = basePath ? pathService.join(basePath, name) : name;
 
         const stat = yield* fs.stat(fullPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
         if (!stat) continue;
 
         if (stat.type === 'Directory') {
-          yield* processDirectory(fullPath, relativePath);
+          yield* processDirectory(fullPath, relativePath, depth + 1);
         } else {
           result[fullPath] = relativePath;
         }

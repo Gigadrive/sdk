@@ -12,7 +12,6 @@ export const vite: FrameworkDefinition = {
     maxDuration: 30,
     streaming: false,
     commands: ['vite build'],
-    entrypoint: 'dist/index.html',
     assetsDir: 'dist',
     populateAssetCache: true,
     routes: [],

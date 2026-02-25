@@ -1,6 +1,5 @@
-import { FileSystem } from '@effect/platform';
+import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
-import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { ConfigFileEmptyError, ConfigFileNotFoundError, ConfigFileParseError, ConfigVersionError } from '../errors';
 
@@ -9,6 +8,7 @@ export const ALLOWED_CONFIG_NAMES = ['gigadrive.yaml', 'gigadrive.yml', 'nebula.
 export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfigReader', {
   effect: Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* Path.Path;
 
     /**
      * Scans for a known config filename in the given project folder.
@@ -18,7 +18,7 @@ export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfi
      */
     const findConfig = Effect.fn('RawConfigReader.findConfig')(function* (projectFolder: string) {
       for (const name of ALLOWED_CONFIG_NAMES) {
-        const filePath = path.join(projectFolder, name);
+        const filePath = pathService.join(projectFolder, name);
         const exists = yield* fs.exists(filePath).pipe(Effect.catchAll(() => Effect.succeed(false)));
         if (exists) {
           return filePath as string | null;
@@ -59,7 +59,7 @@ export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfi
         );
       }
 
-      const fileExtension = path.extname(filePath).toLowerCase();
+      const fileExtension = pathService.extname(filePath).toLowerCase();
 
       let parsed: Record<string, unknown>;
       try {

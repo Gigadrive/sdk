@@ -1,10 +1,12 @@
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { makeTestFs } from '../test-utils';
+import { makeTestFs, TestPathLayer } from '../test-utils';
 import { RawConfigReader } from './raw-config-reader';
 
 const runWithFs = <A, E>(files: Record<string, string>, effect: Effect.Effect<A, E, RawConfigReader>) =>
-  Effect.runPromise(effect.pipe(Effect.provide(RawConfigReader.Default), Effect.provide(makeTestFs(files))));
+  Effect.runPromise(
+    effect.pipe(Effect.provide(RawConfigReader.Default), Effect.provide(Layer.merge(makeTestFs(files), TestPathLayer)))
+  );
 
 describe('RawConfigReader', () => {
   describe('findConfig', () => {
@@ -108,7 +110,7 @@ describe('RawConfigReader', () => {
             Effect.succeed({ _tag: 'caught' as const, filePath: err.filePath })
           ),
           Effect.provide(RawConfigReader.Default),
-          Effect.provide(makeTestFs({}))
+          Effect.provide(Layer.merge(makeTestFs({}), TestPathLayer))
         )
       );
       expect(result).toMatchObject({ _tag: 'caught', filePath: '/project/missing.json' });
@@ -124,7 +126,7 @@ describe('RawConfigReader', () => {
             Effect.succeed({ _tag: 'caught' as const, filePath: err.filePath })
           ),
           Effect.provide(RawConfigReader.Default),
-          Effect.provide(makeTestFs({ '/project/config.yaml': '' }))
+          Effect.provide(Layer.merge(makeTestFs({ '/project/config.yaml': '' }), TestPathLayer))
         )
       );
       expect(result).toMatchObject({ _tag: 'caught', filePath: '/project/config.yaml' });
@@ -140,7 +142,7 @@ describe('RawConfigReader', () => {
             Effect.succeed({ _tag: 'caught' as const, filePath: err.filePath })
           ),
           Effect.provide(RawConfigReader.Default),
-          Effect.provide(makeTestFs({ '/project/config.json': '{ invalid json' }))
+          Effect.provide(Layer.merge(makeTestFs({ '/project/config.json': '{ invalid json' }), TestPathLayer))
         )
       );
       expect(result).toMatchObject({ _tag: 'caught', filePath: '/project/config.json' });
@@ -156,7 +158,7 @@ describe('RawConfigReader', () => {
             Effect.succeed({ _tag: 'caught' as const, filePath: err.filePath })
           ),
           Effect.provide(RawConfigReader.Default),
-          Effect.provide(makeTestFs({ '/project/config.yaml': 'name: test-no-version' }))
+          Effect.provide(Layer.merge(makeTestFs({ '/project/config.yaml': 'name: test-no-version' }), TestPathLayer))
         )
       );
       expect(result).toMatchObject({ _tag: 'caught', filePath: '/project/config.yaml' });

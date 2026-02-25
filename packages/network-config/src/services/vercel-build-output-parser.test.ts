@@ -1,7 +1,7 @@
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import type { NormalizedConfig } from '../normalized-config';
-import { makeTestFs } from '../test-utils';
+import { makeTestFs, TestPathLayer } from '../test-utils';
 import { RawConfigReader } from './raw-config-reader';
 import { VercelBuildOutputParser } from './vercel-build-output-parser';
 
@@ -28,7 +28,7 @@ const runParser = (files: Record<string, string>, config: NormalizedConfig, proj
     }).pipe(
       Effect.provide(VercelBuildOutputParser.Default),
       Effect.provide(RawConfigReader.Default),
-      Effect.provide(makeTestFs(files))
+      Effect.provide(Layer.merge(makeTestFs(files), TestPathLayer))
     )
   );
 
@@ -45,6 +45,19 @@ describe('VercelBuildOutputParser', () => {
       '/project'
     );
     expect(result).toEqual(emptyConfig);
+  });
+
+  it('should not mutate the input parseResult errors array', async () => {
+    const inputConfig: NormalizedConfig = {
+      ...emptyConfig,
+      errors: ['existing-error'],
+    };
+    const originalErrors = [...inputConfig.errors];
+
+    // No vercel output → loadFunctions not called, no mutations possible
+    await runParser({}, inputConfig, '/project');
+
+    expect(inputConfig.errors).toEqual(originalErrors);
   });
 
   it('should merge asset overrides from vercel config', async () => {

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { AVAILABLE_REGIONS } from '../regions';
-import { makeTestFs } from '../test-utils';
+import { makeTestFs, TestPathLayer } from '../test-utils';
 import type { ConfigV4 } from '../v4';
 import { getFunctionSettings, V4ConfigParser } from './v4-config-parser';
 
@@ -101,7 +101,7 @@ describe('V4ConfigParser', () => {
       Effect.gen(function* () {
         const parser = yield* V4ConfigParser;
         return yield* parser.parse(config, '/project');
-      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(testFs))
+      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(Layer.merge(testFs, TestPathLayer)))
     );
 
     expect(result.assets.paths).toEqual([
@@ -129,7 +129,7 @@ describe('V4ConfigParser', () => {
       Effect.gen(function* () {
         const parser = yield* V4ConfigParser;
         return yield* parser.parse(config, '/project');
-      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(testFs))
+      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(Layer.merge(testFs, TestPathLayer)))
     );
 
     expect(result.assets.paths).toEqual(['public/index.html']);
@@ -173,7 +173,7 @@ describe('V4ConfigParser', () => {
       Effect.gen(function* () {
         const parser = yield* V4ConfigParser;
         return yield* parser.parse(config, '/project');
-      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(loopFs))
+      }).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(Layer.merge(loopFs, TestPathLayer)))
     );
 
     // The function should terminate (not hang) and collect files up to the depth limit.

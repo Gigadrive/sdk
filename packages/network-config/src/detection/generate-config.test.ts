@@ -141,4 +141,51 @@ describe('generateConfig', () => {
     const result = await Effect.runPromise(generateConfig(mockFramework, 'npm'));
     expect(result.excludeFiles).toBeUndefined();
   });
+
+  it('should use custom installCommand when provided', async () => {
+    const customInstallFramework: FrameworkDefinition = {
+      ...mockFramework,
+      getDefaultConfig: () => ({
+        ...mockFramework.getDefaultConfig('npm'),
+        installCommand: 'composer install --prefer-dist --optimize-autoloader --no-dev',
+        commands: ['bun install', 'bun run build'],
+      }),
+    };
+
+    const result = await Effect.runPromise(generateConfig(customInstallFramework, 'composer'));
+    expect(result.commands[0]).toBe('composer install --prefer-dist --optimize-autoloader --no-dev');
+    expect(result.commands).not.toContain('composer install');
+  });
+
+  it('should not produce duplicate install commands for Symfony', async () => {
+    const { symfony } = await import('./frameworks/symfony');
+    const result = await Effect.runPromise(generateConfig(symfony, 'composer'));
+
+    // installCommand overrides the default 'composer install'
+    const composerInstallCount = result.commands.filter((c) => c.startsWith('composer install')).length;
+    expect(composerInstallCount).toBe(1);
+    expect(result.commands[0]).toBe('composer install --prefer-dist --optimize-autoloader --no-dev');
+  });
+
+  it('should generate empty entrypoints and routes when entrypoint is not provided', async () => {
+    const staticFramework: FrameworkDefinition = {
+      ...mockFramework,
+      getDefaultConfig: () => ({
+        runtime: 'node-22',
+        memory: 128,
+        maxDuration: 30,
+        streaming: false,
+        commands: ['vite build'],
+        assetsDir: 'dist',
+        populateAssetCache: true,
+        routes: [],
+        environmentVariables: { NODE_ENV: 'production' },
+      }),
+    };
+
+    const result = await Effect.runPromise(generateConfig(staticFramework, 'npm'));
+    expect(result.entrypoints).toEqual([]);
+    expect(result.routes).toEqual([]);
+    expect(result.assets).toBeDefined();
+  });
 });

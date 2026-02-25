@@ -5,6 +5,9 @@ import { ConfigSchemaValidationError } from '../errors';
 
 export class SchemaValidator extends Effect.Service<SchemaValidator>()('SchemaValidator', {
   effect: Effect.gen(function* () {
+    const ajv = new Ajv();
+    addFormats(ajv);
+
     /**
      * Validates a parsed config object against a JSON Schema.
      *
@@ -17,9 +20,6 @@ export class SchemaValidator extends Effect.Service<SchemaValidator>()('SchemaVa
       schema: object,
       filePath: string
     ) {
-      const ajv = new Ajv();
-      addFormats(ajv);
-
       const compiledValidate = ajv.compile(schema);
       const valid = compiledValidate(config);
 

@@ -1,4 +1,4 @@
-import { FileSystem } from '@effect/platform';
+import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
 import type { PackageManager } from './types';
 
@@ -22,10 +22,13 @@ const LOCKFILE_MAP: Array<{ files: string[]; pm: PackageManager }> = [
  */
 export const detectPackageManager = Effect.fn('detectPackageManager')(function* (projectFolder: string) {
   const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
 
   for (const { files, pm } of LOCKFILE_MAP) {
     for (const file of files) {
-      const exists = yield* fs.exists(`${projectFolder}/${file}`).pipe(Effect.catchAll(() => Effect.succeed(false)));
+      const exists = yield* fs
+        .exists(pathService.join(projectFolder, file))
+        .pipe(Effect.catchAll(() => Effect.succeed(false)));
       if (exists) {
         yield* Effect.logDebug(`Detected package manager: ${pm} (via ${file})`);
         return pm;

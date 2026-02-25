@@ -1,4 +1,7 @@
 import { FileSystem } from '@effect/platform';
+import { NodePath } from '@effect/platform-node';
+import type { DetectionResult, NormalizedConfig } from '@gigadrive/network-config';
+import { FrameworkNotDetectedError } from '@gigadrive/network-config';
 import { Effect, Layer, Logger, LogLevel } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectConfigService } from './project-config';
@@ -35,6 +38,17 @@ const mockedMergeWithFrameworkDefaults = vi.mocked(mergeWithFrameworkDefaults);
 // Helpers
 // ---------------------------------------------------------------------------
 
+const makeNormalizedConfig = (overrides: Partial<NormalizedConfig> = {}): NormalizedConfig => ({
+  warnings: [],
+  errors: [],
+  commands: [],
+  entrypoints: [],
+  routes: [],
+  regions: ['us-east-1'],
+  environmentVariables: {},
+  ...overrides,
+});
+
 // Control which files exist in the stub filesystem. RawConfigReader.findConfig
 // iterates over ALLOWED_CONFIG_NAMES and calls fs.exists for each.
 let existingFiles: Set<string> = new Set();
@@ -54,7 +68,7 @@ const TestLayer = Layer.mergeAll(
   ProjectConfigService.Default,
   NetworkConfigLive,
   Logger.minimumLogLevel(LogLevel.None)
-).pipe(Layer.provideMerge(StubFileSystem));
+).pipe(Layer.provideMerge(Layer.mergeAll(StubFileSystem, NodePath.layer)));
 
 const runEffect = <A, E>(effect: Effect.Effect<A, E, Layer.Layer.Success<typeof TestLayer>>) =>
   Effect.runPromise(Effect.provide(effect, TestLayer));
@@ -62,7 +76,7 @@ const runEffect = <A, E>(effect: Effect.Effect<A, E, Layer.Layer.Success<typeof 
 // Helper: make detectFramework return a "not detected" Effect
 const mockNoFrameworkDetected = () => {
   mockedDetectFramework.mockReturnValue(
-    Effect.fail({ _tag: 'FrameworkNotDetectedError', message: 'No framework detected', directory: '/project' }) as any
+    Effect.fail(new FrameworkNotDetectedError({ message: 'No framework detected', directory: '/project' })) as never
   );
 };
 
@@ -72,16 +86,22 @@ const mockFrameworkDetected = (slug = 'nextjs', name = 'Next.js') => {
     Effect.succeed({
       framework: { slug, name },
       packageManager: 'npm',
-      config: {
+      config: makeNormalizedConfig({
         warnings: [`Auto-detected framework: ${name}. Create a gigadrive.yaml to customize.`],
-        errors: [],
         commands: ['npm install', 'next build'],
         entrypoints: [{ path: '.next/standalone/server.js', runtime: 'node-22', memory: 256, maxDuration: 30 }],
-        routes: [{ path: '/*', destination: '.next/standalone/server.js', handler: 'SERVERLESS_FUNCTION' }],
-        regions: ['us-east-1'],
+        routes: [
+          {
+            path: '/*',
+            destination: '.next/standalone/server.js',
+            handler: 'SERVERLESS_FUNCTION',
+            methods: ['ANY'],
+            headers: {},
+          },
+        ],
         environmentVariables: { NODE_ENV: 'production' },
-      },
-    }) as any
+      }),
+    } as DetectionResult) as never
   );
 };
 
@@ -115,18 +135,18 @@ describe('ProjectConfigService.resolve', () => {
   it('should return config and configPath when config file is valid and no framework detected', async () => {
     existingFiles.add('/project/gigadrive.yaml');
     mockedParseConfig.mockReturnValue(
-      Effect.succeed({
-        warnings: [],
-        errors: [],
-        name: 'test-app',
-      }) as any
+      Effect.succeed(
+        makeNormalizedConfig({
+          commands: ['bun install'],
+        })
+      ) as never
     );
     mockNoFrameworkDetected();
 
     const result = await runEffect(ProjectConfigService.resolve('/project'));
 
     expect(result).toMatchObject({
-      config: { warnings: [], errors: [], name: 'test-app' },
+      config: { warnings: [], errors: [] },
       configPath: '/project/gigadrive.yaml',
     });
   });
@@ -139,7 +159,7 @@ describe('ProjectConfigService.resolve', () => {
         message: 'YAML syntax error',
         filePath: '/project/gigadrive.yaml',
         cause: 'invalid character at line 3',
-      }) as any
+      }) as never
     );
     mockNoFrameworkDetected();
 
@@ -161,11 +181,11 @@ describe('ProjectConfigService.resolve', () => {
   it('should fail with ConfigValidationError when config has errors', async () => {
     existingFiles.add('/project/gigadrive.yaml');
     mockedParseConfig.mockReturnValue(
-      Effect.succeed({
-        warnings: [],
-        errors: ['Invalid region', 'Missing name'],
-        name: 'test-app',
-      }) as any
+      Effect.succeed(
+        makeNormalizedConfig({
+          errors: ['Invalid region', 'Missing name'],
+        })
+      ) as never
     );
     mockNoFrameworkDetected();
 
@@ -186,11 +206,11 @@ describe('ProjectConfigService.resolve', () => {
   it('should still return config when there are warnings but no errors', async () => {
     existingFiles.add('/project/gigadrive.yaml');
     mockedParseConfig.mockReturnValue(
-      Effect.succeed({
-        warnings: ['Deprecated option used'],
-        errors: [],
-        name: 'test-app',
-      }) as any
+      Effect.succeed(
+        makeNormalizedConfig({
+          warnings: ['Deprecated option used'],
+        })
+      ) as never
     );
     mockNoFrameworkDetected();
 
@@ -202,15 +222,14 @@ describe('ProjectConfigService.resolve', () => {
   it('should use auto-detected framework config when no config file exists', async () => {
     mockFrameworkDetected();
     mockedPostProcessConfig.mockReturnValue(
-      Effect.succeed({
-        warnings: ['Auto-detected framework: Next.js. Create a gigadrive.yaml to customize.'],
-        errors: [],
-        commands: ['npm install', 'next build'],
-        entrypoints: [{ path: '.next/standalone/server.js', runtime: 'node-22', memory: 256, maxDuration: 30 }],
-        routes: [],
-        regions: ['us-east-1'],
-        environmentVariables: {},
-      }) as any
+      Effect.succeed(
+        makeNormalizedConfig({
+          warnings: ['Auto-detected framework: Next.js. Create a gigadrive.yaml to customize.'],
+          commands: ['npm install', 'next build'],
+          entrypoints: [{ path: '.next/standalone/server.js', runtime: 'node-22', memory: 256, maxDuration: 30 }],
+          environmentVariables: {},
+        })
+      ) as never
     );
 
     const result = await runEffect(ProjectConfigService.resolve('/project'));
@@ -224,33 +243,49 @@ describe('ProjectConfigService.resolve', () => {
     existingFiles.add('/project/gigadrive.yaml');
     mockFrameworkDetected();
 
-    const userConfig = {
-      warnings: [],
-      errors: [],
+    const userConfig = makeNormalizedConfig({
       commands: ['npm run build'],
-      entrypoints: [],
-      routes: [],
-      regions: ['us-east-1'],
-      environmentVariables: {},
-    };
+    });
 
-    const mergedConfig = {
+    const mergedConfig = makeNormalizedConfig({
       warnings: ['Auto-detected framework: Next.js. Create a gigadrive.yaml to customize.'],
-      errors: [],
       commands: ['npm run build'],
       entrypoints: [{ path: '.next/standalone/server.js', runtime: 'node-22', memory: 256, maxDuration: 30 }],
-      routes: [],
-      regions: ['us-east-1'],
       environmentVariables: { NODE_ENV: 'production' },
-    };
+    });
 
-    mockedParseConfig.mockReturnValue(Effect.succeed(userConfig) as any);
-    mockedMergeWithFrameworkDefaults.mockReturnValue(Effect.succeed(mergedConfig) as any);
+    mockedParseConfig.mockReturnValue(Effect.succeed(userConfig) as never);
+    mockedMergeWithFrameworkDefaults.mockReturnValue(Effect.succeed(mergedConfig) as never);
 
     const result = await runEffect(ProjectConfigService.resolve('/project'));
 
     expect(result.configPath).toBe('/project/gigadrive.yaml');
     expect(result.framework).toEqual({ name: 'Next.js', slug: 'nextjs' });
     expect(mockedMergeWithFrameworkDefaults).toHaveBeenCalled();
+  });
+
+  it('should catch FunctionConfigError from postProcessConfig in Case C', async () => {
+    mockFrameworkDetected();
+    mockedPostProcessConfig.mockReturnValue(
+      Effect.fail({
+        _tag: 'FunctionConfigError',
+        message: 'Failed to resolve function',
+        functionPath: 'src/api.ts',
+      }) as never
+    );
+
+    const result = await runEffect(
+      ProjectConfigService.resolve('/project').pipe(
+        Effect.catchTag('ConfigParseError', (err) =>
+          Effect.succeed({ _tag: 'caught' as const, message: err.message, cause: err.cause })
+        )
+      )
+    );
+
+    expect(result).toMatchObject({
+      _tag: 'caught',
+      message: 'Failed to resolve function',
+      cause: 'src/api.ts',
+    });
   });
 });

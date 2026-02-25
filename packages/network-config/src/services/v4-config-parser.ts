@@ -1,7 +1,8 @@
-import { FileSystem } from '@effect/platform';
+import { FileSystem, Path } from '@effect/platform';
 import { getFilesForPattern } from '@gigadrive/build-utils';
 import { Effect } from 'effect';
 import { minimatch } from 'minimatch';
+import safeRegex from 'safe-regex2';
 import { FunctionConfigError } from '../errors';
 import type {
   NormalizedConfig,
@@ -24,7 +25,9 @@ export const getFunctionSettings = (path: string, config: ConfigV4): ConfigV4Fun
   for (const [key, value] of Object.entries(config.functions ?? {})) {
     let regexMatch = false;
     try {
-      regexMatch = new RegExp(key).test(path);
+      if (safeRegex(key)) {
+        regexMatch = new RegExp(key).test(path);
+      }
     } catch {
       // key is not valid regex (e.g. glob pattern like **), skip regex matching
     }
@@ -77,6 +80,7 @@ export const getFunctionSettings = (path: string, config: ConfigV4): ConfigV4Fun
 export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigParser', {
   effect: Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* Path.Path;
 
     /**
      * Parses a ConfigV4 into a NormalizedConfig.
@@ -145,14 +149,14 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
       const assets: string[] = [];
 
       if (config.assets != null) {
-        const assetsPath = `${projectFolder}/${config.assets}`;
+        const assetsPath = pathService.join(projectFolder, config.assets);
         const assetsExist = yield* fs.exists(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
         if (assetsExist) {
           const stat = yield* fs.stat(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
           if (stat && stat.type === 'Directory') {
-            const allFiles = yield* collectFilesRecursively(fs, assetsPath);
+            const allFiles = yield* collectFilesRecursively(fs, pathService, assetsPath);
 
             const disallowedExtensions = ['.htaccess', '.htpasswd'];
 
@@ -227,6 +231,7 @@ const MAX_ASSET_DEPTH = 100;
  */
 const collectFilesRecursively = (
   fs: FileSystem.FileSystem,
+  pathSvc: Path.Path,
   basePath: string,
   relativePath: string = '',
   depth: number = 0
@@ -234,20 +239,20 @@ const collectFilesRecursively = (
   Effect.gen(function* () {
     if (depth > MAX_ASSET_DEPTH) return [];
 
-    const currentPath = relativePath ? `${basePath}/${relativePath}` : basePath;
+    const currentPath = relativePath ? pathSvc.join(basePath, relativePath) : basePath;
 
     const entries = yield* fs.readDirectory(currentPath).pipe(Effect.catchAll(() => Effect.succeed([] as string[])));
     const result: string[] = [];
 
     for (const name of entries) {
-      const fullPath = `${currentPath}/${name}`;
-      const entryRelative = relativePath ? `${relativePath}/${name}` : name;
+      const fullPath = pathSvc.join(currentPath, name);
+      const entryRelative = relativePath ? pathSvc.join(relativePath, name) : name;
       const stat = yield* fs.stat(fullPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
       if (!stat) continue;
 
       if (stat.type === 'Directory') {
-        const nested = yield* collectFilesRecursively(fs, basePath, entryRelative, depth + 1);
+        const nested = yield* collectFilesRecursively(fs, pathSvc, basePath, entryRelative, depth + 1);
         result.push(...nested);
       } else {
         result.push(entryRelative);

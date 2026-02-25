@@ -1,17 +1,7 @@
-import { FileSystem } from '@effect/platform';
 import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
+import { makeTestFs, TestPathLayer } from '../test-utils';
 import { detectFramework } from './detect-framework';
-
-/**
- * Creates a test FileSystem layer with in-memory files and existence checks.
- */
-const makeTestFs = (files: Record<string, string>) =>
-  Layer.succeed(FileSystem.FileSystem, {
-    exists: (path: string) => Effect.succeed(path in files),
-    readFileString: (path: string) =>
-      path in files ? Effect.succeed(files[path]) : Effect.fail(new Error(`File not found: ${path}`)),
-  } as unknown as FileSystem.FileSystem);
 
 describe('detectFramework', () => {
   it('should detect Next.js from package.json', async () => {
@@ -21,7 +11,9 @@ describe('detectFramework', () => {
       }),
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('nextjs');
     expect(result.framework.name).toBe('Next.js');
@@ -35,7 +27,9 @@ describe('detectFramework', () => {
       }),
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('nuxt');
   });
@@ -47,7 +41,9 @@ describe('detectFramework', () => {
       }),
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     // NestJS has higher priority than Express
     expect(result.framework.slug).toBe('nestjs');
@@ -62,7 +58,9 @@ describe('detectFramework', () => {
       '/project/composer.lock': '',
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('laravel');
     expect(result.packageManager).toBe('composer');
@@ -76,7 +74,9 @@ describe('detectFramework', () => {
       '/project/bin/console': '#!/usr/bin/env php',
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('symfony');
   });
@@ -88,7 +88,9 @@ describe('detectFramework', () => {
       }),
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('nextjs');
   });
@@ -100,7 +102,9 @@ describe('detectFramework', () => {
       }),
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('express');
   });
@@ -112,7 +116,9 @@ describe('detectFramework', () => {
       }),
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('elysia');
     expect(result.config.entrypoints[0].runtime).toBe('bun-1');
@@ -128,7 +134,7 @@ describe('detectFramework', () => {
     const result = await Effect.runPromise(
       detectFramework('/project').pipe(
         Effect.catchTag('FrameworkNotDetectedError', (e) => Effect.succeed({ error: e })),
-        Effect.provide(fs)
+        Effect.provide(Layer.merge(fs, TestPathLayer))
       )
     );
 
@@ -142,7 +148,7 @@ describe('detectFramework', () => {
     const result = await Effect.runPromise(
       detectFramework('/project').pipe(
         Effect.catchTag('FrameworkNotDetectedError', (e) => Effect.succeed({ error: e })),
-        Effect.provide(fs)
+        Effect.provide(Layer.merge(fs, TestPathLayer))
       )
     );
 
@@ -157,7 +163,9 @@ describe('detectFramework', () => {
       '/project/pnpm-lock.yaml': '',
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('hono');
     expect(result.packageManager).toBe('pnpm');
@@ -170,7 +178,9 @@ describe('detectFramework', () => {
       }),
     });
 
-    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+    const result = await Effect.runPromise(
+      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
+    );
 
     expect(result.framework.slug).toBe('remix');
   });
@@ -186,10 +196,30 @@ describe('detectFramework', () => {
     const result = await Effect.runPromise(
       detectFramework('/project').pipe(
         Effect.catchTag('FrameworkNotDetectedError', (e) => Effect.succeed({ error: e })),
-        Effect.provide(fs)
+        Effect.provide(Layer.merge(fs, TestPathLayer))
       )
     );
 
     expect(result).toHaveProperty('error');
+  });
+
+  it('should not crash when a framework definition has an invalid matchContent regex', async () => {
+    // The matchContent regex is invalid, but the framework should still be detected
+    // (matchContent check should return false gracefully instead of throwing)
+    const fs = Layer.merge(
+      makeTestFs({
+        '/project/package.json': JSON.stringify({
+          dependencies: { next: '^14.0.0' },
+        }),
+        '/project/next.config.js': 'module.exports = {}',
+      }),
+      TestPathLayer
+    );
+
+    // Even though next.config.js exists, the invalid regex should not crash
+    const result = await Effect.runPromise(detectFramework('/project').pipe(Effect.provide(fs)));
+
+    // Next.js doesn't use matchContent, so it still detects fine
+    expect(result.framework.slug).toBe('nextjs');
   });
 });

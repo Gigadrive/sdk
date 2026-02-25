@@ -36,7 +36,8 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
 ) {
   const defaults = framework.getDefaultConfig(packageManager);
 
-  const commands = [getInstallCommand(packageManager), ...defaults.commands];
+  const installCmd = defaults.installCommand ?? getInstallCommand(packageManager);
+  const commands = [installCmd, ...defaults.commands];
 
   yield* Effect.logDebug(`Generating config for ${framework.name}`, {
     runtime: defaults.runtime,
@@ -44,27 +45,35 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
     commands,
   });
 
+  const entrypoints = defaults.entrypoint
+    ? [
+        {
+          path: defaults.entrypoint,
+          runtime: defaults.runtime,
+          memory: defaults.memory,
+          maxDuration: defaults.maxDuration,
+          streaming: defaults.streaming,
+          symlinks: defaults.symlinks,
+        },
+      ]
+    : [];
+
+  const routes = defaults.entrypoint
+    ? defaults.routes.map((route) => ({
+        path: route.source,
+        destination: route.destination,
+        handler: defaults.streaming ? ('SERVERLESS_FUNCTION_STREAMING' as const) : ('SERVERLESS_FUNCTION' as const),
+        methods: ['ANY' as const],
+        headers: {},
+      }))
+    : [];
+
   const config: NormalizedConfig = {
     regions: [...AVAILABLE_REGIONS],
     environmentVariables: { ...defaults.environmentVariables },
     commands,
-    entrypoints: [
-      {
-        path: defaults.entrypoint,
-        runtime: defaults.runtime,
-        memory: defaults.memory,
-        maxDuration: defaults.maxDuration,
-        streaming: defaults.streaming,
-        symlinks: defaults.symlinks,
-      },
-    ],
-    routes: defaults.routes.map((route) => ({
-      path: route.source,
-      destination: route.destination,
-      handler: defaults.streaming ? ('SERVERLESS_FUNCTION_STREAMING' as const) : ('SERVERLESS_FUNCTION' as const),
-      methods: ['ANY' as const],
-      headers: {},
-    })),
+    entrypoints,
+    routes,
     excludeFiles: defaults.excludeFiles && defaults.excludeFiles.length > 0 ? [...defaults.excludeFiles] : undefined,
     warnings: [`Auto-detected framework: ${framework.name}. Create a gigadrive.yaml to customize.`],
     errors: [],

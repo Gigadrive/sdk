@@ -1,4 +1,5 @@
-import { FileSystem } from '@effect/platform';
+import { FileSystem, Path } from '@effect/platform';
+import { NodePath } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
 
 /**
@@ -57,3 +58,9 @@ export const makeTestFs = (files: Record<string, string>) => {
     },
   } as unknown as FileSystem.FileSystem);
 };
+
+/**
+ * Provides the real Node.js `Path.Path` implementation for tests.
+ * Compose with `makeTestFs` via `Layer.merge(makeTestFs(files), TestPathLayer)`.
+ */
+export const TestPathLayer: Layer.Layer<Path.Path> = NodePath.layer;

@@ -108,14 +108,7 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
         config = yield* wrapParseErrors(parseConfig(configPath, cwd));
       } else if (detection) {
         // Case C: no config file, framework detected → use detection + post-process
-        config = yield* postProcessConfig(detection.config, cwd).pipe(
-          Effect.catchTags({
-            ConfigFileParseError: (e) =>
-              Effect.fail(
-                new ConfigParseError({ message: 'Failed to post-process auto-detected config', cause: e.message })
-              ),
-          })
-        );
+        config = yield* wrapParseErrors(postProcessConfig(detection.config, cwd));
 
         framework = { name: detection.framework.name, slug: detection.framework.slug };
       } else {

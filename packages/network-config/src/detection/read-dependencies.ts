@@ -1,4 +1,4 @@
-import { FileSystem } from '@effect/platform';
+import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
 import type { FrameworkLanguage } from './types';
 import { ManifestNotFoundError, ManifestParseError, ManifestReadError } from './types';
@@ -41,7 +41,10 @@ const readManifest = Effect.fn('readManifest')(function* (filePath: string) {
  * Reads dependency names from the appropriate manifest file for a language.
  * Returns a set of all dependency names (production + dev).
  *
- * If the manifest file does not exist, returns an empty set (not an error).
+ * If the manifest file does not exist, returns an empty set (graceful).
+ * If the file exists but cannot be read (`ManifestReadError`) or parsed
+ * (`ManifestParseError`), the error propagates — this indicates a real
+ * problem the user should know about.
  *
  * @param projectFolder - Absolute path to the project root
  * @param language - The framework language to determine which manifest to read
@@ -51,8 +54,9 @@ export const readDependencies = Effect.fn('readDependencies')(function* (
   projectFolder: string,
   language: FrameworkLanguage
 ) {
+  const pathService = yield* Path.Path;
   const config = MANIFEST_CONFIG[language];
-  const filePath = `${projectFolder}/${config.file}`;
+  const filePath = pathService.join(projectFolder, config.file);
 
   const manifest = yield* readManifest(filePath).pipe(
     Effect.catchTag('ManifestNotFoundError', () => Effect.succeed(null))

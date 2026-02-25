@@ -63,9 +63,11 @@ export interface FrameworkDefaultConfig {
   memory: number;
   maxDuration: number;
   streaming: boolean;
+  /** Overrides the auto-generated install command (e.g. for custom composer flags) */
+  installCommand?: string;
   /** Build commands (install command is auto-prepended by generateConfig) */
   commands: string[];
-  entrypoint: string;
+  entrypoint?: string;
   assetsDir?: string;
   populateAssetCache?: boolean;
   routes: Array<{ source: string; destination: string }>;

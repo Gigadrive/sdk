@@ -1,7 +1,7 @@
+import { Path } from '@effect/platform';
 import { getFilesForPattern } from '@gigadrive/build-utils';
 import { deepMerge } from '@gigadrive/commons';
 import { Effect } from 'effect';
-import path from 'node:path';
 import { type Config, type ServerlessFunctionConfig } from '../build-output-v3';
 import { determineRepoRoot } from '../build-output-v3/determine-repo-root';
 import { getDefaultPathMap } from '../build-output-v3/get-default-path-map';
@@ -25,6 +25,7 @@ const FUNCTION_CONFIGS_PATTERN = `${FUNCTIONS_FOLDER}/**/*.func/.vc-config.json`
 export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputParser>()('VercelBuildOutputParser', {
   effect: Effect.gen(function* () {
     const rawConfigReader = yield* RawConfigReader;
+    const pathService = yield* Path.Path;
 
     /**
      * Transforms a parsed config using Vercel's Build Output API v3.
@@ -36,7 +37,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
       parseResult: NormalizedConfig,
       projectFolder: string
     ) {
-      const config = yield* rawConfigReader.readConfigFile<Config>(path.join(projectFolder, CONFIG_PATH));
+      const config = yield* rawConfigReader.readConfigFile<Config>(pathService.join(projectFolder, CONFIG_PATH));
 
       if (!config || config.version < 3) {
         return parseResult;
@@ -66,24 +67,25 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
         entrypoints: [],
         routes: [],
         regions: [...parseResult.regions],
+        errors: [],
       };
 
       for (const functionConfigPath of functionConfigs) {
         const functionConfig = yield* rawConfigReader.readConfigFile<ServerlessFunctionConfig>(
-          path.join(projectFolder, functionConfigPath)
+          pathService.join(projectFolder, functionConfigPath)
         );
 
         if (!functionConfig) {
-          parseResult.errors.push(`Failed to read function config at ${functionConfigPath}`);
+          result.errors!.push(`Failed to read function config at ${functionConfigPath}`);
           continue;
         }
 
-        const functionPathRelative = path.dirname(functionConfigPath).replace(FUNCTIONS_FOLDER, '');
+        const functionPathRelative = pathService.dirname(functionConfigPath).replace(FUNCTIONS_FOLDER, '');
         const functionName = functionPathRelative.replace(/^\/|\.func$/g, '');
         const runtime = translateVercelRuntime(functionConfig.runtime);
 
         if (!runtime) {
-          parseResult.errors.push(`Unsupported runtime for function ${functionName}: ${functionConfig.runtime}`);
+          result.errors!.push(`Unsupported runtime for function ${functionName}: ${functionConfig.runtime}`);
           continue;
         }
 
@@ -111,11 +113,11 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
 
         let filePathMap: Record<string, string> = {};
         for (const [key, value] of Object.entries(configFilePathMap)) {
-          filePathMap[path.join(projectFolder, key)] = value;
+          filePathMap[pathService.join(projectFolder, key)] = value;
         }
 
         if (Object.keys(filePathMap).length === 0) {
-          filePathMap = yield* getDefaultPathMap(path.join(projectFolder, functionDirectory));
+          filePathMap = yield* getDefaultPathMap(pathService.join(projectFolder, functionDirectory));
         }
 
         if (!result.entrypoints) {
@@ -125,7 +127,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
         result.entrypoints.push({
           displayName: functionName,
           runtime,
-          path: path.join(functionDirectory, handler),
+          path: pathService.join(functionDirectory, handler),
           memory: memory ?? 1024,
           maxDuration: maxDuration ?? 15,
           environmentVariables,
