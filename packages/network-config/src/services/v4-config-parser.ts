@@ -80,12 +80,16 @@ const resolveRouteHandler = (destination: string, redirect?: boolean): Normalize
   return isExternal ? 'HTTP_PROXY' : 'SERVERLESS_FUNCTION';
 };
 
+/** Type guard that validates a string is a known Region. */
+const isRegion = (r: string): r is Region => AVAILABLE_REGIONS.includes(r as Region);
+
 /**
  * Resolves the region list from config, expanding 'global' to all available regions.
  */
 const resolveRegions = (configRegions?: string[] | null): Region[] => {
   if (configRegions?.includes('global') === true) return AVAILABLE_REGIONS;
-  return (configRegions?.filter((r) => r !== 'global') ?? AVAILABLE_REGIONS) as Region[];
+  const valid = configRegions?.filter(isRegion);
+  return valid && valid.length > 0 ? valid : AVAILABLE_REGIONS;
 };
 
 /**
