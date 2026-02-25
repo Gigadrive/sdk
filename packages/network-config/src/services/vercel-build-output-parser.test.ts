@@ -6,8 +6,11 @@ import { RawConfigReader } from './raw-config-reader';
 import { VercelBuildOutputParser } from './vercel-build-output-parser';
 
 // Mock getFilesForPattern to avoid real filesystem access
+const { mockGetFilesForPattern } = vi.hoisted(() => ({
+  mockGetFilesForPattern: vi.fn().mockResolvedValue([]),
+}));
 vi.mock('@gigadrive/build-utils', () => ({
-  getFilesForPattern: vi.fn().mockResolvedValue([]),
+  getFilesForPattern: mockGetFilesForPattern,
 }));
 
 const emptyConfig: NormalizedConfig = {
@@ -58,6 +61,36 @@ describe('VercelBuildOutputParser', () => {
     await runParser({}, inputConfig, '/project');
 
     expect(inputConfig.errors).toEqual(originalErrors);
+  });
+
+  it('should deduplicate regions when function regions overlap with parseResult regions', async () => {
+    mockGetFilesForPattern.mockResolvedValueOnce(['.vercel/output/functions/api/hello.func/.vc-config.json']);
+
+    const vercelConfig = { version: 3 };
+    const functionConfig = {
+      handler: 'index.js',
+      runtime: 'nodejs20.x',
+      regions: ['iad1'], // translates to us-east-1, which is already in parseResult
+      filePathMap: { 'index.js': 'index.js' },
+    };
+
+    const inputConfig: NormalizedConfig = {
+      ...emptyConfig,
+      regions: ['us-east-1'],
+    };
+
+    const result = await runParser(
+      {
+        '/project/.vercel/output/config.json': JSON.stringify(vercelConfig),
+        '/project/.vercel/output/functions/api/hello.func/.vc-config.json': JSON.stringify(functionConfig),
+      },
+      inputConfig,
+      '/project'
+    );
+
+    // us-east-1 appears in both parseResult and the translated function region (iad1 → us-east-1)
+    // It should appear only once after deduplication
+    expect(result.regions).toEqual(['us-east-1']);
   });
 
   it('should merge asset overrides from vercel config', async () => {

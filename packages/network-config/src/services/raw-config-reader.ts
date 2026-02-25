@@ -3,7 +3,13 @@ import { Effect } from 'effect';
 import { parse as parseYaml } from 'yaml';
 import { ConfigFileEmptyError, ConfigFileNotFoundError, ConfigFileParseError, ConfigVersionError } from '../errors';
 
-export const ALLOWED_CONFIG_NAMES = ['gigadrive.yaml', 'gigadrive.yml', 'nebula.yaml', 'nebula.yml', 'nebula.json'];
+export const ALLOWED_CONFIG_NAMES = [
+  'gigadrive.yaml',
+  'gigadrive.yml',
+  'nebula.yaml',
+  'nebula.yml',
+  'nebula.json',
+] as const;
 
 export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfigReader', {
   effect: Effect.gen(function* () {

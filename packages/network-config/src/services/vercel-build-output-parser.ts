@@ -46,7 +46,9 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
       const functionData = yield* loadFunctions(config, parseResult, projectFolder);
       const assetOverrides = loadAssetOverrides(config, parseResult);
 
-      return deepMerge(parseResult, functionData, assetOverrides);
+      const merged = deepMerge(parseResult, functionData, assetOverrides);
+      merged.regions = [...new Set(merged.regions)] as Region[];
+      return merged;
     });
 
     const loadFunctions = Effect.fn('VercelBuildOutputParser.loadFunctions')(function* (
@@ -66,7 +68,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
       const result: Partial<NormalizedConfig> = {
         entrypoints: [],
         routes: [],
-        regions: [...parseResult.regions],
+        regions: [],
         errors: [],
       };
 
