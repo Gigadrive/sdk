@@ -84,7 +84,7 @@ const resolveRouteHandler = (destination: string, redirect?: boolean): Normalize
  * Resolves the region list from config, expanding 'global' to all available regions.
  */
 const resolveRegions = (configRegions?: string[] | null): Region[] => {
-  if (configRegions?.includes('global') === true) return AVAILABLE_REGIONS as Region[];
+  if (configRegions?.includes('global') === true) return AVAILABLE_REGIONS;
   return (configRegions?.filter((r) => r !== 'global') ?? AVAILABLE_REGIONS) as Region[];
 };
 
