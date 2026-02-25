@@ -99,6 +99,8 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
           filePathMap: configFilePathMap = {},
         } = functionConfig;
 
+        const functionEntrypointPath = pathService.join(functionDirectory, handler);
+
         const translatedRegions = regions.length > 0 ? regions.map(translateVercelRegion) : ['us-east-1'];
         result.regions = Array.from(new Set([...(result.regions ?? []), ...translatedRegions])) as Region[];
 
@@ -127,7 +129,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
         result.entrypoints.push({
           displayName: functionName,
           runtime,
-          path: pathService.join(functionDirectory, handler),
+          path: functionEntrypointPath,
           memory: memory ?? 1024,
           maxDuration: maxDuration ?? 15,
           environmentVariables,
@@ -145,7 +147,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
           path: `/${functionName}`,
           methods: ['ANY'],
           headers: {},
-          destination: handler,
+          destination: functionEntrypointPath,
           handler: handlerType,
         };
 
@@ -158,7 +160,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
                   path: ('src' in r ? r.src : undefined) ?? `/${functionName}`,
                   methods: ['ANY'] as NormalizedConfigRouteMethod[],
                   headers: {},
-                  destination: handler,
+                  destination: functionEntrypointPath,
                   handler: handlerType,
                 }) as NormalizedConfigRoute
             ) ?? [];

@@ -80,7 +80,7 @@ export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfi
         );
       }
 
-      if (parsed === undefined) {
+      if (parsed == null) {
         return yield* Effect.fail(
           new ConfigFileParseError({ message: `Config file could not be parsed at ${filePath}`, filePath })
         );

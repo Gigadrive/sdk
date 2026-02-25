@@ -222,14 +222,14 @@ const collectFilesRecursively: (
 export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigParser', {
   accessors: true,
 
-  effect: Effect.gen(function* () {
+  effect: Effect.succeed({
     /**
      * Parses a ConfigV4 into a NormalizedConfig.
      *
      * @param config - The raw V4 config object
      * @param projectFolder - Absolute path to the project root
      */
-    const parse = Effect.fn('V4ConfigParser.parse')(function* (config: ConfigV4, projectFolder: string) {
+    parse: Effect.fn('V4ConfigParser.parse')(function* (config: ConfigV4, projectFolder: string) {
       const entrypoints = yield* parseEntrypoints(config, projectFolder);
       const assets = yield* collectAssets(config, projectFolder);
 
@@ -248,8 +248,6 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         warnings: [],
         routes: (config.routes ?? []).map(mapRoute),
       } as NormalizedConfig;
-    });
-
-    return { parse };
+    }),
   }),
 }) {}
