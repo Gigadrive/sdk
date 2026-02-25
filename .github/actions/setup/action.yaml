@@ -6,6 +6,10 @@ inputs:
     description: Node.js version to use
     required: false
     default: '22'
+  registry-url:
+    description: Registry URL for npm
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -14,9 +18,10 @@ runs:
       uses: pnpm/action-setup@v4
 
     - name: Setup Node.js
-      uses: useblacksmith/setup-node@v5
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
         cache: pnpm
 
     - name: Install dependencies

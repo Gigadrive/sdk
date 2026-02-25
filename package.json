@@ -12,7 +12,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:no-cache": "turbo run build --force",
-    "ci:publish": "pnpm publish -r && node scripts/update-canary-tags.mjs && changeset tag",
+    "ci:publish": "npm publish --workspace=@gigadrive/sdk --workspace=@gigadrive/commons --workspace=@gigadrive/network-config --workspace=@gigadrive/build-utils --workspace=@gigadrive/harmony --workspace=gigadrive && node scripts/update-canary-tags.mjs && changeset tag",
     "ci:version": "changeset version && pnpm install --no-frozen-lockfile",
     "clean": "turbo run clean",
     "dev": "turbo run dev",
