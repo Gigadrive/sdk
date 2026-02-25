@@ -77,12 +77,28 @@ jobs:
       - name: Prettier
         run: pnpm format
 
+  typecheck:
+    name: Type Check
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Type Check
+        run: pnpm typecheck
+
   summary:
     name: Summary (CI)
     runs-on: blacksmith-2vcpu-ubuntu-2204
     timeout-minutes: 5
     if: always()
-    needs: [test, lint, format]
+    needs: [test, lint, format, typecheck]
     permissions:
       contents: read
     steps:
@@ -91,8 +107,9 @@ jobs:
           TEST: ${{ needs.test.result }}
           LINT: ${{ needs.lint.result }}
           FORMAT: ${{ needs.format.result }}
+          TYPECHECK: ${{ needs.typecheck.result }}
         run: |
-          if [[ "$TEST" != "success" || "$LINT" != "success" || "$FORMAT" != "success" ]]; then
+          if [[ "$TEST" != "success" || "$LINT" != "success" || "$FORMAT" != "success" || "$TYPECHECK" != "success" ]]; then
             echo "One or more jobs failed or were cancelled."
             exit 1
           fi

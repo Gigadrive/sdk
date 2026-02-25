@@ -20,7 +20,8 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
-    "dev": "pnpm build && node dist/index.mjs"
+    "dev": "pnpm build && node dist/index.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@effect/cli": "^0.73.2",

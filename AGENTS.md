@@ -28,11 +28,12 @@ pnpm build                # Build all packages (via Turborepo)
 pnpm build:no-cache       # Build without Turbo cache
 pnpm clean                # Remove all dist directories
 
-# Lint & Format
+# Lint, Format & Type Check
 pnpm lint                 # ESLint check
 pnpm lint:fix             # ESLint autofix
 pnpm format               # Prettier check
 pnpm format:fix           # Prettier autofix
+pnpm typecheck            # TypeScript type check (via Turborepo)
 
 # Test (Vitest)
 pnpm test                 # Run all tests once
@@ -49,8 +50,8 @@ pnpm vitest run -t "should merge two objects correctly"
 pnpm vitest run packages/commons/
 ```
 
-**CI runs three parallel checks on every PR:** `pnpm test`, `pnpm lint`, `pnpm format`.
-All three must pass.
+**CI runs four parallel checks on every PR:** `pnpm test`, `pnpm lint`, `pnpm format`, `pnpm typecheck`.
+All four must pass.
 
 ## Test Conventions
 

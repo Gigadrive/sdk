@@ -22,7 +22,8 @@
     "lint:fix": "eslint --cache --fix --ext .ts,.tsx,.js,.jsx .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",

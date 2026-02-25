@@ -23,7 +23,8 @@
   ],
   "scripts": {
     "build": "tsup",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "esbuild": "^0.25.10"
