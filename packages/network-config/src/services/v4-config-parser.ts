@@ -216,15 +216,26 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
 }) {}
 
 /**
+ * Maximum directory nesting depth for asset collection.
+ * Guards against symlink-induced infinite recursion where constructed paths
+ * grow monotonically (e.g. `/assets/link/link/link/...`).
+ */
+const MAX_ASSET_DEPTH = 100;
+
+/**
  * Recursively collects all file paths relative to the base directory.
  */
 const collectFilesRecursively = (
   fs: FileSystem.FileSystem,
   basePath: string,
-  relativePath: string = ''
+  relativePath: string = '',
+  depth: number = 0
 ): Effect.Effect<string[], never, never> =>
   Effect.gen(function* () {
+    if (depth > MAX_ASSET_DEPTH) return [];
+
     const currentPath = relativePath ? `${basePath}/${relativePath}` : basePath;
+
     const entries = yield* fs.readDirectory(currentPath).pipe(Effect.catchAll(() => Effect.succeed([] as string[])));
     const result: string[] = [];
 
@@ -236,7 +247,7 @@ const collectFilesRecursively = (
       if (!stat) continue;
 
       if (stat.type === 'Directory') {
-        const nested = yield* collectFilesRecursively(fs, basePath, entryRelative);
+        const nested = yield* collectFilesRecursively(fs, basePath, entryRelative, depth + 1);
         result.push(...nested);
       } else {
         result.push(entryRelative);
