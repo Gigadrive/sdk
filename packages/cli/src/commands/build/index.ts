@@ -2,7 +2,7 @@ import { Command } from '@effect/cli';
 import { FileSystem, Path } from '@effect/platform';
 import { exec } from '@gigadrive/build-utils';
 import { Console, Effect } from 'effect';
-import { BuildScriptNotFoundError, ExecError, PackageJsonNotFoundError } from '../../errors';
+import { BuildScriptNotFoundError, ExecError, PackageJsonNotFoundError, PackageJsonParseError } from '../../errors';
 import { PackageManagerService } from '../../services/package-manager';
 
 export const buildCommand = Command.make('build', {}, () =>

@@ -18,6 +18,7 @@
   "scripts": {
     "build": "tsup",
     "build:watch": "tsup --watch",
-    "preinstall": "pnpm build"
+    "preinstall": "pnpm build",
+    "typecheck": "tsc --noEmit"
   }
 }

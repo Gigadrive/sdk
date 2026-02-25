@@ -24,7 +24,8 @@
   ],
   "scripts": {
     "build": "tsup && mkdir -p dist/v4 && cp -r ./src/v4/schema.json ./dist/v4/schema.json",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@effect/platform": "^0.94.5",
