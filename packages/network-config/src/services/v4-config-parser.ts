@@ -156,7 +156,7 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
           const stat = yield* fs.stat(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
           if (stat && stat.type === 'Directory') {
-            const allFiles = yield* collectFilesRecursively(fs, pathService, assetsPath);
+            const allFiles = yield* collectFilesRecursively(assetsPath);
 
             const disallowedExtensions = ['.htaccess', '.htpasswd'];
 
@@ -229,15 +229,16 @@ const MAX_ASSET_DEPTH = 100;
 /**
  * Recursively collects all file paths relative to the base directory.
  */
-const collectFilesRecursively = (
-  fs: FileSystem.FileSystem,
-  pathSvc: Path.Path,
+const collectFilesRecursively: (
   basePath: string,
-  relativePath: string = '',
-  depth: number = 0
-): Effect.Effect<string[], never, never> =>
-  Effect.gen(function* () {
-    if (depth > MAX_ASSET_DEPTH) return [];
+  relativePath?: string,
+  depth?: number
+) => Effect.Effect<string[], never, FileSystem.FileSystem | Path.Path> = Effect.fn('collectFilesRecursively')(
+  function* (basePath: string, relativePath: string = '', depth: number = 0) {
+    if (depth > MAX_ASSET_DEPTH) return [] as string[];
+
+    const fs = yield* FileSystem.FileSystem;
+    const pathSvc = yield* Path.Path;
 
     const currentPath = relativePath ? pathSvc.join(basePath, relativePath) : basePath;
 
@@ -252,7 +253,7 @@ const collectFilesRecursively = (
       if (!stat) continue;
 
       if (stat.type === 'Directory') {
-        const nested = yield* collectFilesRecursively(fs, pathSvc, basePath, entryRelative, depth + 1);
+        const nested = yield* collectFilesRecursively(basePath, entryRelative, depth + 1);
         result.push(...nested);
       } else {
         result.push(entryRelative);
@@ -260,4 +261,5 @@ const collectFilesRecursively = (
     }
 
     return result;
-  });
+  }
+);

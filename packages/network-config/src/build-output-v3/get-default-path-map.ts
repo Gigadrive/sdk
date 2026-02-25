@@ -23,11 +23,9 @@ export const getDefaultPathMap = Effect.fn('getDefaultPathMap')(function* (direc
 
   const MAX_DEPTH = 100;
 
-  const processDirectory = (
-    currentPath: string,
-    basePath: string = '',
-    depth: number = 0
-  ): Effect.Effect<void, never, FileSystem.FileSystem> =>
+  // Inner helper that closes over `fs`, `pathService`, and `result` — not extracted
+  // to Effect.fn because it mutates the outer `result` record via closure.
+  const processDirectory = (currentPath: string, basePath: string = '', depth: number = 0): Effect.Effect<void> =>
     Effect.gen(function* () {
       if (depth > MAX_DEPTH) return;
 
