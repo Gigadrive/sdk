@@ -1,5 +1,22 @@
 # gigadrive
 
+## 2.1.0
+
+### Minor Changes
+
+- refactor: move architecture from Commander to Effect ([#266](https://github.com/Gigadrive/sdk/pull/266))
+
+- Add framework auto-detection for zero-config deployments and migrate config parsing to Effect services. ([#268](https://github.com/Gigadrive/sdk/pull/268))
+
+  **Framework auto-detection:** Projects using supported frameworks (Next.js, Nuxt, Remix, SvelteKit, Astro, Vite, Hono, Elysia, Express, Fastify, NestJS, Laravel, Symfony) can now be deployed without a `gigadrive.yaml` — the CLI detects the framework from project dependencies and generates appropriate build commands, entrypoints, routes, and runtime settings. When a config file is present alongside a detected framework, user settings take precedence while framework defaults fill gaps.
+
+  **Effect-based config pipeline:** The config parsing internals (`RawConfigReader`, `SchemaValidator`, `V4ConfigParser`, `VercelBuildOutputParser`) are now Effect services using `@effect/platform` FileSystem, replacing direct `node:fs` calls and the `mock-fs` test dependency with injectable, testable layers.
+
+### Patch Changes
+
+- Updated dependencies [[`7a69f89`](https://github.com/Gigadrive/sdk/commit/7a69f89288ea4f2a0247ff75fae2a158e9f2bfe4)]:
+  - @gigadrive/network-config@3.0.0
+
 ## 2.0.0
 
 ### Major Changes
