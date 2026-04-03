@@ -1,4 +1,4 @@
-import { SidebarContext, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarTrigger, useSidebarOptional } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 
@@ -51,7 +51,7 @@ NavbarActions.displayName = 'NavbarActions';
 
 const Navbar = React.forwardRef<HTMLElement, NavbarProps>(
   ({ className, children, showSidebar = false, size = 'default', logo, logoPosition = 'left', ...props }, ref) => {
-    const sidebarContext = React.useContext(SidebarContext);
+    const sidebarContext = useSidebarOptional();
 
     // Determine if sidebar trigger should be shown based on showSidebar prop
     let showSidebarTrigger = false;

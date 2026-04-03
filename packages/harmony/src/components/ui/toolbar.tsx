@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes, ComponentProps, CSSProperties, ReactNode } f
 import * as React from 'react';
 import { Button } from './button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './dropdown-menu';
-import { SidebarContext, SidebarTrigger } from './sidebar';
+import { SidebarTrigger, useSidebarOptional } from './sidebar';
 
 // Predefined positions for the floating toolbar
 const POSITION_CLASSES: Record<string, string> = {
@@ -44,7 +44,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   offset = '0.5rem',
 }) => {
   // Optionally integrate with Sidebar state
-  const sidebar = React.useContext(SidebarContext);
+  const sidebar = useSidebarOptional();
   const [shouldShow, setShouldShow] = React.useState(!showWhenSidebarClosed);
 
   React.useEffect(() => {
@@ -102,7 +102,7 @@ interface ToolbarButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
   ({ icon, className, onClick, ...props }, ref) => {
-    const sidebar = React.useContext(SidebarContext);
+    const sidebar = useSidebarOptional();
 
     const isSidebarTriggerIcon =
       React.isValidElement(icon) &&
