@@ -24,9 +24,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@effect/cli": "^0.73.2",
-    "@effect/platform": "^0.94.5",
-    "@effect/platform-node": "^0.104.1",
+    "@effect/cli": "^0.75.0",
+    "@effect/platform": "^0.96.0",
+    "@effect/platform-node": "^0.106.0",
     "@gigadrive/build-utils": "workspace:*",
     "@gigadrive/commons": "workspace:*",
     "@gigadrive/network-config": "workspace:*",
@@ -36,9 +36,9 @@
     "open": "^10.2.0"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.73.1",
+    "@effect/language-service": "^0.84.0",
     "@types/archiver": "^6.0.3",
-    "esbuild": "^0.25.10",
+    "esbuild": "^0.28.0",
     "typescript": "^5.9.2"
   },
   "engines": {
