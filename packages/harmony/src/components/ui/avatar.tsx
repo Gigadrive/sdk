@@ -9,7 +9,10 @@ const Avatar = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AvatarPrimitive.Root
     ref={ref}
-    className={cn('relative flex h-10 w-10 shrink-0 overflow-hidden rounded-xl', className)}
+    className={cn(
+      'relative flex h-10 w-10 shrink-0 overflow-hidden rounded-[calc(0.75rem*var(--squircle-radius-multiplier))] [container-type:size] [corner-shape:squircle]',
+      className
+    )}
     {...props}
   />
 ));
@@ -39,7 +42,10 @@ const AvatarFallback = React.forwardRef<
   return (
     <AvatarPrimitive.Fallback
       ref={ref}
-      className={cn('flex h-full w-full items-center justify-center rounded-xl bg-muted text-xs', className)}
+      className={cn(
+        'flex h-full w-full items-center justify-center rounded-[calc(0.75rem*var(--squircle-radius-multiplier))] [corner-shape:squircle] bg-muted text-[length:35cqw] leading-none -tracking-[0.01em] font-semibold [text-box-trim:both] [text-box-edge:cap_alphabetic] shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_2px_4px_0_rgba(0,0,0,0.1)] bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
+        className
+      )}
       {...props}
     >
       {wrapTextNodes(content)}

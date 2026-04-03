@@ -11,6 +11,13 @@
 
     --header-height: 3.5rem;
     --cell-size: var(--spacing-8);
+    --squircle-radius-multiplier: 1;
+  }
+
+  @supports (corner-shape: squircle) {
+    :root {
+      --squircle-radius-multiplier: 2;
+    }
   }
 
   .dark,
