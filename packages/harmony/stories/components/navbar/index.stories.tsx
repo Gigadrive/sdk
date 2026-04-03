@@ -2,7 +2,14 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { Button } from '@/components/ui/button';
 import { Navbar, NavbarActions } from '@/components/ui/navbar';
-import { Sidebar, SidebarContent, SidebarGroup, SidebarInset, SidebarItem, SidebarProvider } from '@/components/ui/sidebar';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarInset,
+  SidebarItem,
+  SidebarProvider,
+} from '@/components/ui/sidebar';
 
 const meta = {
   title: 'Components/Navbar',
