@@ -1,5 +1,5 @@
 import { TableOfContents } from '@/components/ui/table-of-contents';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta: Meta<typeof TableOfContents> = {
   title: 'Components/TableOfContents',

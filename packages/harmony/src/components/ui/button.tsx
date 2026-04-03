@@ -10,13 +10,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-primary text-primary-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4),0_2px_4px_0_rgba(0,0,0,0.1)] hover:bg-primary/90 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.25),transparent)]',
+          'bg-primary text-primary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_2px_4px_0_rgba(0,0,0,0.1)] hover:bg-primary/90 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
         destructive:
-          'bg-destructive text-destructive-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4),0_2px_4px_0_rgba(0,0,0,0.1)] hover:bg-destructive/90 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.25),transparent)]',
+          'bg-destructive text-destructive-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_2px_4px_0_rgba(0,0,0,0.1)] hover:bg-destructive/90 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
         outline:
-          'border border-input bg-background shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4),0_1px_2px_0_rgba(0,0,0,0.05)] hover:bg-accent hover:text-accent-foreground',
+          'border border-input bg-background shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_1px_2px_0_rgba(0,0,0,0.05)] hover:bg-accent hover:text-accent-foreground',
         secondary:
-          'bg-secondary text-secondary-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4),0_1px_2px_0_rgba(0,0,0,0.05)] hover:bg-secondary/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.25),transparent)]',
+          'bg-secondary text-secondary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_1px_2px_0_rgba(0,0,0,0.05)] hover:bg-secondary/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
         ghost: 'hover:bg-accent/50 hover:text-primary/90 text-primary',
         link: 'text-primary underline-offset-4 hover:underline',
       },
@@ -39,8 +39,7 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }
 

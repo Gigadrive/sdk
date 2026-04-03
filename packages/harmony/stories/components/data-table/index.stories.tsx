@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { DataTable, DataTableColumn } from '@/components/ui/data-table';
 import { Badge } from '../../../src/components/ui/badge';

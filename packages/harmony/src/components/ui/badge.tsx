@@ -9,11 +9,11 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          'border-transparent bg-primary text-primary-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-primary/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.25),transparent)]',
+          'border-transparent bg-primary text-primary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-primary/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
         secondary:
-          'border-transparent bg-secondary text-secondary-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-secondary/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.25),transparent)]',
+          'border-transparent bg-secondary text-secondary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-secondary/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
         destructive:
-          'border-transparent bg-destructive text-destructive-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-destructive/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.25),transparent)]',
+          'border-transparent bg-destructive text-destructive-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-destructive/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
         outline: 'text-foreground',
       },
     },

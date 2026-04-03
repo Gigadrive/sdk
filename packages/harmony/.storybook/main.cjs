@@ -6,23 +6,10 @@ const config = {
 
   addons: [
     '@storybook/addon-links',
-    '@storybook/addon-essentials',
-    '@storybook/addon-interactions',
-    '@storybook/addon-console',
     '@storybook/addon-themes',
     '@storybook/addon-docs',
-    {
-      name: '@storybook/addon-storysource',
-      options: {
-        rule: {
-          include: [path.resolve(__dirname, '../src'), path.resolve(__dirname, '../stories')],
-        },
-        loaderOptions: {
-          prettierConfig: { printWidth: 80, singleQuote: false },
-        },
-      },
-    },
     '@storybook/addon-a11y',
+    '@storybook/addon-vitest',
   ],
 
   framework: {

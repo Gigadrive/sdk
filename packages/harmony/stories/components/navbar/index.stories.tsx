@@ -1,15 +1,14 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { Button } from '@/components/ui/button';
 import { Navbar, NavbarActions } from '@/components/ui/navbar';
 import {
   Sidebar,
   SidebarContent,
+  SidebarGroup,
   SidebarInset,
-  SidebarMenu,
-  SidebarMenuItem,
+  SidebarItem,
   SidebarProvider,
-  SidebarSubItem,
 } from '@/components/ui/sidebar';
 
 const meta = {
@@ -219,23 +218,23 @@ export const WithSidebarMobile: Story = {
         <div className="flex flex-1">
           <Sidebar variant="inset" className="top-[var(--header-height)] !h-[calc(100svh-var(--header-height))]!">
             <SidebarContent>
-              <SidebarMenu label="Main">
-                <SidebarMenuItem icon={<span>🏠</span>} title="Dashboard" href="#" />
-                <SidebarMenuItem icon={<span>📁</span>} title="Projects">
-                  <SidebarSubItem title="Project Alpha" href="#" />
-                  <SidebarSubItem title="Project Beta" href="#" />
-                  <SidebarSubItem title="Project Gamma" href="#" isActive />
-                </SidebarMenuItem>
-                <SidebarMenuItem icon={<span>⚙️</span>} title="Settings" href="#" />
-              </SidebarMenu>
-              <SidebarMenu label="Team">
-                <SidebarMenuItem icon={<span>👥</span>} title="Members">
-                  <SidebarSubItem title="Alice" href="#" />
-                  <SidebarSubItem title="Bob" href="#" />
-                  <SidebarSubItem title="Charlie" href="#" />
-                </SidebarMenuItem>
-                <SidebarMenuItem icon={<span>➕</span>} title="Invite" href="#" />
-              </SidebarMenu>
+              <SidebarGroup label="Main">
+                <SidebarItem title="Dashboard" href="#" />
+                <SidebarItem title="Projects">
+                  <SidebarItem title="Project Alpha" href="#" />
+                  <SidebarItem title="Project Beta" href="#" />
+                  <SidebarItem title="Project Gamma" href="#" isActive />
+                </SidebarItem>
+                <SidebarItem title="Settings" href="#" />
+              </SidebarGroup>
+              <SidebarGroup label="Team">
+                <SidebarItem title="Members">
+                  <SidebarItem title="Alice" href="#" />
+                  <SidebarItem title="Bob" href="#" />
+                  <SidebarItem title="Charlie" href="#" />
+                </SidebarItem>
+                <SidebarItem title="Invite" href="#" />
+              </SidebarGroup>
             </SidebarContent>
           </Sidebar>
           <SidebarInset className="flex flex-col">
