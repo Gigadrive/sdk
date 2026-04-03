@@ -48,7 +48,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Switch } from '@/components/ui/switch';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const data = {
   user: {

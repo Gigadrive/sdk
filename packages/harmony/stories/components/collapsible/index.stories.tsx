@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 

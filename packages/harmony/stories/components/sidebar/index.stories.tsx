@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Bell, FileText, Home, Mail, Search, Settings, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';

@@ -1,6 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Toolbar, ToolbarButton, ToolbarMenu, ToolbarMenuItem } from '@/components/ui/toolbar';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MoreHorizontal, Search, User } from 'lucide-react';
 
 const meta: Meta<typeof Toolbar> = {
