@@ -542,6 +542,25 @@ const SidebarGroup = React.forwardRef<
 ));
 SidebarGroup.displayName = 'SidebarGroup';
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Recursively checks if any descendant SidebarItem has isActive set. */
+function hasActiveDescendant(children: React.ReactNode): boolean {
+  let found = false;
+  React.Children.forEach(children, (child) => {
+    if (found) return;
+    if (!React.isValidElement(child)) return;
+    if (child.props.isActive) {
+      found = true;
+      return;
+    }
+    if (child.props.children) {
+      found = hasActiveDescendant(child.props.children);
+    }
+  });
+  return found;
+}
+
 // ─── SidebarItem ─────────────────────────────────────────────────────────────
 
 const SidebarItem = React.forwardRef<
@@ -559,6 +578,9 @@ const SidebarItem = React.forwardRef<
   const { isMobile, state } = useSidebar();
   const layerCtx = useLayer();
   const hasChildren = React.Children.count(children) > 0;
+
+  const childActive = hasChildren && hasActiveDescendant(children);
+  const effectiveActive = isActive || childActive;
 
   const handleClick = React.useCallback(
     (e: React.MouseEvent) => {
@@ -585,7 +607,7 @@ const SidebarItem = React.forwardRef<
     </>
   );
 
-  const buttonClasses = cn(ITEM_BASE, ITEM_COLLAPSED, isActive && ITEM_ACTIVE, className);
+  const buttonClasses = cn(ITEM_BASE, ITEM_COLLAPSED, effectiveActive && ITEM_ACTIVE, className);
 
   const button = href ? (
     (() => {
@@ -606,7 +628,7 @@ const SidebarItem = React.forwardRef<
   const effectiveTooltip = isCollapsed ? (tooltip ?? title) : tooltip;
   const showTooltip = effectiveTooltip && !isMobile;
 
-  const indicator = isActive && (
+  const indicator = effectiveActive && (
     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-primary group-data-[collapsible=icon]:hidden" />
   );
 

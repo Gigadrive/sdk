@@ -404,14 +404,14 @@ function DeepNestingDemo() {
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
-              <SidebarItem icon={Home} title="Home" href="#" isActive />
+              <SidebarItem icon={Home} title="Home" href="#" />
               <SidebarItem icon={Settings} title="Settings">
                 <SidebarGroup>
                   <SidebarItem icon={User} title="Profile">
                     <SidebarGroup>
                       <SidebarItem icon={Paintbrush} title="Appearance">
                         <SidebarGroup>
-                          <SidebarItem icon={Monitor} title="Theme" href="#" />
+                          <SidebarItem icon={Monitor} title="Theme" href="#" isActive />
                           <SidebarItem icon={Paintbrush} title="Colors" href="#" />
                           <SidebarItem icon={Globe} title="Language" href="#" />
                         </SidebarGroup>
@@ -430,8 +430,8 @@ function DeepNestingDemo() {
         <main className="flex-1 p-8 bg-background">
           <h1 className="text-2xl font-bold tracking-tight">Deep Nesting</h1>
           <p className="mt-1.5 text-muted-foreground">
-            Navigate Settings &rarr; Profile &rarr; Appearance to reach four levels deep. Each layer slides in with a
-            spring animation. Use the back button to return.
+            Only &ldquo;Theme&rdquo; has isActive set. Settings, Profile, and Appearance automatically show as active
+            because they contain an active descendant.
           </p>
         </main>
       </div>
