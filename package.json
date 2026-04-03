@@ -34,7 +34,7 @@
     "@types/node": "^22.19.17",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
-    "@vitest/coverage-istanbul": "3.1.4",
+    "@vitest/coverage-istanbul": "3.2.4",
     "dotenv": "^16.6.1",
     "esbuild": "^0.25.12",
     "eslint": "^9.39.4",
