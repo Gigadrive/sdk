@@ -30,7 +30,8 @@ const ITEM_BASE = cn(
   'disabled:pointer-events-none disabled:opacity-50'
 );
 
-const ITEM_ACTIVE = 'bg-primary/[0.08] text-primary font-medium [&_svg]:text-primary';
+const ITEM_ACTIVE =
+  'bg-primary/[0.08] text-primary font-medium [&_svg]:text-primary hover:bg-primary/[0.12] hover:text-primary';
 
 const ITEM_COLLAPSED = cn(
   'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center',
@@ -602,8 +603,8 @@ const SidebarItem = React.forwardRef<
   );
 
   const isCollapsed = state === 'collapsed';
-  const effectiveTooltip = tooltip ?? (isCollapsed ? title : undefined);
-  const showTooltip = effectiveTooltip && !isMobile && (isCollapsed || !!tooltip);
+  const effectiveTooltip = isCollapsed ? (tooltip ?? title) : tooltip;
+  const showTooltip = effectiveTooltip && !isMobile;
 
   const indicator = isActive && (
     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-primary group-data-[collapsible=icon]:hidden" />
