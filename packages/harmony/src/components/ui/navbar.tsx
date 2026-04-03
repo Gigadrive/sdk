@@ -65,11 +65,14 @@ const Navbar = React.forwardRef<HTMLElement, NavbarProps>(
       }
     }
 
+    const isInset = sidebarContext?.variant === 'inset';
+
     return (
       <nav
         ref={ref}
         className={cn(
-          'flex sticky top-0 z-50 w-full items-center border-b bg-background',
+          'flex sticky top-0 z-50 w-full items-center',
+          isInset ? 'bg-transparent border-b-0' : 'border-b bg-background',
           size === 'sm' ? 'h-12' : size === 'lg' ? 'h-16' : 'h-14',
           className
         )}

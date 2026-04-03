@@ -65,6 +65,8 @@ const layerTransition = {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type SidebarVariant = 'default' | 'inset';
+
 interface SidebarContextValue {
   state: 'expanded' | 'collapsed';
   open: boolean;
@@ -74,6 +76,7 @@ interface SidebarContextValue {
   isMobile: boolean;
   toggleSidebar: () => void;
   hasNavbar: boolean;
+  variant: SidebarVariant;
 }
 
 type LayerEntry = {
@@ -124,6 +127,8 @@ const SidebarProvider = React.forwardRef<
     onOpenChange?: (open: boolean) => void;
     /** When true, renders as a column layout (navbar on top, sidebars below). */
     hasNavbar?: boolean;
+    /** Visual variant. 'inset' renders sidebars on a muted background with the main content in a rounded card. */
+    variant?: SidebarVariant;
   }
 >(
   (
@@ -132,6 +137,7 @@ const SidebarProvider = React.forwardRef<
       open: openProp,
       onOpenChange: setOpenProp,
       hasNavbar = false,
+      variant = 'default',
       className,
       style,
       children,
@@ -180,9 +186,21 @@ const SidebarProvider = React.forwardRef<
     const state = open ? 'expanded' : 'collapsed';
 
     const contextValue = React.useMemo<SidebarContextValue>(
-      () => ({ state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, hasNavbar }),
-      [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, hasNavbar]
+      () => ({
+        state,
+        open,
+        setOpen,
+        isMobile,
+        openMobile,
+        setOpenMobile,
+        toggleSidebar,
+        hasNavbar,
+        variant,
+      }),
+      [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, hasNavbar, variant]
     );
+
+    const isInset = variant === 'inset';
 
     return (
       <SidebarCtx.Provider value={contextValue}>
@@ -190,6 +208,7 @@ const SidebarProvider = React.forwardRef<
           <div
             ref={ref}
             data-has-navbar={hasNavbar || undefined}
+            data-variant={variant}
             style={
               {
                 '--sidebar-width': SIDEBAR_WIDTH,
@@ -197,7 +216,12 @@ const SidebarProvider = React.forwardRef<
                 ...style,
               } as React.CSSProperties
             }
-            className={cn('group/sidebar-wrapper flex h-full w-full bg-background', hasNavbar && 'flex-col', className)}
+            className={cn(
+              'group/sidebar-wrapper flex h-full w-full',
+              isInset ? 'bg-muted/40' : 'bg-background',
+              hasNavbar && 'flex-col',
+              className
+            )}
             {...props}
           >
             {children}
@@ -218,13 +242,18 @@ const Sidebar = React.forwardRef<
     collapsible?: 'offcanvas' | 'icon' | 'none';
   }
 >(({ side = 'left', collapsible = 'offcanvas', className, children, ...props }, ref) => {
-  const { isMobile, state, openMobile, setOpenMobile, toggleSidebar, hasNavbar } = useSidebar();
+  const { isMobile, state, openMobile, setOpenMobile, toggleSidebar, hasNavbar, variant } = useSidebar();
+  const isInset = variant === 'inset';
 
   if (collapsible === 'none') {
     return (
       <div
         ref={ref}
-        className={cn('flex h-full w-[var(--sidebar-width)] flex-col bg-background text-sidebar-foreground', className)}
+        className={cn(
+          'flex h-full w-[var(--sidebar-width)] flex-col text-sidebar-foreground',
+          isInset ? 'bg-transparent' : 'bg-background',
+          className
+        )}
         {...props}
       >
         {children}
@@ -257,7 +286,7 @@ const Sidebar = React.forwardRef<
           'w-[var(--sidebar-width)] shrink-0 transition-[width] duration-200 ease-linear',
           'group-data-[collapsible=offcanvas]:w-0',
           'group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]',
-          side === 'left' ? 'border-r border-sidebar-border' : 'border-l border-sidebar-border',
+          !isInset && (side === 'left' ? 'border-r border-sidebar-border' : 'border-l border-sidebar-border'),
           className
         )}
         data-state={state}
@@ -267,7 +296,10 @@ const Sidebar = React.forwardRef<
       >
         <div
           data-sidebar="sidebar"
-          className="flex h-full w-full flex-col bg-background overflow-x-hidden overflow-y-auto"
+          className={cn(
+            'flex h-full w-full flex-col overflow-x-hidden overflow-y-auto',
+            isInset ? 'bg-transparent' : 'bg-background'
+          )}
         >
           {children}
         </div>
@@ -300,12 +332,15 @@ const Sidebar = React.forwardRef<
             ? 'left-0 group-data-[collapsible=offcanvas]:-left-[var(--sidebar-width)]'
             : 'right-0 group-data-[collapsible=offcanvas]:-right-[var(--sidebar-width)]',
           'group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]',
-          side === 'left' ? 'border-r border-sidebar-border' : 'border-l border-sidebar-border',
+          !isInset && (side === 'left' ? 'border-r border-sidebar-border' : 'border-l border-sidebar-border'),
           className
         )}
         {...props}
       >
-        <div data-sidebar="sidebar" className="flex h-full w-full flex-col bg-background overflow-x-hidden">
+        <div
+          data-sidebar="sidebar"
+          className={cn('flex h-full w-full flex-col overflow-x-hidden', isInset ? 'bg-transparent' : 'bg-background')}
+        >
           {children}
         </div>
 
@@ -618,6 +653,29 @@ const SidebarSkeleton = React.forwardRef<HTMLDivElement, React.ComponentProps<'d
 );
 SidebarSkeleton.displayName = 'SidebarSkeleton';
 
+// ─── SidebarInset ────────────────────────────────────────────────────────────
+
+const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<'main'>>(({ className, ...props }, ref) => {
+  const { variant } = useSidebar();
+  const isInset = variant === 'inset';
+
+  return (
+    <main
+      ref={ref}
+      data-sidebar="inset"
+      className={cn(
+        'flex-1 overflow-y-auto',
+        isInset &&
+          'my-2 rounded-xl border border-border/60 bg-background shadow-[0_1px_3px_0_rgb(0_0_0/0.04),0_1px_2px_-1px_rgb(0_0_0/0.04),0_0_0_1px_rgb(0_0_0/0.02)]',
+        !isInset && 'bg-background',
+        className
+      )}
+      {...props}
+    />
+  );
+});
+SidebarInset.displayName = 'SidebarInset';
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 export {
@@ -626,6 +684,7 @@ export {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
+  SidebarInset,
   SidebarItem,
   SidebarProvider,
   SidebarSkeleton,
