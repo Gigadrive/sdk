@@ -12,7 +12,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:no-cache": "turbo run build --force",
-    "ci:publish": "changeset publish && node scripts/update-canary-tags.mjs",
+    "ci:publish": "changeset publish",
     "ci:version": "changeset version && pnpm install --no-frozen-lockfile",
     "clean": "turbo run clean",
     "dev": "turbo run dev",
