@@ -44,7 +44,7 @@
     "esbuild": "^0.28.0"
   },
   "peerDependencies": {
-    "@effect/platform": "^0.94.5",
+    "@effect/platform": "^0.94.5 || ^0.96.0",
     "effect": "^3.19.17"
   },
   "publishConfig": {
