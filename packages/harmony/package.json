@@ -102,7 +102,7 @@
   "devDependencies": {
     "@rsbuild/plugin-react": "^1.4.1",
     "@rsbuild/plugin-sass": "^1.4.0",
-    "@rslib/core": "^0.20.0",
+    "@rslib/core": "^0.21.0",
     "@storybook/addon-a11y": "^10.3.4",
     "@storybook/addon-docs": "^10.3.4",
     "@storybook/addon-links": "^10.3.4",
