@@ -32,6 +32,11 @@ const DEFAULT_FUNCTION_SETTINGS: Required<Pick<ConfigV4FunctionSettings, 'memory
   includeFiles: undefined,
 };
 
+const toArray = (value: string | string[] | undefined): string[] | undefined => {
+  if (value == null) return undefined;
+  return Array.isArray(value) ? value : [value];
+};
+
 // -- Pure helpers (no Effect needed) ----------------------------------------------------------
 
 /**
@@ -147,6 +152,13 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
         symlinks: func.symlinks,
         streaming:
           settings!.runtime == null || settings!.runtime.startsWith('node-') || settings!.runtime.startsWith('bun-'),
+        package:
+          settings!.includeFiles != null || settings!.excludeFiles != null
+            ? {
+                includeFiles: toArray(settings!.includeFiles),
+                excludeFiles: toArray(settings!.excludeFiles),
+              }
+            : undefined,
       });
     }
   }

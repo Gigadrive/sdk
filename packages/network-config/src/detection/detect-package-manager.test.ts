@@ -48,4 +48,55 @@ describe('detectPackageManager', () => {
     const result = await run({ '/project/bun.lockb': '', '/project/pnpm-lock.yaml': '' });
     expect(result).toBe('bun');
   });
+
+  it('should prefer bun.lock over all non-Bun lockfiles', async () => {
+    const result = await run({
+      '/project/bun.lock': '',
+      '/project/pnpm-lock.yaml': '',
+      '/project/yarn.lock': '',
+      '/project/package-lock.json': '',
+      '/project/composer.lock': '',
+    });
+
+    expect(result).toBe('bun');
+  });
+
+  it('should prefer pnpm over yarn, npm, and composer lockfiles', async () => {
+    const result = await run({
+      '/project/pnpm-lock.yaml': '',
+      '/project/yarn.lock': '',
+      '/project/package-lock.json': '',
+      '/project/composer.lock': '',
+    });
+
+    expect(result).toBe('pnpm');
+  });
+
+  it('should prefer yarn over npm and composer lockfiles', async () => {
+    const result = await run({
+      '/project/yarn.lock': '',
+      '/project/package-lock.json': '',
+      '/project/composer.lock': '',
+    });
+
+    expect(result).toBe('yarn');
+  });
+
+  it('should prefer npm over composer lockfiles', async () => {
+    const result = await run({
+      '/project/package-lock.json': '',
+      '/project/composer.lock': '',
+    });
+
+    expect(result).toBe('npm');
+  });
+
+  it('should ignore lockfiles outside the project root', async () => {
+    const result = await run({
+      '/pnpm-lock.yaml': '',
+      '/project/package.json': '',
+    });
+
+    expect(result).toBe('npm');
+  });
 });
