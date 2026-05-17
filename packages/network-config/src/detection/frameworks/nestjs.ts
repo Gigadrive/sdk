@@ -45,8 +45,15 @@ const getProjectOutputPath = (config: NestCliJson): string | undefined => {
 };
 
 const normalizeOutputPath = (outputPath: string): string | undefined => {
-  const normalized = outputPath.replace(/^\.\//, '').replace(/\/$/, '');
-  if (!normalized || normalized.startsWith('/') || normalized.split('/').some((segment) => segment === '..')) {
+  const normalized = outputPath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+  if (
+    !normalized ||
+    normalized === '.' ||
+    normalized.startsWith('/') ||
+    /^[A-Za-z]:/.test(normalized) ||
+    normalized.includes(':') ||
+    normalized.split('/').some((segment) => segment === '..')
+  ) {
     return undefined;
   }
   return normalized;

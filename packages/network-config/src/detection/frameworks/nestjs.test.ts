@@ -111,8 +111,30 @@ describe('NestJS framework detection', () => {
     expect(result.config.routes[0].destination).toBe('dist/main.js');
   });
 
-  it.each(['/tmp/build', '../build', 'nested/../build', ''])(
-    'should ignore unsafe NestJS output path %s and keep the default output path',
+  it.each([
+    '/tmp/build',
+    '../build',
+    'nested/../build',
+    '..\\build',
+    'nested\\..\\build',
+    'C:\\build',
+    '\\\\server\\share',
+    'dist:build',
+    '.',
+  ])('should ignore unsafe NestJS output path %s and keep the default output path', async (outputPath) => {
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/nest-cli.json': JSON.stringify({
+        compilerOptions: { outputPath },
+      }),
+    });
+
+    expect(result.config.entrypoints[0].path).toBe('dist/main.js');
+    expect(result.config.routes[0].destination).toBe('dist/main.js');
+  });
+
+  it.each(['', './', '.\\'])(
+    'should ignore empty-equivalent NestJS output path %s and keep the default output path',
     async (outputPath) => {
       const result = await detectProject({
         '/project/package.json': packageJson(dependencies),

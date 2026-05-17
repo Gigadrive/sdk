@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composerJson, detectProject, detectProjectError } from './test-utils';
+import { composerJson, detectProject, detectProjectError, packageJson } from './test-utils';
 
 const lockfileCases: Array<{ name: string; lockfile: Record<string, string> }> = [
   { name: 'no lockfile', lockfile: {} },
@@ -28,6 +28,8 @@ describe('Symfony framework detection', () => {
     const result = await detectProject({
       '/project/composer.json': composerJson({ php: '^8.3', 'symfony/framework-bundle': '^7.0' }),
       '/project/bin/console': '#!/usr/bin/env php',
+      '/project/package.json': packageJson({ vite: '^7.0.0' }),
+      '/project/bun.lockb': '',
     });
 
     expect(result.framework).toMatchObject({ slug: 'symfony', name: 'Symfony' });

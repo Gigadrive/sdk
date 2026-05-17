@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composerJson, detectProject, detectProjectError } from './test-utils';
+import { composerJson, detectProject, detectProjectError, packageJson } from './test-utils';
 
 const lockfileCases: Array<{ name: string; lockfile: Record<string, string> }> = [
   { name: 'no lockfile', lockfile: {} },
@@ -26,6 +26,8 @@ describe('Laravel framework detection', () => {
       '/project/composer.json': composerJson({ php: '^8.3', 'laravel/framework': '^11.0' }),
       '/project/artisan': '#!/usr/bin/env php',
       '/project/composer.lock': '',
+      '/project/package.json': packageJson({ vite: '^7.0.0' }),
+      '/project/bun.lockb': '',
     });
 
     expect(result.framework).toMatchObject({ slug: 'laravel', name: 'Laravel' });
