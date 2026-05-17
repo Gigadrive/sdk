@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.1.0
+
+### Minor Changes
+
+- Add package include/exclude metadata to normalized function entrypoints, refine NestJS output path detection from `nest-cli.json`, and use Composer for detected PHP frameworks even when JavaScript lockfiles are present. ([#298](https://github.com/Gigadrive/sdk/pull/298))
+
 ## 3.0.1
 
 ### Patch Changes
