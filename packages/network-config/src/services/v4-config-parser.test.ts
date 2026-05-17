@@ -4,6 +4,7 @@ import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { Effect, Layer } from 'effect';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
@@ -16,6 +17,18 @@ import { getFunctionSettings, V4ConfigParser } from './v4-config-parser';
 const loadExample = (): Record<string, unknown> => {
   const content = fs.readFileSync(path.join(__dirname, '../v4/example.yaml'), 'utf8');
   return parseYaml(content) as Record<string, unknown>;
+};
+
+const withTempFunctionProject = async <T>(run: (projectFolder: string) => Promise<T>): Promise<T> => {
+  const projectFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'network-config-v4-'));
+  try {
+    fs.mkdirSync(path.join(projectFolder, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(projectFolder, 'dist/main.js'), 'exports.handler = () => {}');
+    fs.writeFileSync(path.join(projectFolder, 'dist/health.js'), 'exports.handler = () => {}');
+    return await run(projectFolder);
+  } finally {
+    fs.rmSync(projectFolder, { recursive: true, force: true });
+  }
 };
 
 describe('V4ConfigParser', () => {
@@ -82,6 +95,175 @@ describe('V4ConfigParser', () => {
 
     expect(getFunctionSettings('app/test.ts', config as ConfigV4)).toBeUndefined();
     expect(getFunctionSettings('test/index.ts', config as ConfigV4)).toBeUndefined();
+  });
+
+  it('should preserve function includeFiles and excludeFiles as package rules', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+            includeFiles: ['maxmind/**'],
+            excludeFiles: ['**/*.map'],
+          },
+        },
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(result.entrypoints[0].package).toEqual({
+        includeFiles: ['maxmind/**'],
+        excludeFiles: ['**/*.map'],
+      });
+    });
+  });
+
+  it('should normalize scalar includeFiles and excludeFiles into package rule arrays', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+            includeFiles: 'maxmind/**',
+            excludeFiles: '**/*.map',
+          },
+        },
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(result.entrypoints[0].package).toEqual({
+        includeFiles: ['maxmind/**'],
+        excludeFiles: ['**/*.map'],
+      });
+    });
+  });
+
+  it('should preserve package rules when only includeFiles is configured', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+            includeFiles: ['maxmind/**'],
+          },
+        },
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(result.entrypoints[0].package).toEqual({
+        includeFiles: ['maxmind/**'],
+        excludeFiles: undefined,
+      });
+    });
+  });
+
+  it('should preserve package rules when only excludeFiles is configured', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+            excludeFiles: ['**/*.map'],
+          },
+        },
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(result.entrypoints[0].package).toEqual({
+        includeFiles: undefined,
+        excludeFiles: ['**/*.map'],
+      });
+    });
+  });
+
+  it('should not create package metadata when includeFiles and excludeFiles are absent', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+          },
+        },
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(result.entrypoints[0].package).toBeUndefined();
+    });
+  });
+
+  it('should merge package rules from broad function settings into matching concrete functions', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/*.js': {
+            runtime: 'node-22',
+            includeFiles: ['shared/**'],
+            excludeFiles: ['**/*.map'],
+          },
+          'dist/main.js': {
+            memory: 512,
+            includeFiles: ['maxmind/**'],
+          },
+        },
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      const main = result.entrypoints.find((entrypoint) => entrypoint.path === 'dist/main.js');
+      const health = result.entrypoints.find((entrypoint) => entrypoint.path === 'dist/health.js');
+
+      expect(main).toMatchObject({
+        memory: 512,
+        package: {
+          includeFiles: ['maxmind/**'],
+          excludeFiles: ['**/*.map'],
+        },
+      });
+      expect(health?.package).toEqual({
+        includeFiles: ['shared/**'],
+        excludeFiles: ['**/*.map'],
+      });
+    });
   });
 
   it('should collect assets from nested directories', async () => {

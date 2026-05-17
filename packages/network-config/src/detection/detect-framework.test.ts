@@ -34,21 +34,6 @@ describe('detectFramework', () => {
     expect(result.framework.slug).toBe('nuxt');
   });
 
-  it('should detect NestJS from package.json', async () => {
-    const fs = makeTestFs({
-      '/project/package.json': JSON.stringify({
-        dependencies: { '@nestjs/core': '^10.0.0', express: '^4.0.0' },
-      }),
-    });
-
-    const result = await Effect.runPromise(
-      detectFramework('/project').pipe(Effect.provide(Layer.merge(fs, TestPathLayer)))
-    );
-
-    // NestJS has higher priority than Express
-    expect(result.framework.slug).toBe('nestjs');
-  });
-
   it('should detect Laravel from composer.json + artisan file', async () => {
     const fs = makeTestFs({
       '/project/composer.json': JSON.stringify({

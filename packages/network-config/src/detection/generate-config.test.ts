@@ -137,6 +137,26 @@ describe('generateConfig', () => {
     expect(result.excludeFiles).toEqual(['tests/', 'storage/', '.ddev', 'node_modules/']);
   });
 
+  it('should copy framework package defaults onto generated entrypoints', async () => {
+    const frameworkWithPackageDefaults: FrameworkDefinition = {
+      ...mockFramework,
+      getDefaultConfig: () => ({
+        ...mockFramework.getDefaultConfig('npm'),
+        package: {
+          includeFiles: ['dist/**', 'package.json', 'node_modules/**'],
+          excludeFiles: ['**/*.map'],
+        },
+      }),
+    };
+
+    const result = await Effect.runPromise(generateConfig(frameworkWithPackageDefaults, 'npm'));
+
+    expect(result.entrypoints[0].package).toEqual({
+      includeFiles: ['dist/**', 'package.json', 'node_modules/**'],
+      excludeFiles: ['**/*.map'],
+    });
+  });
+
   it('should not set excludeFiles when not provided', async () => {
     const result = await Effect.runPromise(generateConfig(mockFramework, 'npm'));
     expect(result.excludeFiles).toBeUndefined();

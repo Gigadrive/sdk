@@ -115,8 +115,13 @@ export const detectFramework = Effect.fn('detectFramework')(function* (projectFo
     if (matches) {
       yield* Effect.log(`Detected framework: ${framework.name}`, { slug: framework.slug });
 
-      const packageManager = yield* detectPackageManager(projectFolder);
-      const config = yield* generateConfig(framework, packageManager);
+      const detectedPackageManager = yield* detectPackageManager(projectFolder);
+      const packageManager = framework.language === 'php' ? 'composer' : detectedPackageManager;
+      const defaults = framework.getDefaultConfig(packageManager);
+      const refinedDefaults = framework.refineDefaultConfig
+        ? yield* framework.refineDefaultConfig(defaults, projectFolder)
+        : defaults;
+      const config = yield* generateConfig(framework, packageManager, refinedDefaults);
 
       return { framework, packageManager, config } as DetectionResult;
     }

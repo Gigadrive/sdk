@@ -159,6 +159,8 @@ export interface NormalizedConfigEntrypoint {
   package?: {
     rootOverwrite?: string;
     filePathMap?: FilePathMap;
+    includeFiles?: string[];
+    excludeFiles?: string[];
   };
 }
 
