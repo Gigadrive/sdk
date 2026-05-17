@@ -26,6 +26,9 @@
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "tus-js-client": "^4.3.1"
+  },
   "devDependencies": {
     "esbuild": "^0.28.0"
   },
