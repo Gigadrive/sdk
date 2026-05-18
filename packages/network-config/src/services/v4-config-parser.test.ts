@@ -172,6 +172,30 @@ describe('V4ConfigParser', () => {
     });
   });
 
+  it('should preserve Bun functions as response streaming by default', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'bun-1',
+          },
+        },
+        routes: [{ source: '/*', destination: 'dist/main.js' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(requireEntrypoint(result).streaming).toBe(true);
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+    });
+  });
+
   it('should allow explicitly disabling function streaming', async () => {
     await withTempFunctionProject(async (projectFolder) => {
       const config: ConfigV4 = {
@@ -268,6 +292,90 @@ describe('V4ConfigParser', () => {
       );
 
       expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+    });
+  });
+
+  it('should match streaming function routes with nested substituted destinations', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      fs.mkdirSync(path.join(projectFolder, 'pages/blog'), { recursive: true });
+      fs.writeFileSync(path.join(projectFolder, 'pages/blog/post.tsx'), 'exports.handler = () => {}');
+
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'pages/**/*.tsx': {
+            runtime: 'node-22',
+          },
+        },
+        routes: [{ source: '/pages/(.*)', destination: '/pages/$1.tsx' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+    });
+  });
+
+  it('should match streaming function routes with named substituted destinations', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      fs.mkdirSync(path.join(projectFolder, 'sites/acme'), { recursive: true });
+      fs.writeFileSync(path.join(projectFolder, 'sites/acme/index.js'), 'exports.handler = () => {}');
+
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'sites/*/index.js': {
+            runtime: 'node-22',
+          },
+        },
+        routes: [{ source: '/sites/(?<tenant>.*)', destination: '/sites/$tenant/index.js' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+    });
+  });
+
+  it('should use non-streaming handlers for substituted routes with mixed streaming entrypoints', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      fs.mkdirSync(path.join(projectFolder, 'pages'), { recursive: true });
+      fs.writeFileSync(path.join(projectFolder, 'pages/user.tsx'), 'exports.handler = () => {}');
+      fs.writeFileSync(path.join(projectFolder, 'pages/admin.tsx'), 'exports.handler = () => {}');
+
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'pages/*.tsx': {
+            runtime: 'node-22',
+          },
+          'pages/admin.*': {
+            streaming: false,
+          },
+        },
+        routes: [{ source: '/pages/(.*)', destination: '/pages/$1.tsx' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      const admin = result.entrypoints.find((entrypoint) => entrypoint.path === 'pages/admin.tsx');
+      expect(admin?.streaming).toBe(false);
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION');
     });
   });
 

@@ -38,7 +38,7 @@ const toArray = (value: string | string[] | undefined): string[] | undefined => 
 };
 
 const runtimeStreamsByDefault = (runtime: ConfigV4FunctionSettings['runtime'] | undefined): boolean =>
-  runtime == null || runtime.startsWith('node-');
+  runtime == null || runtime.startsWith('node-') || runtime.startsWith('bun-');
 
 const normalizeRouteDestination = (destination: string): string => {
   const [withoutHash] = destination.split('#', 1);
@@ -51,7 +51,7 @@ const destinationMatchesEntrypoint = (destination: string, entrypointPath: strin
   if (normalizedDestination === entrypointPath) return true;
   if (!normalizedDestination.includes('$')) return false;
 
-  const pattern = normalizedDestination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\$\d+/g, '[^/]+');
+  const pattern = normalizedDestination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\$[\w]+/g, '.+');
   return new RegExp(`^${pattern}$`).test(entrypointPath);
 };
 
@@ -106,8 +106,10 @@ const resolveRouteHandler = (
   if (redirect === true) return 'HTTP_REDIRECT';
   if (isExternal) return 'HTTP_PROXY';
 
-  const entrypoint = entrypoints.find((item) => destinationMatchesEntrypoint(destination, item.path));
-  return entrypoint?.streaming === true ? 'SERVERLESS_FUNCTION_STREAMING' : 'SERVERLESS_FUNCTION';
+  const matchingEntrypoints = entrypoints.filter((item) => destinationMatchesEntrypoint(destination, item.path));
+  return matchingEntrypoints.length > 0 && matchingEntrypoints.every((entrypoint) => entrypoint.streaming === true)
+    ? 'SERVERLESS_FUNCTION_STREAMING'
+    : 'SERVERLESS_FUNCTION';
 };
 
 /** Type guard that validates a string is a known Region. */
@@ -149,9 +151,7 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
   if (config.functions == null) return entrypoints;
 
   for (const [fnPath, func] of Object.entries(config.functions)) {
-    const settings = getFunctionSettings(fnPath, config);
-
-    if (settings == null) {
+    if (getFunctionSettings(fnPath, config) == null) {
       return yield* new FunctionConfigError({
         message: `Settings invalid for function at path '${fnPath}'`,
         functionPath: fnPath,
@@ -170,6 +170,14 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
     for (const file of matchedFiles) {
       if (entrypoints.some((ep) => ep.path === file)) continue;
       if (Object.keys(config.functions).some((f) => f === file && f !== fnPath)) continue;
+
+      const settings = getFunctionSettings(file, config);
+      if (settings == null) {
+        return yield* new FunctionConfigError({
+          message: `Settings invalid for function at path '${file}'`,
+          functionPath: file,
+        });
+      }
 
       const runtime = settings.runtime ?? 'node-20';
       const streaming = settings.streaming ?? runtimeStreamsByDefault(runtime);

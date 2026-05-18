@@ -171,7 +171,7 @@ export interface ConfigV4FunctionSettings {
    */
   runtime?: Runtime;
   /**
-   * Enable function response streaming. When omitted, Node runtimes stream by default.
+   * Enable function response streaming. When omitted, Node and Bun runtimes stream by default.
    */
   streaming?: boolean;
   /**

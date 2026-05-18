@@ -67,7 +67,7 @@ export const schema = {
           },
           streaming: {
             type: 'boolean',
-            description: 'Enable function response streaming. When omitted, Node runtimes stream by default.',
+            description: 'Enable function response streaming. When omitted, Node and Bun runtimes stream by default.',
           },
           schedule: {
             type: 'string',
