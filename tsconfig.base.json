@@ -4,6 +4,7 @@
     "declaration": true,
     "declarationMap": true,
     "esModuleInterop": true,
+    "ignoreDeprecations": "5.0",
     "lib": ["ES2022", "ESNext.disposable"],
     "module": "es2022",
     "moduleResolution": "bundler",

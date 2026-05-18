@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+import type { NormalizedConfig, NormalizedConfigEntrypoint, NormalizedConfigRoute } from '../normalized-config';
 import { AVAILABLE_REGIONS } from '../regions';
 import { makeTestFs, TestPathLayer } from '../test-utils';
 import type { ConfigV4 } from '../v4';
@@ -29,6 +30,29 @@ const withTempFunctionProject = async <T>(run: (projectFolder: string) => Promis
   } finally {
     fs.rmSync(projectFolder, { recursive: true, force: true });
   }
+};
+
+const requireAssets = (result: NormalizedConfig): NonNullable<NormalizedConfig['assets']> => {
+  if (result.assets == null) throw new Error('Expected assets to be defined');
+  return result.assets;
+};
+
+const requireAssetPaths = (result: NormalizedConfig): string[] => {
+  const paths = requireAssets(result).paths;
+  if (paths == null) throw new Error('Expected asset paths to be defined');
+  return paths;
+};
+
+const requireEntrypoint = (result: NormalizedConfig, index = 0): NormalizedConfigEntrypoint => {
+  const entrypoint = result.entrypoints[index];
+  if (entrypoint == null) throw new Error(`Expected entrypoint at index ${index}`);
+  return entrypoint;
+};
+
+const requireRoute = (result: NormalizedConfig, index = 0): NormalizedConfigRoute => {
+  const route = result.routes[index];
+  if (route == null) throw new Error(`Expected route at index ${index}`);
+  return route;
 };
 
 describe('V4ConfigParser', () => {
@@ -69,7 +93,7 @@ describe('V4ConfigParser', () => {
   it('getFunctionSettings', () => {
     const config = loadExample();
 
-    expect(getFunctionSettings('src/index.ts', config as ConfigV4)).toEqual({
+    expect(getFunctionSettings('src/index.ts', config as unknown as ConfigV4)).toEqual({
       runtime: 'bun-1',
       memory: 128,
       max_duration: 15,
@@ -81,7 +105,7 @@ describe('V4ConfigParser', () => {
       },
     });
 
-    expect(getFunctionSettings('src/cron.ts', config as ConfigV4)).toEqual({
+    expect(getFunctionSettings('src/cron.ts', config as unknown as ConfigV4)).toEqual({
       runtime: 'bun-1',
       memory: 128,
       max_duration: 15,
@@ -93,8 +117,8 @@ describe('V4ConfigParser', () => {
       },
     });
 
-    expect(getFunctionSettings('app/test.ts', config as ConfigV4)).toBeUndefined();
-    expect(getFunctionSettings('test/index.ts', config as ConfigV4)).toBeUndefined();
+    expect(getFunctionSettings('app/test.ts', config as unknown as ConfigV4)).toBeUndefined();
+    expect(getFunctionSettings('test/index.ts', config as unknown as ConfigV4)).toBeUndefined();
   });
 
   it('should preserve function includeFiles and excludeFiles as package rules', async () => {
@@ -117,10 +141,84 @@ describe('V4ConfigParser', () => {
         )
       );
 
-      expect(result.entrypoints[0].package).toEqual({
+      expect(requireEntrypoint(result).package).toEqual({
         includeFiles: ['maxmind/**'],
         excludeFiles: ['**/*.map'],
       });
+    });
+  });
+
+  it('should default Node functions to response streaming', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+          },
+        },
+        routes: [{ source: '/*', destination: 'dist/main.js' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(requireEntrypoint(result).streaming).toBe(true);
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+    });
+  });
+
+  it('should allow explicitly disabling function streaming', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+            streaming: false,
+          },
+        },
+        routes: [{ source: '/*', destination: 'dist/main.js' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(requireEntrypoint(result).streaming).toBe(false);
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION');
+    });
+  });
+
+  it('should preserve explicitly enabled function streaming and route handlers', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+            streaming: true,
+          },
+        },
+        routes: [{ source: '/*', destination: 'dist/main.js' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(requireEntrypoint(result).streaming).toBe(true);
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION_STREAMING');
     });
   });
 
@@ -144,7 +242,7 @@ describe('V4ConfigParser', () => {
         )
       );
 
-      expect(result.entrypoints[0].package).toEqual({
+      expect(requireEntrypoint(result).package).toEqual({
         includeFiles: ['maxmind/**'],
         excludeFiles: ['**/*.map'],
       });
@@ -170,7 +268,7 @@ describe('V4ConfigParser', () => {
         )
       );
 
-      expect(result.entrypoints[0].package).toEqual({
+      expect(requireEntrypoint(result).package).toEqual({
         includeFiles: ['maxmind/**'],
         excludeFiles: undefined,
       });
@@ -196,7 +294,7 @@ describe('V4ConfigParser', () => {
         )
       );
 
-      expect(result.entrypoints[0].package).toEqual({
+      expect(requireEntrypoint(result).package).toEqual({
         includeFiles: undefined,
         excludeFiles: ['**/*.map'],
       });
@@ -221,7 +319,7 @@ describe('V4ConfigParser', () => {
         )
       );
 
-      expect(result.entrypoints[0].package).toBeUndefined();
+      expect(requireEntrypoint(result).package).toBeUndefined();
     });
   });
 
@@ -286,13 +384,14 @@ describe('V4ConfigParser', () => {
       )
     );
 
-    expect(result.assets.paths).toEqual([
+    const assets = requireAssets(result);
+    expect(requireAssetPaths(result)).toEqual([
       'public/css/style.css',
       'public/images/icons/favicon.ico',
       'public/images/logo.png',
       'public/index.html',
     ]);
-    expect(result.assets.prefixToStrip).toBe('public/');
+    expect(assets.prefixToStrip).toBe('public/');
   });
 
   it('should filter disallowed asset extensions', async () => {
@@ -314,7 +413,7 @@ describe('V4ConfigParser', () => {
       )
     );
 
-    expect(result.assets.paths).toEqual(['public/index.html']);
+    expect(requireAssetPaths(result)).toEqual(['public/index.html']);
   });
 
   it('should terminate when directory structure contains a symlink loop', async () => {
@@ -361,7 +460,8 @@ describe('V4ConfigParser', () => {
     // The function should terminate (not hang) and collect files up to the depth limit.
     // With depth limit of 100, we expect 101 readDirectory calls (depth 0 through 100).
     expect(readDirCalls).toBe(101);
-    expect(result.assets.paths.length).toBeGreaterThan(0);
-    expect(result.assets.paths.length).toBeLessThanOrEqual(101);
+    const assetPaths = requireAssetPaths(result);
+    expect(assetPaths.length).toBeGreaterThan(0);
+    expect(assetPaths.length).toBeLessThanOrEqual(101);
   });
 });

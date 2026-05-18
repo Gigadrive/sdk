@@ -37,6 +37,9 @@ const toArray = (value: string | string[] | undefined): string[] | undefined => 
   return Array.isArray(value) ? value : [value];
 };
 
+const runtimeStreamsByDefault = (runtime: ConfigV4FunctionSettings['runtime'] | undefined): boolean =>
+  runtime == null || runtime.startsWith('node-');
+
 // -- Pure helpers (no Effect needed) ----------------------------------------------------------
 
 /**
@@ -77,12 +80,19 @@ export const getFunctionSettings = (path: string, config: ConfigV4): ConfigV4Fun
 /**
  * Determines the route handler type based on destination and redirect flag.
  */
-const resolveRouteHandler = (destination: string, redirect?: boolean): NormalizedConfigRouteHandler => {
+const resolveRouteHandler = (
+  destination: string,
+  redirect: boolean | undefined,
+  entrypoints: readonly NormalizedConfigEntrypoint[] = []
+): NormalizedConfigRouteHandler => {
   const isExternal =
     destination.toLowerCase().startsWith('http://') || destination.toLowerCase().startsWith('https://');
 
   if (redirect === true) return 'HTTP_REDIRECT';
-  return isExternal ? 'HTTP_PROXY' : 'SERVERLESS_FUNCTION';
+  if (isExternal) return 'HTTP_PROXY';
+
+  const entrypoint = entrypoints.find((item) => item.path === destination);
+  return entrypoint?.streaming === true ? 'SERVERLESS_FUNCTION_STREAMING' : 'SERVERLESS_FUNCTION';
 };
 
 /** Type guard that validates a string is a known Region. */
@@ -100,10 +110,13 @@ const resolveRegions = (configRegions?: string[] | null): Region[] => {
 /**
  * Maps a V4 route definition to a NormalizedConfigRoute.
  */
-const mapRoute = (route: NonNullable<ConfigV4['routes']>[number]): NormalizedConfigRoute => ({
+const mapRoute = (
+  route: NonNullable<ConfigV4['routes']>[number],
+  entrypoints: readonly NormalizedConfigEntrypoint[]
+): NormalizedConfigRoute => ({
   path: route.source,
   destination: route.destination,
-  handler: resolveRouteHandler(route.destination, route.redirect),
+  handler: resolveRouteHandler(route.destination, route.redirect, entrypoints),
   headers: route.headers ?? {},
   methods: route.methods ?? ['ANY'],
   positiveRequirements: route.has,
@@ -124,7 +137,7 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
     const settings = getFunctionSettings(fnPath, config);
 
     if (settings == null) {
-      yield* new FunctionConfigError({
+      return yield* new FunctionConfigError({
         message: `Settings invalid for function at path '${fnPath}'`,
         functionPath: fnPath,
       });
@@ -145,18 +158,17 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
 
       entrypoints.push({
         path: file,
-        runtime: settings!.runtime ?? 'node-20',
-        memory: settings!.memory ?? 128,
-        maxDuration: settings!.max_duration ?? 30,
+        runtime: settings.runtime ?? 'node-20',
+        memory: settings.memory ?? 128,
+        maxDuration: settings.max_duration ?? 30,
         schedule: func.schedule,
         symlinks: func.symlinks,
-        streaming:
-          settings!.runtime == null || settings!.runtime.startsWith('node-') || settings!.runtime.startsWith('bun-'),
+        streaming: settings.streaming ?? runtimeStreamsByDefault(settings.runtime),
         package:
-          settings!.includeFiles != null || settings!.excludeFiles != null
+          settings.includeFiles != null || settings.excludeFiles != null
             ? {
-                includeFiles: toArray(settings!.includeFiles),
-                excludeFiles: toArray(settings!.excludeFiles),
+                includeFiles: toArray(settings.includeFiles),
+                excludeFiles: toArray(settings.excludeFiles),
               }
             : undefined,
       });
@@ -262,7 +274,7 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         entrypoints,
         errors: [],
         warnings: [],
-        routes: (config.routes ?? []).map(mapRoute),
+        routes: (config.routes ?? []).map((route) => mapRoute(route, entrypoints)),
       } as NormalizedConfig;
     }),
   }),
