@@ -65,6 +65,10 @@ export const schema = {
             $ref: '#/$defs/runtimes',
             description: 'The runtime to use for the function.',
           },
+          streaming: {
+            type: 'boolean',
+            description: 'Enable function response streaming. When omitted, Node and Bun runtimes stream by default.',
+          },
           schedule: {
             type: 'string',
             description: 'An expression to schedule the function to run at specific times.',

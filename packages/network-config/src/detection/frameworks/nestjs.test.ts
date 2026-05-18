@@ -29,6 +29,8 @@ describe('NestJS framework detection', () => {
     // NestJS has higher priority than Express.
     expect(result.framework.slug).toBe('nestjs');
     expect(result.config.entrypoints[0].path).toBe('dist/main.js');
+    expect(result.config.entrypoints[0].streaming).toBe(true);
+    expect(result.config.routes[0].handler).toBe('SERVERLESS_FUNCTION_STREAMING');
     expect(result.config.entrypoints[0].package).toBeUndefined();
   });
 
