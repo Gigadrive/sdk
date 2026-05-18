@@ -222,6 +222,55 @@ describe('V4ConfigParser', () => {
     });
   });
 
+  it('should match streaming function routes with absolute destinations', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'dist/main.js': {
+            runtime: 'node-22',
+          },
+        },
+        routes: [{ source: '/*', destination: '/dist/main.js' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+    });
+  });
+
+  it('should match streaming function routes with substituted destinations', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      fs.mkdirSync(path.join(projectFolder, 'pages'), { recursive: true });
+      fs.writeFileSync(path.join(projectFolder, 'pages/user.tsx'), 'exports.handler = () => {}');
+
+      const config: ConfigV4 = {
+        version: 4,
+        functions: {
+          'pages/*.tsx': {
+            runtime: 'node-22',
+          },
+        },
+        routes: [{ source: '/pages/(.*)', destination: '/pages/$1.tsx?name=$1' }],
+      };
+
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      );
+
+      expect(requireRoute(result).handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+    });
+  });
+
   it('should normalize scalar includeFiles and excludeFiles into package rule arrays', async () => {
     await withTempFunctionProject(async (projectFolder) => {
       const config: ConfigV4 = {

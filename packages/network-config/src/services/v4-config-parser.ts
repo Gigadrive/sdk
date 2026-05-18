@@ -40,6 +40,21 @@ const toArray = (value: string | string[] | undefined): string[] | undefined => 
 const runtimeStreamsByDefault = (runtime: ConfigV4FunctionSettings['runtime'] | undefined): boolean =>
   runtime == null || runtime.startsWith('node-');
 
+const normalizeRouteDestination = (destination: string): string => {
+  const [withoutHash] = destination.split('#', 1);
+  const [withoutQuery] = withoutHash.split('?', 1);
+  return withoutQuery.replace(/^\/+/, '');
+};
+
+const destinationMatchesEntrypoint = (destination: string, entrypointPath: string): boolean => {
+  const normalizedDestination = normalizeRouteDestination(destination);
+  if (normalizedDestination === entrypointPath) return true;
+  if (!normalizedDestination.includes('$')) return false;
+
+  const pattern = normalizedDestination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\$\d+/g, '[^/]+');
+  return new RegExp(`^${pattern}$`).test(entrypointPath);
+};
+
 // -- Pure helpers (no Effect needed) ----------------------------------------------------------
 
 /**
@@ -91,7 +106,7 @@ const resolveRouteHandler = (
   if (redirect === true) return 'HTTP_REDIRECT';
   if (isExternal) return 'HTTP_PROXY';
 
-  const entrypoint = entrypoints.find((item) => item.path === destination);
+  const entrypoint = entrypoints.find((item) => destinationMatchesEntrypoint(destination, item.path));
   return entrypoint?.streaming === true ? 'SERVERLESS_FUNCTION_STREAMING' : 'SERVERLESS_FUNCTION';
 };
 
@@ -156,14 +171,17 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
       if (entrypoints.some((ep) => ep.path === file)) continue;
       if (Object.keys(config.functions).some((f) => f === file && f !== fnPath)) continue;
 
+      const runtime = settings.runtime ?? 'node-20';
+      const streaming = settings.streaming ?? runtimeStreamsByDefault(runtime);
+
       entrypoints.push({
         path: file,
-        runtime: settings.runtime ?? 'node-20',
+        runtime,
         memory: settings.memory ?? 128,
         maxDuration: settings.max_duration ?? 30,
         schedule: func.schedule,
         symlinks: func.symlinks,
-        streaming: settings.streaming ?? runtimeStreamsByDefault(settings.runtime),
+        streaming,
         package:
           settings.includeFiles != null || settings.excludeFiles != null
             ? {
