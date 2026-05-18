@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.1.1
+
+### Patch Changes
+
+- Add explicit response streaming configuration for Node functions and Vercel Build Output functions. Node and Bun functions now stream by default and can opt out with `streaming: false`; Vercel Build Output functions can opt out with `supportsResponseStreaming: false`. ([#300](https://github.com/Gigadrive/sdk/pull/300))
+
 ## 3.1.0
 
 ### Minor Changes
