@@ -3,6 +3,18 @@ import { AuthenticationError } from '../errors';
 const DEFAULT_SCOPE = 'offline_access openid profile email';
 const TOKEN_EXPIRY_MARGIN_SECONDS = 30;
 
+/**
+ * Compute the absolute expiry (epoch ms) for a token, applying a safety margin
+ * so the SDK refreshes proactively. The margin is clamped to never exceed half
+ * the token lifetime, so very short-lived tokens are not treated as already
+ * expired (which would refresh on every request).
+ */
+const computeExpiresAt = (expiresInSeconds: number | undefined): number => {
+  const ttl = expiresInSeconds ?? 3600;
+  const margin = Math.min(TOKEN_EXPIRY_MARGIN_SECONDS, ttl / 2);
+  return Date.now() + (ttl - margin) * 1000;
+};
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -129,7 +141,7 @@ export class OAuth2ClientCredentialProvider implements CredentialProvider {
 
     return {
       accessToken: data.access_token,
-      expiresAt: Date.now() + (data.expires_in - TOKEN_EXPIRY_MARGIN_SECONDS) * 1000,
+      expiresAt: computeExpiresAt(data.expires_in),
     };
   }
 }
@@ -153,6 +165,7 @@ export class OAuth2ClientCredentialProvider implements CredentialProvider {
  */
 export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
   readonly type = 'oauth2-authorization-code';
+  private currentRefreshToken: string | null = null;
 
   constructor(
     private readonly clientId: string,
@@ -166,7 +179,22 @@ export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
   async getToken(): Promise<TokenResult> {
     const oidc = await discoverOidc(this.issuerUrl, this.fetchFn);
 
-    if (!oidc.authorization_endpoint || !oidc.token_endpoint) {
+    if (!oidc.token_endpoint) {
+      throw new AuthenticationError('OIDC discovery returned no token endpoint');
+    }
+
+    // After the first interactive exchange, refresh silently rather than
+    // re-prompting the user. Fall back to a fresh authorization if the refresh
+    // token is rejected (e.g. revoked or expired).
+    if (this.currentRefreshToken) {
+      try {
+        return await this.refreshAccessToken(oidc.token_endpoint, this.currentRefreshToken);
+      } catch {
+        this.currentRefreshToken = null;
+      }
+    }
+
+    if (!oidc.authorization_endpoint) {
       throw new AuthenticationError('OIDC discovery returned incomplete endpoints');
     }
 
@@ -236,10 +264,46 @@ export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
       expires_in?: number;
     };
 
+    this.currentRefreshToken = data.refresh_token ?? null;
+
     return {
       accessToken: data.access_token,
-      expiresAt: Date.now() + ((data.expires_in ?? 3600) - TOKEN_EXPIRY_MARGIN_SECONDS) * 1000,
+      expiresAt: computeExpiresAt(data.expires_in),
       refreshToken: data.refresh_token,
+    };
+  }
+
+  /** Exchange the stored refresh token for a new access token (silent renewal). */
+  private async refreshAccessToken(tokenEndpoint: string, refreshToken: string): Promise<TokenResult> {
+    const response = await this.fetchFn(tokenEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: this.clientId,
+        refresh_token: refreshToken,
+      }).toString(),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new AuthenticationError(`Token refresh failed (${response.status}): ${body}`);
+    }
+
+    const data = (await response.json()) as {
+      access_token: string;
+      refresh_token?: string;
+      expires_in?: number;
+    };
+
+    if (data.refresh_token) {
+      this.currentRefreshToken = data.refresh_token;
+    }
+
+    return {
+      accessToken: data.access_token,
+      expiresAt: computeExpiresAt(data.expires_in),
+      refreshToken: data.refresh_token ?? this.currentRefreshToken ?? undefined,
     };
   }
 }
@@ -308,7 +372,7 @@ export class OAuth2RefreshTokenProvider implements CredentialProvider {
 
     return {
       accessToken: data.access_token,
-      expiresAt: Date.now() + ((data.expires_in ?? 3600) - TOKEN_EXPIRY_MARGIN_SECONDS) * 1000,
+      expiresAt: computeExpiresAt(data.expires_in),
       refreshToken: data.refresh_token ?? this.currentRefreshToken,
     };
   }
@@ -370,7 +434,9 @@ const DEFAULT_BASE_URL = 'https://api.gigadrive.network';
  * 8. Throws AuthenticationError
  */
 export const resolveCredentialProvider = (config: CredentialResolverConfig): CredentialProvider => {
-  const fetchFn = config.fetch ?? globalThis.fetch;
+  // Bind the default fetch to globalThis so calling it as `this.fetchFn(...)`
+  // does not throw "Illegal invocation" in runtimes that require a bound receiver.
+  const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
   const baseUrl = config.baseUrl ?? process.env.GIGADRIVE_API_BASE_URL ?? DEFAULT_BASE_URL;
   const idpIssuerUrl = config.idpIssuerUrl ?? process.env.GIGADRIVE_IDP_ISSUER_URL ?? DEFAULT_IDP_ISSUER_URL;
   const tokenUrl = `${baseUrl}/oauth2/token`;

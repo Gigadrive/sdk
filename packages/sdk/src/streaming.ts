@@ -30,7 +30,8 @@ const parseEvent = <T>(data: string): T => {
 
 /**
  * Parse an SSE stream, yielding each event's `data` payload parsed as JSON.
- * Stops cleanly when the server sends the `[DONE]` sentinel.
+ * The `[DONE]` sentinel and empty keep-alive events are skipped; iteration ends
+ * when the underlying stream closes.
  *
  * @typeParam T - The shape of each streamed JSON chunk.
  * @param response - A streaming `fetch` response.

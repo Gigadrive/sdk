@@ -169,7 +169,9 @@ export class GigadriveClient {
 
   constructor(config: GigadriveClientConfig = {}) {
     const baseUrl = config.baseUrl ?? process.env.GIGADRIVE_API_BASE_URL ?? DEFAULT_BASE_URL;
-    const fetchFn = config.fetch ?? globalThis.fetch;
+    // Bind the default fetch to globalThis so it can be invoked as a method on
+    // the HTTP client without throwing "Illegal invocation" in some runtimes.
+    const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
 
     const credentialProvider = resolveCredentialProvider({ ...config, baseUrl, fetch: fetchFn });
     const tokenManager = new TokenManager(credentialProvider);

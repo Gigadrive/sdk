@@ -127,8 +127,9 @@ export class StorageObjectsResource extends BaseResource {
 
   /**
    * Resolve an object by its key (path) instead of its ID. Convenience over
-   * {@link list} — lists with the key as the prefix and returns the exact match
-   * from the first page, or `null` if no object with that key exists.
+   * {@link list} — lists with the key as the prefix and returns the exact match,
+   * paging through results until found, or `null` if no object with that key
+   * exists. (The API has no get-by-key endpoint.)
    *
    * @param applicationId - The application ID (UUID).
    * @param bucketId - The bucket ID (UUID).
@@ -136,8 +137,14 @@ export class StorageObjectsResource extends BaseResource {
    * @returns The matching object, or `null` if not found.
    */
   async getByKey(applicationId: string, bucketId: string, key: string): Promise<StorageObject | null> {
-    const { items } = await this.list(applicationId, bucketId, { prefix: key, delimiter: '' });
-    return items.find((object) => object.key === key) ?? null;
+    let cursor: string | undefined;
+    do {
+      const page = await this.list(applicationId, bucketId, { prefix: key, delimiter: '', cursor });
+      const match = page.items.find((object) => object.key === key);
+      if (match) return match;
+      cursor = page.nextCursor;
+    } while (cursor);
+    return null;
   }
 
   /**

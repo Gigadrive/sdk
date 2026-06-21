@@ -43,6 +43,28 @@ describe('StorageObjectsResource', () => {
     });
   });
 
+  it('should page through results in getByKey until the exact key is found', async () => {
+    const target = { id: 'obj-2', key: 'images/photo.jpg' };
+    const get = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [{ id: 'x', key: 'images/photo.jpg.bak' }],
+        total: 2,
+        commonPrefixes: [],
+        nextCursor: 'c1',
+      })
+      .mockResolvedValueOnce({ items: [target], total: 2, commonPrefixes: [] });
+    const http = { get } as unknown as HttpClient;
+    const resource = new StorageObjectsResource(http);
+
+    const result = await resource.getByKey('app-1', 'bucket-1', 'images/photo.jpg');
+    expect(result).toEqual(target);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenNthCalledWith(2, '/applications/app-1/storage/buckets/bucket-1/objects', {
+      query: { prefix: 'images/photo.jpg', delimiter: '', cursor: 'c1' },
+    });
+  });
+
   it('should return null from getByKey when no exact match exists', async () => {
     const http = createMockHttpClient({ items: [{ id: 'x', key: 'other.txt' }], total: 1, commonPrefixes: [] });
     const resource = new StorageObjectsResource(http);

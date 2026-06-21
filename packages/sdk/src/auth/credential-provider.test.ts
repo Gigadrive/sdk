@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthenticationError } from '../errors';
 import {
   BearerTokenProvider,
+  OAuth2AuthorizationCodeProvider,
   OAuth2ClientCredentialProvider,
   OAuth2RefreshTokenProvider,
   resolveCredentialProvider,
@@ -109,6 +110,60 @@ describe('OAuth2RefreshTokenProvider', () => {
     const provider = new OAuth2RefreshTokenProvider('client-id', 'bad-refresh', 'https://idp.example.com', mockFetch);
 
     await expect(provider.getToken()).rejects.toThrow('Refresh token is invalid or expired');
+  });
+});
+
+describe('OAuth2AuthorizationCodeProvider', () => {
+  it('exchanges a code on first use, then refreshes silently without re-prompting', async () => {
+    const discovery = {
+      authorization_endpoint: 'https://idp.example/authorize',
+      token_endpoint: 'https://idp.example/token',
+    };
+    let exchanges = 0;
+    let refreshes = 0;
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes('.well-known')) {
+        return new Response(JSON.stringify(discovery), { status: 200 });
+      }
+      const body = String(init?.body ?? '');
+      if (body.includes('grant_type=authorization_code')) {
+        exchanges++;
+        return new Response(JSON.stringify({ access_token: 'access-1', refresh_token: 'refresh-1', expires_in: 300 }), {
+          status: 200,
+        });
+      }
+      if (body.includes('grant_type=refresh_token')) {
+        refreshes++;
+        return new Response(JSON.stringify({ access_token: 'access-2', expires_in: 300 }), { status: 200 });
+      }
+      return new Response('bad request', { status: 400 });
+    });
+
+    let prompts = 0;
+    const onAuthorizationUrl = async (url: string): Promise<string> => {
+      prompts++;
+      const state = new URL(url).searchParams.get('state');
+      return `https://app.example/callback?code=abc&state=${state}`;
+    };
+
+    const provider = new OAuth2AuthorizationCodeProvider(
+      'client-id',
+      'https://idp.example',
+      'urn:ietf:wg:oauth:2.0:oob',
+      onAuthorizationUrl,
+      fetchImpl as unknown as typeof globalThis.fetch
+    );
+
+    const first = await provider.getToken();
+    expect(first.accessToken).toBe('access-1');
+    expect(prompts).toBe(1);
+
+    const second = await provider.getToken();
+    expect(second.accessToken).toBe('access-2');
+    expect(prompts).toBe(1); // not re-prompted
+    expect(exchanges).toBe(1);
+    expect(refreshes).toBe(1);
   });
 });
 

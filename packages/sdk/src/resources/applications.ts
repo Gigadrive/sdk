@@ -58,11 +58,12 @@ export class ApplicationsResource extends BaseResource {
    * @example
    * ```ts
    * // Upload a file
-   * const { url } = await client.applications.storage.uploadSessions.upload(
-   *   'app-id', 'bucket-id', 'images/logo.png',
-   *   fileData,
-   *   { contentType: 'image/png' },
-   * );
+   * const { url } = await client.applications.storage.upload({
+   *   applicationId: 'app-id',
+   *   bucketId: 'bucket-id',
+   *   key: 'images/logo.png',
+   *   data: fileData,
+   * });
    *
    * // List objects in a bucket
    * const { items } = await client.applications.storage.objects.list('app-id', 'bucket-id');

@@ -28,7 +28,11 @@ describe('AiGatewayResource', () => {
     const request = { model: 'openai/gpt-4o', messages: [{ role: 'user', content: 'Hello' }] };
 
     await resource.chatCompletions(request);
-    expect(http.post).toHaveBeenCalledWith('/ai/v1/chat/completions', request, { headers: undefined });
+    expect(http.post).toHaveBeenCalledWith(
+      '/ai/v1/chat/completions',
+      { ...request, stream: false },
+      { headers: undefined }
+    );
   });
 
   it('lists models at /ai/v1/models', async () => {

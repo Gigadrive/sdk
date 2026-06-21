@@ -266,6 +266,7 @@ export class DeploymentsResource extends BaseResource {
     const response = await this.httpClient.fetchRaw(presignedUrl, {
       method: 'PUT',
       headers: {
+        // Deployment artifacts are always ZIP archives.
         'Content-Type': 'application/zip',
         'Content-Length': String(data instanceof Blob ? data.size : data.byteLength),
       },

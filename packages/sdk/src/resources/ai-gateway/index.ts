@@ -112,7 +112,7 @@ export class AiGatewayResource extends BaseResource {
    * @param options - Custom headers (e.g. `X-Gigadrive-Application-Id`).
    */
   async chatCompletions(data: ChatCompletionRequest, options?: GatewayRequestOptions): Promise<ChatCompletionResponse> {
-    return this.httpClient.post(`${BASE}/chat/completions`, data, { headers: options?.headers });
+    return this.httpClient.post(`${BASE}/chat/completions`, { ...data, stream: false }, { headers: options?.headers });
   }
 
   /**
@@ -124,7 +124,7 @@ export class AiGatewayResource extends BaseResource {
     options?: GatewayRequestOptions
   ): Promise<GatewayResult<ChatCompletionResponse>> {
     const response = await this.httpClient.requestStream('POST', `${BASE}/chat/completions`, {
-      body: data,
+      body: { ...data, stream: false },
       headers: options?.headers,
     });
     const body = (await response.json()) as ChatCompletionResponse;
@@ -156,7 +156,7 @@ export class AiGatewayResource extends BaseResource {
    * Create a response using the Open Responses-compatible endpoint.
    */
   async responses(data: ResponsesRequest, options?: GatewayRequestOptions): Promise<ResponsesResponse> {
-    return this.httpClient.post(`${BASE}/responses`, data, { headers: options?.headers });
+    return this.httpClient.post(`${BASE}/responses`, { ...data, stream: false }, { headers: options?.headers });
   }
 
   /**
