@@ -159,7 +159,8 @@ export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
     private readonly issuerUrl: string,
     private readonly redirectUri: string,
     private readonly onAuthorizationUrl: (url: string) => Promise<string>,
-    private readonly fetchFn: typeof globalThis.fetch
+    private readonly fetchFn: typeof globalThis.fetch,
+    private readonly scope: string = DEFAULT_SCOPE
   ) {}
 
   async getToken(): Promise<TokenResult> {
@@ -176,7 +177,7 @@ export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
     authUrl.searchParams.set('client_id', this.clientId);
     authUrl.searchParams.set('redirect_uri', this.redirectUri);
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', DEFAULT_SCOPE);
+    authUrl.searchParams.set('scope', this.scope);
     authUrl.searchParams.set('code_challenge', codeChallenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');
     authUrl.searchParams.set('state', state);
@@ -348,6 +349,8 @@ export interface CredentialResolverConfig {
   redirectUri?: string;
   baseUrl?: string;
   fetch?: typeof globalThis.fetch;
+  /** OAuth scopes to request in the authorization-code flow (in addition to identity scopes). */
+  scopes?: string[];
 }
 
 const DEFAULT_IDP_ISSUER_URL = 'https://idp.gigadrive.de';
@@ -390,12 +393,14 @@ export const resolveCredentialProvider = (config: CredentialResolverConfig): Cre
   // 4. Explicit authorization code callback
   if (config.onAuthorizationUrl && config.clientId) {
     const redirectUri = config.redirectUri ?? 'urn:ietf:wg:oauth:2.0:oob';
+    const scope = config.scopes && config.scopes.length > 0 ? config.scopes.join(' ') : DEFAULT_SCOPE;
     return new OAuth2AuthorizationCodeProvider(
       config.clientId,
       idpIssuerUrl,
       redirectUri,
       config.onAuthorizationUrl,
-      fetchFn
+      fetchFn,
+      scope
     );
   }
 

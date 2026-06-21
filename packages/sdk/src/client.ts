@@ -86,6 +86,14 @@ export interface GigadriveClientConfig {
   redirectUri?: string;
 
   /**
+   * OAuth scopes to request during the authorization-code flow, in addition to
+   * the default identity scopes (`openid profile email offline_access`). Use
+   * this to request API capability scopes (e.g. `network:applications:read`) so
+   * the resulting token can call the corresponding endpoints.
+   */
+  scopes?: string[];
+
+  /**
    * Base URL of the Gigadrive Network API.
    * Falls back to `GIGADRIVE_API_BASE_URL`, default: `https://api.gigadrive.network`.
    */

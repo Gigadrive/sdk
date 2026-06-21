@@ -16,7 +16,16 @@ describe('OrganizationsResource', () => {
     const resource = new OrganizationsResource(http);
 
     await resource.list();
-    expect(http.get).toHaveBeenCalledWith('/organizations');
+    expect(http.get).toHaveBeenCalledWith('/organizations', { query: undefined });
+  });
+
+  it('should expose the aiGateway governance sub-resource', () => {
+    const http = createMockHttpClient();
+    const resource = new OrganizationsResource(http);
+
+    expect(resource.aiGateway.usage).toBeDefined();
+    expect(resource.aiGateway.budgets).toBeDefined();
+    expect(resource.aiGateway.policies).toBeDefined();
   });
 });
 
@@ -26,7 +35,7 @@ describe('OrganizationEnvVarsResource', () => {
     const resource = new OrganizationsResource(http);
 
     await resource.envVars.list('org-1');
-    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/env-vars');
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/env-vars', { query: undefined });
   });
 
   it('should create env var', async () => {

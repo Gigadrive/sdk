@@ -16,7 +16,23 @@ describe('ApplicationsResource', () => {
     const resource = new ApplicationsResource(http);
 
     await resource.list();
-    expect(http.get).toHaveBeenCalledWith('/applications');
+    expect(http.get).toHaveBeenCalledWith('/applications', { query: undefined });
+  });
+
+  it('should list applications filtered by organization', async () => {
+    const http = createMockHttpClient();
+    const resource = new ApplicationsResource(http);
+
+    await resource.list({ organizationId: 'org-1' });
+    expect(http.get).toHaveBeenCalledWith('/applications', { query: { organizationId: 'org-1' } });
+  });
+
+  it('should list application hostnames', async () => {
+    const http = createMockHttpClient();
+    const resource = new ApplicationsResource(http);
+
+    await resource.hostnames('app-1');
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/hostnames');
   });
 
   it('should expose envVars sub-resource', async () => {
@@ -24,15 +40,17 @@ describe('ApplicationsResource', () => {
     const resource = new ApplicationsResource(http);
 
     await resource.envVars.list('app-1');
-    expect(http.get).toHaveBeenCalledWith('/applications/app-1/env-vars');
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/env-vars', { query: undefined });
   });
 
-  it('should expose storage sub-resources', () => {
+  it('should expose storage and requests sub-resources', () => {
     const http = createMockHttpClient();
     const resource = new ApplicationsResource(http);
 
     expect(resource.storage.buckets).toBeDefined();
     expect(resource.storage.objects).toBeDefined();
     expect(resource.storage.uploadSessions).toBeDefined();
+    expect(resource.storage.upload).toBeInstanceOf(Function);
+    expect(resource.requests).toBeDefined();
   });
 });

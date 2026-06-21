@@ -1,5 +1,6 @@
-import type { Paginated } from '../http-client';
+import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
+import { OrganizationAiGatewayResource } from './organization-ai-gateway';
 import { OrganizationEnvVarsResource } from './organization-env-vars';
 
 /** A Gigadrive Network organization. */
@@ -46,16 +47,28 @@ export class OrganizationsResource extends BaseResource {
    */
   readonly envVars: OrganizationEnvVarsResource;
 
+  /**
+   * AI Gateway governance for an organization: usage analytics, budgets, and
+   * model/provider policies.
+   *
+   * @example
+   * ```ts
+   * const usage = await client.organizations.aiGateway.usage.summary('org-id', { from: '2026-06-01' });
+   * console.log(usage.summary.totalTokens);
+   * ```
+   */
+  readonly aiGateway: OrganizationAiGatewayResource;
+
   constructor(...args: ConstructorParameters<typeof BaseResource>) {
     super(...args);
     this.envVars = new OrganizationEnvVarsResource(this.httpClient);
+    this.aiGateway = new OrganizationAiGatewayResource(this.httpClient);
   }
 
   /**
-   * List all organizations the authenticated actor has access to.
+   * List organizations the authenticated actor has access to.
    *
-   * Requires the `network:organizations:read` scope.
-   *
+   * @param query - Optional pagination.
    * @returns A paginated list of organizations.
    *
    * @example
@@ -64,7 +77,9 @@ export class OrganizationsResource extends BaseResource {
    * console.log(`Found ${total} organizations`);
    * ```
    */
-  async list(): Promise<Paginated<Organization>> {
-    return this.httpClient.get('/organizations');
+  async list(query?: ListQuery): Promise<Paginated<Organization>> {
+    return this.httpClient.get('/organizations', {
+      query: query as Record<string, string | number | undefined> | undefined,
+    });
   }
 }

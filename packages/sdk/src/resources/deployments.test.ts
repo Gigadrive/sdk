@@ -89,7 +89,15 @@ describe('DeploymentsResource', () => {
 
     await resource.getLogs('dep-1', { offset: 0, limit: 10 });
     expect(http.get).toHaveBeenCalledWith('/deployments/dep-1/logs', {
-      query: { offset: '0', limit: '10' },
+      query: { offset: 0, limit: 10 },
     });
+  });
+
+  it('should list deployment hostnames', async () => {
+    const http = createMockHttpClient();
+    const resource = new DeploymentsResource(http);
+
+    await resource.getHostnames('dep-1');
+    expect(http.get).toHaveBeenCalledWith('/deployments/dep-1/hostnames');
   });
 });

@@ -79,3 +79,47 @@ export class ApiError extends GigadriveError {
     this.code = code;
   }
 }
+
+/**
+ * Thrown when a file upload fails. The original cause (e.g. a network error or a
+ * transport-level error from the resumable upload) is preserved on
+ * {@link cause} for inspection.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await client.applications.storage.upload({ applicationId, bucketId, key, data });
+ * } catch (err) {
+ *   if (err instanceof UploadError) {
+ *     console.error('Upload failed:', err.message, err.cause);
+ *   }
+ * }
+ * ```
+ */
+export class UploadError extends GigadriveError {
+  /** The underlying error that caused the upload to fail, if any. */
+  override readonly cause: unknown;
+
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'UploadError';
+    this.cause = cause;
+  }
+}
+
+/**
+ * Thrown when an upload cannot complete because its session (and the short-lived
+ * upload URL it was issued with) expired. Create a new upload to retry.
+ *
+ * The upload URL is only valid until `session.expiresAt`; very large uploads on
+ * slow connections can exceed that window.
+ */
+export class UploadSessionExpiredError extends UploadError {
+  constructor(
+    message = 'The upload session expired before the upload completed. Start a new upload to retry.',
+    cause?: unknown
+  ) {
+    super(message, cause);
+    this.name = 'UploadSessionExpiredError';
+  }
+}

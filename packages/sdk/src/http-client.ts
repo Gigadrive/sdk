@@ -6,7 +6,7 @@ import { ApiError, AuthenticationError } from './errors';
 // ---------------------------------------------------------------------------
 
 /**
- * A paginated API response. All list endpoints return this shape.
+ * A paginated API response. List endpoints return this shape.
  *
  * @typeParam T - The type of each item in the list.
  */
@@ -15,14 +15,40 @@ export interface Paginated<T> {
   items: T[];
   /** The total number of items across all pages. */
   total: number;
+  /** An opaque cursor for the next page, present on cursor-paginated endpoints when more items remain. */
+  nextCursor?: string;
+}
+
+/** A value that can be serialized into a query-string parameter. `undefined` values are omitted. */
+export type QueryValue = string | number | boolean | undefined;
+
+/** Common pagination query parameters accepted by list endpoints. */
+export interface ListQuery {
+  /** 1-indexed page number (for page/`perPage`-style pagination). */
+  page?: number;
+  /** Maximum number of items per page. */
+  perPage?: number;
+  /** Opaque cursor for cursor-based pagination (from a previous response's `nextCursor`). */
+  cursor?: string;
 }
 
 /** @internal */
 export interface RequestOptions {
-  query?: Record<string, string | undefined>;
+  query?: Record<string, QueryValue>;
   body?: unknown;
   headers?: Record<string, string>;
 }
+
+const isRawBody = (body: unknown): boolean =>
+  typeof body === 'string' ||
+  body instanceof ArrayBuffer ||
+  (typeof Uint8Array !== 'undefined' && body instanceof Uint8Array) ||
+  (typeof Blob !== 'undefined' && body instanceof Blob) ||
+  (typeof FormData !== 'undefined' && body instanceof FormData) ||
+  (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream);
+
+const hasHeader = (headers: Record<string, string>, name: string): boolean =>
+  Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase());
 
 // ---------------------------------------------------------------------------
 // HTTP Client
@@ -51,18 +77,23 @@ export class HttpClient {
   }
 
   /** @internal */
-  async post<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('POST', path, { body });
+  async post<T>(path: string, body?: unknown, options?: Pick<RequestOptions, 'headers' | 'query'>): Promise<T> {
+    return this.request<T>('POST', path, { body, ...options });
   }
 
   /** @internal */
-  async patch<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('PATCH', path, { body });
+  async put<T>(path: string, body?: unknown, options?: Pick<RequestOptions, 'headers' | 'query'>): Promise<T> {
+    return this.request<T>('PUT', path, { body, ...options });
   }
 
   /** @internal */
-  async delete<T>(path: string): Promise<T> {
-    return this.request<T>('DELETE', path);
+  async patch<T>(path: string, body?: unknown, options?: Pick<RequestOptions, 'headers' | 'query'>): Promise<T> {
+    return this.request<T>('PATCH', path, { body, ...options });
+  }
+
+  /** @internal */
+  async delete<T>(path: string, options?: Pick<RequestOptions, 'query'>): Promise<T> {
+    return this.request<T>('DELETE', path, options);
   }
 
   /** @internal */
@@ -71,12 +102,27 @@ export class HttpClient {
     body: string | ArrayBuffer | Uint8Array | ReadableStream | Blob | FormData,
     headers?: Record<string, string>
   ): Promise<T> {
-    return this.request<T>('POST', path, { body: body as unknown, headers });
+    return this.request<T>('POST', path, { body, headers });
   }
 
   /**
-   * Make a raw fetch request to an arbitrary URL (e.g. presigned S3 URLs
-   * or TUS upload endpoints). No auth header is injected and the base URL
+   * Make an authenticated request and return the raw `Response` without parsing
+   * the body. Used for streamed (SSE) and binary responses.
+   *
+   * @throws {@link ApiError} if the response status is not OK.
+   * @internal
+   */
+  async requestStream(method: string, path: string, options?: RequestOptions): Promise<Response> {
+    const response = await this.fetchWithAuth(method, path, options);
+    if (!response.ok) {
+      throw await this.toApiError(response);
+    }
+    return response;
+  }
+
+  /**
+   * Make a raw fetch request to an arbitrary URL (e.g. presigned upload URLs
+   * or resumable upload endpoints). No auth header is injected and the base URL
    * is not prepended.
    *
    * @param url - The full URL to fetch.
@@ -95,6 +141,12 @@ export class HttpClient {
   }
 
   private async request<T>(method: string, path: string, options?: RequestOptions): Promise<T> {
+    const response = await this.fetchWithAuth(method, path, options);
+    return this.handleResponse<T>(response);
+  }
+
+  /** Perform the request with auth injection and a single 401 refresh-retry. */
+  private async fetchWithAuth(method: string, path: string, options?: RequestOptions): Promise<Response> {
     const url = this.buildUrl(path, options?.query);
     const token = await this.tokenManager.getToken();
 
@@ -103,42 +155,39 @@ export class HttpClient {
       ...options?.headers,
     };
 
-    // Add Content-Type for JSON bodies (skip for raw bodies which set their own headers)
-    if (options?.body !== undefined && !options.headers) {
-      headers['Content-Type'] = 'application/json';
+    let requestBody: RequestInit['body'] = null;
+    if (options?.body !== undefined) {
+      if (isRawBody(options.body)) {
+        // Raw bodies (FormData/Blob/bytes/streams) set their own Content-Type.
+        requestBody = options.body as RequestInit['body'];
+      } else {
+        requestBody = JSON.stringify(options.body);
+        if (!hasHeader(headers, 'Content-Type')) {
+          headers['Content-Type'] = 'application/json';
+        }
+      }
     }
 
-    const requestBody =
-      options?.body !== undefined && !options.headers
-        ? JSON.stringify(options.body)
-        : (options?.body as string | ArrayBuffer | Uint8Array | ReadableStream | Blob | FormData | undefined);
+    const response = await this.fetchFn(url, { method, headers, body: requestBody });
 
-    const response = await this.fetchFn(url, {
-      method,
-      headers,
-      body: requestBody ?? null,
-    });
+    // A streamed body is consumed by the first fetch and cannot be replayed, so
+    // we cannot transparently retry it after a token refresh.
+    const bodyIsOneShot = typeof ReadableStream !== 'undefined' && requestBody instanceof ReadableStream;
 
-    // Retry once on 401
-    if (response.status === 401) {
+    // Retry once on 401 after refreshing the token.
+    if (response.status === 401 && !bodyIsOneShot) {
       this.tokenManager.invalidate();
       const retryToken = await this.tokenManager.getToken();
       headers.Authorization = `Bearer ${retryToken}`;
 
-      const retryResponse = await this.fetchFn(url, {
-        method,
-        headers,
-        body: requestBody ?? null,
-      });
-
+      const retryResponse = await this.fetchFn(url, { method, headers, body: requestBody });
       if (retryResponse.status === 401) {
         throw new AuthenticationError('Authentication failed after token refresh');
       }
-
-      return this.handleResponse<T>(retryResponse);
+      return retryResponse;
     }
 
-    return this.handleResponse<T>(response);
+    return response;
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -156,6 +205,10 @@ export class HttpClient {
       return JSON.parse(text) as T;
     }
 
+    throw await this.toApiError(response);
+  }
+
+  private async toApiError(response: Response): Promise<ApiError> {
     let message: string;
     let code: string | undefined;
 
@@ -173,10 +226,10 @@ export class HttpClient {
       message = response.statusText;
     }
 
-    throw new ApiError(message, response.status, code);
+    return new ApiError(message, response.status, code);
   }
 
-  private buildUrl(path: string, query?: Record<string, string | undefined>): string {
+  private buildUrl(path: string, query?: Record<string, QueryValue>): string {
     const url = `${this.baseUrl}${path}`;
 
     if (!query) return url;
@@ -184,7 +237,7 @@ export class HttpClient {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) {
-        params.set(key, value);
+        params.set(key, String(value));
       }
     }
 

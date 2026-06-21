@@ -1,16 +1,18 @@
 import type { Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
+import type { Hostname } from './hostnames';
 
 /**
  * The lifecycle status of a deployment.
  * - `"PENDING"` — Created, waiting for artifact upload.
+ * - `"QUEUED"` — Queued for processing.
+ * - `"STARTING"` — Processing is starting.
  * - `"BUILDING"` — Build pipeline is running.
  * - `"PROVISIONING"` — Infrastructure is being provisioned.
  * - `"ACTIVE"` — Successfully deployed and serving traffic.
  * - `"FAILED"` — Build or provisioning failed.
- * - `"SUSPENDED"` — Deployment has been suspended.
  */
-export type DeploymentStatus = 'PENDING' | 'BUILDING' | 'PROVISIONING' | 'FAILED' | 'ACTIVE' | 'SUSPENDED';
+export type DeploymentStatus = 'PENDING' | 'QUEUED' | 'STARTING' | 'BUILDING' | 'PROVISIONING' | 'ACTIVE' | 'FAILED';
 
 /** The severity level of a deployment log entry. */
 export type DeploymentLogType = 'INFO' | 'ERROR' | 'WARN';
@@ -200,8 +202,7 @@ export class DeploymentsResource extends BaseResource {
 
   /**
    * Start a multipart upload for deployment artifacts. This initiates a new
-   * S3-compatible multipart upload and returns an upload ID for subsequent
-   * part uploads.
+   * multipart upload and returns an upload ID for subsequent part uploads.
    *
    * The deployment must be in `"PENDING"` status.
    *
@@ -239,7 +240,7 @@ export class DeploymentsResource extends BaseResource {
 
   /**
    * Upload a part to a presigned URL obtained from {@link getPresignedUrl}.
-   * This sends the chunk data directly to the storage provider (S3), not
+   * This sends the chunk data directly to the backend storage service, not
    * to the Gigadrive API. The returned `etag` is needed for
    * {@link completeUpload}.
    *
@@ -329,11 +330,23 @@ export class DeploymentsResource extends BaseResource {
    */
   async getLogs(deploymentId: string, query?: ListDeploymentLogsQuery): Promise<DeploymentLogPage> {
     return this.httpClient.get(`/deployments/${deploymentId}/logs`, {
-      query: query
-        ? (Object.fromEntries(
-            Object.entries(query).map(([k, v]) => [k, v !== undefined ? String(v) : undefined])
-          ) as Record<string, string | undefined>)
-        : undefined,
+      query: query as Record<string, string | number | undefined> | undefined,
     });
+  }
+
+  /**
+   * List the immutable `*.gigadrive.app` hostnames assigned to a deployment.
+   *
+   * @param deploymentId - The deployment ID (UUID).
+   * @returns A paginated list of hostnames.
+   *
+   * @example
+   * ```ts
+   * const { items } = await client.deployments.getHostnames('deployment-id');
+   * console.log(items.map((h) => h.hostname));
+   * ```
+   */
+  async getHostnames(deploymentId: string): Promise<Paginated<Hostname>> {
+    return this.httpClient.get(`/deployments/${deploymentId}/hostnames`);
   }
 }

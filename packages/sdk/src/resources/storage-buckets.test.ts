@@ -15,15 +15,19 @@ describe('StorageBucketsResource', () => {
     const resource = new StorageBucketsResource(http);
 
     await resource.list('app-1');
-    expect(http.get).toHaveBeenCalledWith('/applications/app-1/storage/buckets');
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/storage/buckets', { query: undefined });
   });
 
   it('should create a bucket', async () => {
     const http = createMockHttpClient();
     const resource = new StorageBucketsResource(http);
 
-    await resource.create('app-1', { name: 'my-bucket' });
-    expect(http.post).toHaveBeenCalledWith('/applications/app-1/storage/buckets', { name: 'my-bucket' });
+    await resource.create('app-1', { name: 'my-bucket', environmentId: 'env-1', visibility: 'public' });
+    expect(http.post).toHaveBeenCalledWith('/applications/app-1/storage/buckets', {
+      name: 'my-bucket',
+      environmentId: 'env-1',
+      visibility: 'public',
+    });
   });
 
   it('should get a bucket', async () => {

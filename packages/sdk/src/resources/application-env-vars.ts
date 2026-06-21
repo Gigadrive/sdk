@@ -1,4 +1,4 @@
-import type { Paginated } from '../http-client';
+import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 import type { CreateEnvVarInput, EnvVar, UpdateEnvVarInput } from './env-vars';
 
@@ -21,8 +21,10 @@ export class ApplicationEnvVarsResource extends BaseResource {
    * }
    * ```
    */
-  async list(applicationId: string): Promise<Paginated<EnvVar>> {
-    return this.httpClient.get(`/applications/${applicationId}/env-vars`);
+  async list(applicationId: string, query?: ListQuery): Promise<Paginated<EnvVar>> {
+    return this.httpClient.get(`/applications/${applicationId}/env-vars`, {
+      query: query as Record<string, string | number | undefined> | undefined,
+    });
   }
 
   /**

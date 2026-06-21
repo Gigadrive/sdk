@@ -1,7 +1,9 @@
-import type { Paginated } from '../http-client';
+import type { ListQuery, Paginated } from '../http-client';
 import { ApplicationEnvVarsResource } from './application-env-vars';
+import { ApplicationRequestsResource } from './application-requests';
 import { ApplicationStorageResource } from './application-storage';
 import { BaseResource } from './base-resource';
+import type { ApplicationHostnameList } from './hostnames';
 import type { Organization } from './organizations';
 
 /** A Gigadrive Network application, belonging to an {@link Organization}. */
@@ -18,6 +20,12 @@ export interface Application {
   createdAt: string;
   /** ISO 8601 last-updated timestamp. */
   updatedAt: string;
+}
+
+/** Query filters for listing applications. */
+export interface ListApplicationsQuery extends ListQuery {
+  /** Only return applications belonging to this organization. */
+  organizationId?: string;
 }
 
 /**
@@ -62,26 +70,57 @@ export class ApplicationsResource extends BaseResource {
    */
   readonly storage: ApplicationStorageResource;
 
+  /**
+   * Read observed traffic (request logs) for an application.
+   *
+   * @example
+   * ```ts
+   * const { items } = await client.applications.requests.list('app-id', { statusFamily: 5 });
+   * ```
+   */
+  readonly requests: ApplicationRequestsResource;
+
   constructor(...args: ConstructorParameters<typeof BaseResource>) {
     super(...args);
     this.envVars = new ApplicationEnvVarsResource(this.httpClient);
     this.storage = new ApplicationStorageResource(this.httpClient);
+    this.requests = new ApplicationRequestsResource(this.httpClient);
   }
 
   /**
-   * List all applications the authenticated actor has access to.
+   * List applications the authenticated actor has access to.
    *
    * Requires the `network:applications:read` scope.
    *
+   * @param query - Optional organization filter and pagination.
    * @returns A paginated list of applications.
    *
    * @example
    * ```ts
-   * const { items, total } = await client.applications.list();
+   * const { items, total } = await client.applications.list({ organizationId: 'org-id' });
    * console.log(`Found ${total} applications`);
    * ```
    */
-  async list(): Promise<Paginated<Application>> {
-    return this.httpClient.get('/applications');
+  async list(query?: ListApplicationsQuery): Promise<Paginated<Application>> {
+    return this.httpClient.get('/applications', {
+      query: query as Record<string, string | number | undefined> | undefined,
+    });
+  }
+
+  /**
+   * List the `*.gigadrive.app` hostnames for an application (production alias
+   * and per-branch aliases).
+   *
+   * @param applicationId - The application ID (UUID).
+   * @returns The hostnames plus the production hostname `label`.
+   *
+   * @example
+   * ```ts
+   * const { items, label } = await client.applications.hostnames('app-id');
+   * console.log(`Production: ${label}.gigadrive.app`);
+   * ```
+   */
+  async hostnames(applicationId: string): Promise<ApplicationHostnameList> {
+    return this.httpClient.get(`/applications/${applicationId}/hostnames`);
   }
 }
