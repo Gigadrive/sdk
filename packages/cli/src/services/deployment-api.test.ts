@@ -32,16 +32,15 @@ const makeTestLayer = () => {
 const depId = 'dep-123' as DeploymentId;
 const uploadId = 'upload-456' as UploadId;
 
-/** Inspect the most recent call made to the mocked global fetch. */
+/** Inspect the most recent call made to the mocked global fetch, with header names lower-cased. */
 const lastFetchCall = () => {
   const calls = vi.mocked(globalThis.fetch).mock.calls;
   const [url, init] = calls[calls.length - 1]!;
-  return {
-    url: String(url),
-    method: init?.method,
-    body: init?.body,
-    headers: (init?.headers ?? {}) as Record<string, string>,
-  };
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries((init?.headers ?? {}) as Record<string, string>)) {
+    headers[key.toLowerCase()] = value;
+  }
+  return { url: String(url), method: init?.method, body: init?.body, headers };
 };
 
 // ---------------------------------------------------------------------------
@@ -87,7 +86,7 @@ describe('DeploymentApiService', () => {
       expect(call.url).toBe(`${BASE_URL}/deployments`);
       expect(call.method).toBe('POST');
       expect(call.body).toBe(JSON.stringify({ applicationId: 'app-1' }));
-      expect(call.headers.Authorization).toBe('Bearer test-auth-token');
+      expect(call.headers.authorization).toBe('Bearer test-auth-token');
     });
 
     it('should fail with DeploymentCreateError on non-OK response', async () => {
@@ -224,9 +223,9 @@ describe('DeploymentApiService', () => {
       const call = lastFetchCall();
       expect(call.url).toBe('https://s3.example.com/part');
       expect(call.method).toBe('PUT');
-      expect(call.headers['Content-Type']).toBe('application/zip');
+      expect(call.headers['content-type']).toBe('application/zip');
       // The part PUT goes directly to the signed URL and carries no API auth.
-      expect(call.headers.Authorization).toBeUndefined();
+      expect(call.headers.authorization).toBeUndefined();
     });
 
     it('should fail with UploadPartError when response is not OK', async () => {

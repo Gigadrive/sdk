@@ -37,6 +37,8 @@ export interface RequestOptions {
   query?: Record<string, QueryValue>;
   body?: unknown;
   headers?: Record<string, string>;
+  /** Abort signal to cancel the request (and any 401-refresh retry). */
+  signal?: AbortSignal;
 }
 
 const isRawBody = (body: unknown): boolean =>
@@ -72,27 +74,39 @@ export class HttpClient {
   ) {}
 
   /** @internal */
-  async get<T>(path: string, options?: Pick<RequestOptions, 'query'>): Promise<T> {
+  async get<T>(path: string, options?: Pick<RequestOptions, 'query' | 'signal'>): Promise<T> {
     return this.request<T>('GET', path, options);
   }
 
   /** @internal */
-  async post<T>(path: string, body?: unknown, options?: Pick<RequestOptions, 'headers' | 'query'>): Promise<T> {
+  async post<T>(
+    path: string,
+    body?: unknown,
+    options?: Pick<RequestOptions, 'headers' | 'query' | 'signal'>
+  ): Promise<T> {
     return this.request<T>('POST', path, { body, ...options });
   }
 
   /** @internal */
-  async put<T>(path: string, body?: unknown, options?: Pick<RequestOptions, 'headers' | 'query'>): Promise<T> {
+  async put<T>(
+    path: string,
+    body?: unknown,
+    options?: Pick<RequestOptions, 'headers' | 'query' | 'signal'>
+  ): Promise<T> {
     return this.request<T>('PUT', path, { body, ...options });
   }
 
   /** @internal */
-  async patch<T>(path: string, body?: unknown, options?: Pick<RequestOptions, 'headers' | 'query'>): Promise<T> {
+  async patch<T>(
+    path: string,
+    body?: unknown,
+    options?: Pick<RequestOptions, 'headers' | 'query' | 'signal'>
+  ): Promise<T> {
     return this.request<T>('PATCH', path, { body, ...options });
   }
 
   /** @internal */
-  async delete<T>(path: string, options?: Pick<RequestOptions, 'query'>): Promise<T> {
+  async delete<T>(path: string, options?: Pick<RequestOptions, 'query' | 'signal'>): Promise<T> {
     return this.request<T>('DELETE', path, options);
   }
 
@@ -168,7 +182,8 @@ export class HttpClient {
       }
     }
 
-    const response = await this.fetchFn(url, { method, headers, body: requestBody });
+    const signal = options?.signal;
+    const response = await this.fetchFn(url, { method, headers, body: requestBody, signal });
 
     // A streamed body is consumed by the first fetch and cannot be replayed, so
     // we cannot transparently retry it after a token refresh.
@@ -180,7 +195,7 @@ export class HttpClient {
       const retryToken = await this.tokenManager.getToken();
       headers.Authorization = `Bearer ${retryToken}`;
 
-      const retryResponse = await this.fetchFn(url, { method, headers, body: requestBody });
+      const retryResponse = await this.fetchFn(url, { method, headers, body: requestBody, signal });
       if (retryResponse.status === 401) {
         throw new AuthenticationError('Authentication failed after token refresh');
       }

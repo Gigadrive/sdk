@@ -15,6 +15,39 @@ const computeExpiresAt = (expiresInSeconds: number | undefined): number => {
   return Date.now() + (ttl - margin) * 1000;
 };
 
+/**
+ * Read an environment variable safely. Returns `undefined` when `process` is
+ * unavailable (e.g. browsers / some edge runtimes) instead of throwing.
+ *
+ * @internal
+ */
+export const readEnv = (name: string): string | undefined => {
+  if (typeof process === 'undefined' || !process.env) return undefined;
+  return process.env[name];
+};
+
+interface RawTokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+}
+
+/**
+ * Validate and normalize a token-endpoint JSON response, guarding against
+ * malformed payloads that would otherwise yield `Authorization: Bearer undefined`.
+ */
+const parseTokenResponse = (payload: unknown): RawTokenResponse => {
+  const data = payload as { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
+  if (typeof data.access_token !== 'string' || data.access_token.length === 0) {
+    throw new AuthenticationError('Token endpoint returned no access_token');
+  }
+  return {
+    access_token: data.access_token,
+    refresh_token: typeof data.refresh_token === 'string' ? data.refresh_token : undefined,
+    expires_in: typeof data.expires_in === 'number' ? data.expires_in : undefined,
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -137,7 +170,7 @@ export class OAuth2ClientCredentialProvider implements CredentialProvider {
       throw new AuthenticationError(`OAuth2 token request failed (${response.status}): ${body}`);
     }
 
-    const data = (await response.json()) as { access_token: string; expires_in: number; scope?: string };
+    const data = parseTokenResponse(await response.json());
 
     return {
       accessToken: data.access_token,
@@ -184,14 +217,12 @@ export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
     }
 
     // After the first interactive exchange, refresh silently rather than
-    // re-prompting the user. Fall back to a fresh authorization if the refresh
-    // token is rejected (e.g. revoked or expired).
+    // re-prompting the user. Only fall back to a fresh authorization when the
+    // refresh token is actually rejected — transient errors are surfaced.
     if (this.currentRefreshToken) {
-      try {
-        return await this.refreshAccessToken(oidc.token_endpoint, this.currentRefreshToken);
-      } catch {
-        this.currentRefreshToken = null;
-      }
+      const refreshed = await this.tryRefresh(oidc.token_endpoint, this.currentRefreshToken);
+      if (refreshed) return refreshed;
+      this.currentRefreshToken = null;
     }
 
     if (!oidc.authorization_endpoint) {
@@ -258,11 +289,7 @@ export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
       throw new AuthenticationError(`Token exchange failed (${response.status}): ${body}`);
     }
 
-    const data = (await response.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-    };
+    const data = parseTokenResponse(await response.json());
 
     this.currentRefreshToken = data.refresh_token ?? null;
 
@@ -273,8 +300,12 @@ export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
     };
   }
 
-  /** Exchange the stored refresh token for a new access token (silent renewal). */
-  private async refreshAccessToken(tokenEndpoint: string, refreshToken: string): Promise<TokenResult> {
+  /**
+   * Try to exchange the stored refresh token for a new access token. Returns the
+   * token on success, `null` when the refresh token is definitively rejected
+   * (a 4xx — caller should re-authenticate), and throws on transient failures.
+   */
+  private async tryRefresh(tokenEndpoint: string, refreshToken: string): Promise<TokenResult | null> {
     const response = await this.fetchFn(tokenEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -286,15 +317,14 @@ export class OAuth2AuthorizationCodeProvider implements CredentialProvider {
     });
 
     if (!response.ok) {
+      // A 4xx means the refresh token is invalid/expired — re-authenticate.
+      if (response.status >= 400 && response.status < 500) return null;
+      // Transient (network/5xx) failures surface instead of forcing a re-prompt.
       const body = await response.text().catch(() => '');
       throw new AuthenticationError(`Token refresh failed (${response.status}): ${body}`);
     }
 
-    const data = (await response.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-    };
+    const data = parseTokenResponse(await response.json());
 
     if (data.refresh_token) {
       this.currentRefreshToken = data.refresh_token;
@@ -359,11 +389,7 @@ export class OAuth2RefreshTokenProvider implements CredentialProvider {
       throw new AuthenticationError(`Token refresh failed (${response.status}): ${body}`);
     }
 
-    const data = (await response.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-    };
+    const data = parseTokenResponse(await response.json());
 
     // Handle refresh token rotation
     if (data.refresh_token) {
@@ -437,8 +463,8 @@ export const resolveCredentialProvider = (config: CredentialResolverConfig): Cre
   // Bind the default fetch to globalThis so calling it as `this.fetchFn(...)`
   // does not throw "Illegal invocation" in runtimes that require a bound receiver.
   const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
-  const baseUrl = config.baseUrl ?? process.env.GIGADRIVE_API_BASE_URL ?? DEFAULT_BASE_URL;
-  const idpIssuerUrl = config.idpIssuerUrl ?? process.env.GIGADRIVE_IDP_ISSUER_URL ?? DEFAULT_IDP_ISSUER_URL;
+  const baseUrl = config.baseUrl ?? readEnv('GIGADRIVE_API_BASE_URL') ?? DEFAULT_BASE_URL;
+  const idpIssuerUrl = config.idpIssuerUrl ?? readEnv('GIGADRIVE_IDP_ISSUER_URL') ?? DEFAULT_IDP_ISSUER_URL;
   const tokenUrl = `${baseUrl}/oauth2/token`;
 
   // 1. Explicit bearer token
@@ -471,20 +497,20 @@ export const resolveCredentialProvider = (config: CredentialResolverConfig): Cre
   }
 
   // 5. GIGADRIVE_BEARER_TOKEN env var
-  const envBearerToken = process.env.GIGADRIVE_BEARER_TOKEN;
+  const envBearerToken = readEnv('GIGADRIVE_BEARER_TOKEN');
   if (envBearerToken) {
     return new BearerTokenProvider(envBearerToken);
   }
 
   // 6. GIGADRIVE_CLIENT_ID + GIGADRIVE_CLIENT_SECRET env vars
-  const envClientId = process.env.GIGADRIVE_CLIENT_ID;
-  const envClientSecret = process.env.GIGADRIVE_CLIENT_SECRET;
+  const envClientId = readEnv('GIGADRIVE_CLIENT_ID');
+  const envClientSecret = readEnv('GIGADRIVE_CLIENT_SECRET');
   if (envClientId && envClientSecret) {
     return new OAuth2ClientCredentialProvider(envClientId, envClientSecret, tokenUrl, fetchFn);
   }
 
   // 7. GIGADRIVE_REFRESH_TOKEN + GIGADRIVE_CLIENT_ID env vars
-  const envRefreshToken = process.env.GIGADRIVE_REFRESH_TOKEN;
+  const envRefreshToken = readEnv('GIGADRIVE_REFRESH_TOKEN');
   if (envRefreshToken && envClientId) {
     return new OAuth2RefreshTokenProvider(envClientId, envRefreshToken, idpIssuerUrl, fetchFn);
   }

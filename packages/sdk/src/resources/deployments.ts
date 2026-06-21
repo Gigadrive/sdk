@@ -235,6 +235,9 @@ export class DeploymentsResource extends BaseResource {
    * ```
    */
   async getPresignedUrl(deploymentId: string, uploadId: string, partNumber: number): Promise<PresignedUrlResult> {
+    if (!Number.isInteger(partNumber) || partNumber < 1) {
+      throw new Error(`partNumber must be a positive integer, received ${partNumber}`);
+    }
     return this.httpClient.post(`/deployments/${deploymentId}/upload/part`, { uploadId, partNumber });
   }
 
@@ -263,6 +266,9 @@ export class DeploymentsResource extends BaseResource {
     data: ArrayBuffer | Uint8Array | Blob,
     partNumber: number
   ): Promise<UploadPart> {
+    if (!Number.isInteger(partNumber) || partNumber < 1) {
+      throw new Error(`partNumber must be a positive integer, received ${partNumber}`);
+    }
     const response = await this.httpClient.fetchRaw(presignedUrl, {
       method: 'PUT',
       headers: {

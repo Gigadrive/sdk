@@ -10,7 +10,7 @@ const createUploadResponse = () => ({
   upload: {
     method: 'PATCH',
     url: 'https://upload.example/abc',
-    headers: {},
+    headers: { 'Tus-Resumable': '1.0.0', 'X-Upload-Token': 'signed-abc' },
     publicObjectUrl: 'https://cdn.example/hello.txt',
   },
 });
@@ -39,6 +39,8 @@ describe('ApplicationStorageResource.upload', () => {
     );
     expect(transport).toHaveBeenCalledTimes(1);
     expect(transport.mock.calls[0][0].uploadUrl).toBe('https://upload.example/abc');
+    // Session-provided required headers must reach the transport.
+    expect(transport.mock.calls[0][0].headers).toMatchObject({ 'X-Upload-Token': 'signed-abc' });
     expect(result.url).toBe('https://cdn.example/hello.txt');
     expect(result.object).toBeUndefined();
   });

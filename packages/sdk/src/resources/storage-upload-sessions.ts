@@ -177,12 +177,18 @@ export class StorageUploadSessionsResource extends BaseResource {
    *
    * @param url - A signed upload URL.
    * @param source - The bytes to upload.
-   * @param options - Chunk size, retry config, progress, abort signal, resume.
+   * @param options - Chunk size, retry config, progress, abort signal, resume,
+   *   and any required `headers` returned with the upload session.
    * @throws {@link UploadError} if the upload fails after all retries.
    */
-  async uploadToUrl(url: string, source: UploadByteSource, options?: RunUploadOptions): Promise<void> {
+  async uploadToUrl(
+    url: string,
+    source: UploadByteSource,
+    options?: RunUploadOptions & { headers?: Record<string, string> }
+  ): Promise<void> {
     const resolved = await resolveUploadSource({ key: '', ...source }, { hash: false });
-    await runResolvedUpload(this.transport, url, resolved, options).catch(toUploadError);
+    const headers = { 'Tus-Resumable': '1.0.0', ...options?.headers };
+    await runResolvedUpload(this.transport, url, resolved, options, headers).catch(toUploadError);
   }
 
   /**
@@ -193,7 +199,11 @@ export class StorageUploadSessionsResource extends BaseResource {
    * @param source - The full bytes to upload (the same content as the original).
    * @param options - Chunk size, retry config, progress, abort signal.
    */
-  async resumeFromUrl(url: string, source: UploadByteSource, options?: RunUploadOptions): Promise<void> {
+  async resumeFromUrl(
+    url: string,
+    source: UploadByteSource,
+    options?: RunUploadOptions & { headers?: Record<string, string> }
+  ): Promise<void> {
     return this.uploadToUrl(url, source, { ...options, resume: true });
   }
 }

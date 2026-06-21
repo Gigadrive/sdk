@@ -66,6 +66,19 @@ describe('OAuth2ClientCredentialProvider', () => {
 
     await expect(provider.getToken()).rejects.toThrow(AuthenticationError);
   });
+
+  it('should throw when the token response has no access_token', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ expires_in: 300 }), { status: 200 }));
+
+    const provider = new OAuth2ClientCredentialProvider(
+      'client-id',
+      'client-secret',
+      'https://api.example.com/oauth2/token',
+      mockFetch
+    );
+
+    await expect(provider.getToken()).rejects.toThrow(/no access_token/i);
+  });
 });
 
 describe('OAuth2RefreshTokenProvider', () => {

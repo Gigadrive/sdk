@@ -1,4 +1,4 @@
-import { resolveCredentialProvider } from './auth/credential-provider';
+import { readEnv, resolveCredentialProvider } from './auth/credential-provider';
 import { TokenManager } from './auth/token-manager';
 import { HttpClient } from './http-client';
 import { AiGatewayResource } from './resources/ai-gateway';
@@ -168,7 +168,7 @@ export class GigadriveClient {
   readonly aiGateway: AiGatewayResource;
 
   constructor(config: GigadriveClientConfig = {}) {
-    const baseUrl = config.baseUrl ?? process.env.GIGADRIVE_API_BASE_URL ?? DEFAULT_BASE_URL;
+    const baseUrl = config.baseUrl ?? readEnv('GIGADRIVE_API_BASE_URL') ?? DEFAULT_BASE_URL;
     // Bind the default fetch to globalThis so it can be invoked as a method on
     // the HTTP client without throwing "Illegal invocation" in some runtimes.
     const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);

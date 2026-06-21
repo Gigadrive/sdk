@@ -56,6 +56,22 @@ describe('resolveUploadSource', () => {
     await expect(resolveUploadSource({ key: 'x' })).rejects.toThrow(/No upload source/);
   });
 
+  it('rejects ambiguous input with more than one source', async () => {
+    await expect(resolveUploadSource({ key: 'x', data: new Uint8Array([1]), path: '/tmp/whatever' })).rejects.toThrow(
+      /only one upload source/i
+    );
+  });
+
+  it('honors a pre-supplied SHA-1 while computing the SHA-256', async () => {
+    const resolved = await resolveUploadSource({
+      key: 'x.txt',
+      data: new TextEncoder().encode('hello'),
+      checksumSha1: 'aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d',
+    });
+    expect(resolved.checksums.sha256).toBe(HELLO_SHA256);
+    expect(resolved.checksums.sha1).toBe('aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d');
+  });
+
   it('resolves a Node file path (size, content type, streamed SHA-256, finite chunk)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gigadrive-sdk-'));
     const path = join(dir, 'hello.txt');

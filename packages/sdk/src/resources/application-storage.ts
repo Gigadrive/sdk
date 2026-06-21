@@ -190,14 +190,21 @@ export class ApplicationStorageResource {
       checksumMd5: resolved.checksums.md5,
     });
 
-    await runResolvedUpload(this.transport, upload.url, resolved, {
-      chunkSize: input.chunkSize,
-      retryDelays: input.retryDelays,
-      onProgress: input.onProgress,
-      signal: input.signal,
-      resume: input.resume,
-      urlStorage: input.urlStorage,
-    }).catch(toUploadError);
+    await runResolvedUpload(
+      this.transport,
+      upload.url,
+      resolved,
+      {
+        chunkSize: input.chunkSize,
+        retryDelays: input.retryDelays,
+        onProgress: input.onProgress,
+        signal: input.signal,
+        resume: input.resume,
+        urlStorage: input.urlStorage,
+      },
+      // Forward any required headers the API issued with the session.
+      { 'Tus-Resumable': '1.0.0', ...upload.headers }
+    ).catch(toUploadError);
 
     if (input.waitForCompletion) {
       const options = typeof input.waitForCompletion === 'object' ? input.waitForCompletion : undefined;

@@ -71,11 +71,15 @@ export async function* parseSSEStream<T = unknown>(response: Response): AsyncGen
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+      // Normalise CRLF on the whole buffer so a separator split across two reads
+      // (a trailing "\r" then a leading "\n") is still collapsed correctly.
+      buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, '\n');
       yield* drain(false);
     }
     yield* drain(true);
   } finally {
-    reader.releaseLock();
+    // Cancel (not just release the lock) so breaking out of the consumer's
+    // `for await` early stops the underlying HTTP body instead of leaking it.
+    await reader.cancel().catch(() => undefined);
   }
 }

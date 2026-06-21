@@ -129,11 +129,12 @@ export class AiGatewayResource extends BaseResource {
     });
     const body = (await response.json()) as ChatCompletionResponse;
     const cost = response.headers.get('X-Gigadrive-Cost-Micros');
+    const costMicros = cost !== null ? Number(cost) : NaN;
     return {
       data: body,
       response,
       requestId: response.headers.get('X-Gigadrive-Request-Id') ?? undefined,
-      costMicros: cost !== null ? Number(cost) : undefined,
+      costMicros: Number.isFinite(costMicros) ? costMicros : undefined,
     };
   }
 

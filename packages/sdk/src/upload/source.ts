@@ -84,62 +84,74 @@ const toTusFile = (data: UploadData): TusFile => {
   return isNode() ? bytes : new Blob([bytes]);
 };
 
-const explicitChecksums = (input: UploadSourceInput): Checksums | null => {
-  if (!input.checksumSha256) return null;
-  const checksums: Checksums = { sha256: input.checksumSha256 };
+/**
+ * Build the checksum set, always honoring caller-supplied SHA-1/MD5 (they are
+ * passed through, never recomputed). Only SHA-256 is ever computed by the SDK.
+ */
+const buildChecksums = (input: UploadSourceInput, sha256: string): Checksums => {
+  const checksums: Checksums = { sha256 };
   if (input.checksumSha1) checksums.sha1 = input.checksumSha1;
   if (input.checksumMd5) checksums.md5 = input.checksumMd5;
   return checksums;
 };
 
-const EMPTY_CHECKSUMS: Checksums = { sha256: '' };
-
 /**
  * Resolve an {@link UploadSourceInput} into a {@link ResolvedUploadSource},
- * computing size, content type, and checksums as needed.
+ * computing size, content type, and the SHA-256 as needed.
  *
- * @param input - The upload source description.
- * @param options - Set `hash: false` to skip checksum computation (e.g. when
+ * @param input - The upload source description. Exactly one of `data`, `path`,
+ *   or `stream` must be provided.
+ * @param options - Set `hash: false` to skip SHA-256 computation (e.g. when
  *   uploading to an already-authorized URL, where checksums are not needed).
  */
 export const resolveUploadSource = async (
   input: UploadSourceInput,
   options: { hash?: boolean } = {}
 ): Promise<ResolvedUploadSource> => {
+  const sourceCount = [input.data !== undefined, input.path !== undefined, input.stream !== undefined].filter(
+    Boolean
+  ).length;
+  if (sourceCount > 1) {
+    throw new Error('Provide only one upload source: data, path, or stream.');
+  }
+
   const hash = options.hash !== false;
   const contentType = input.contentType ?? inferContentType(input.key);
-  const checksumRequest = { sha1: !!input.checksumSha1, md5: !!input.checksumMd5 };
-  const provided = explicitChecksums(input);
 
   if (input.data !== undefined) {
     const size = input.contentLength ?? sizeOf(input.data);
-    const checksums =
-      provided ?? (hash ? await computeChecksums(await toBytes(input.data), checksumRequest) : EMPTY_CHECKSUMS);
-    return { tusFile: toTusFile(input.data), size, contentType, checksums, requiresFiniteChunkSize: false };
+    const sha256 = input.checksumSha256 ?? (hash ? (await computeChecksums(await toBytes(input.data))).sha256 : '');
+    return {
+      tusFile: toTusFile(input.data),
+      size,
+      contentType,
+      checksums: buildChecksums(input, sha256),
+      requiresFiniteChunkSize: false,
+    };
   }
 
   if (input.path !== undefined) {
     if (!isNode()) throw new Error('Uploading from a file path is only supported in Node.js.');
     const fs = await import('node:fs');
     const size = input.contentLength ?? fs.statSync(input.path).size;
-    const checksums = provided ?? (hash ? await hashNodeFile(input.path, checksumRequest) : EMPTY_CHECKSUMS);
+    const sha256 = input.checksumSha256 ?? (hash ? (await hashNodeFile(input.path)).sha256 : '');
     // A fresh read stream is handed to tus for the byte upload.
     const tusFile = fs.createReadStream(input.path) as unknown as NodeReadableLike;
-    return { tusFile, size, contentType, checksums, requiresFiniteChunkSize: true };
+    return { tusFile, size, contentType, checksums: buildChecksums(input, sha256), requiresFiniteChunkSize: true };
   }
 
   if (input.stream !== undefined) {
     if (input.contentLength === undefined) {
       throw new Error('Uploading from a stream requires contentLength to be provided.');
     }
-    if (hash && !provided) {
+    if (hash && !input.checksumSha256) {
       throw new Error('Uploading from a stream requires checksumSha256 to be provided.');
     }
     return {
       tusFile: input.stream,
       size: input.contentLength,
       contentType,
-      checksums: provided ?? EMPTY_CHECKSUMS,
+      checksums: buildChecksums(input, input.checksumSha256 ?? ''),
       requiresFiniteChunkSize: true,
     };
   }

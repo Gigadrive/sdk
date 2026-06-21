@@ -27,6 +27,13 @@ describe('parseSSEStream', () => {
     expect(received).toEqual([{ part: true }]);
   });
 
+  it('handles a CRLF event separator split across two reads', async () => {
+    const response = sseResponse(['data: {"a":1}\r\n', '\r\ndata: {"b":2}\r\n\r\n']);
+    const received: unknown[] = [];
+    for await (const chunk of parseSSEStream(response)) received.push(chunk);
+    expect(received).toEqual([{ a: 1 }, { b: 2 }]);
+  });
+
   it('ignores empty/whitespace-only data events without throwing', async () => {
     const response = sseResponse(['data: {"i":1}\n\n', 'data: \n\n', ': keep-alive comment\n\n', 'data:\n\n']);
     const received: unknown[] = [];
