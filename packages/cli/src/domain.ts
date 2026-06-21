@@ -1,7 +1,13 @@
 import { Schema } from 'effect';
 
 // ---------------------------------------------------------------------------
-// Branded IDs
+// Re-export shared types from SDK
+// ---------------------------------------------------------------------------
+
+export type { DeploymentLog, DeploymentLogPage, DeploymentLogType, DeploymentStatus } from '@gigadrive/sdk';
+
+// ---------------------------------------------------------------------------
+// Branded IDs (CLI-specific, for type safety within Effect pipelines)
 // ---------------------------------------------------------------------------
 
 export const DeploymentId = Schema.String.pipe(Schema.brand('@Gigadrive/DeploymentId'));
@@ -14,36 +20,14 @@ export const UploadId = Schema.String.pipe(Schema.brand('@Gigadrive/UploadId'));
 export type UploadId = Schema.Schema.Type<typeof UploadId>;
 
 // ---------------------------------------------------------------------------
-// Domain schemas
+// CLI-specific domain schemas
 // ---------------------------------------------------------------------------
-
-export const DeploymentStatus = Schema.Literal('PENDING', 'BUILDING', 'PROVISIONING', 'FAILED', 'ACTIVE', 'SUSPENDED');
-export type DeploymentStatus = Schema.Schema.Type<typeof DeploymentStatus>;
-
-export const DeploymentLogType = Schema.Literal('INFO', 'ERROR', 'WARN');
-export type DeploymentLogType = Schema.Schema.Type<typeof DeploymentLogType>;
-
-export const DeploymentLog = Schema.Struct({
-  id: Schema.String,
-  message: Schema.String,
-  type: DeploymentLogType,
-  createdAt: Schema.String,
-});
-export type DeploymentLog = Schema.Schema.Type<typeof DeploymentLog>;
-
-export const DeploymentLogPage = Schema.Struct({
-  totalItems: Schema.Number,
-  limit: Schema.Number,
-  offset: Schema.Number,
-  items: Schema.Array(DeploymentLog),
-});
-export type DeploymentLogPage = Schema.Schema.Type<typeof DeploymentLogPage>;
 
 export const PackageManager = Schema.Literal('npm', 'yarn', 'pnpm', 'bun');
 export type PackageManager = Schema.Schema.Type<typeof PackageManager>;
 
 // ---------------------------------------------------------------------------
-// OAuth schemas
+// OAuth schemas (CLI-specific, for interactive login flow)
 // ---------------------------------------------------------------------------
 
 export const OAuthTokens = Schema.Struct({

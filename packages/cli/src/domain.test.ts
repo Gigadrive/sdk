@@ -3,10 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   ApplicationId,
   DeploymentId,
-  DeploymentLog,
-  DeploymentLogPage,
-  DeploymentLogType,
-  DeploymentStatus,
   OAuthClientConfig,
   OAuthTokens,
   PackageManager,
@@ -55,30 +51,6 @@ describe('UploadId', () => {
 // Literal schemas
 // ---------------------------------------------------------------------------
 
-describe('DeploymentStatus', () => {
-  const validStatuses = ['PENDING', 'BUILDING', 'PROVISIONING', 'FAILED', 'ACTIVE', 'SUSPENDED'] as const;
-
-  it.each(validStatuses)('should accept "%s"', (status) => {
-    expect(Schema.decodeUnknownSync(DeploymentStatus)(status)).toBe(status);
-  });
-
-  it('should reject an invalid status', () => {
-    expect(() => Schema.decodeUnknownSync(DeploymentStatus)('UNKNOWN')).toThrow();
-  });
-});
-
-describe('DeploymentLogType', () => {
-  const validTypes = ['INFO', 'ERROR', 'WARN'] as const;
-
-  it.each(validTypes)('should accept "%s"', (type) => {
-    expect(Schema.decodeUnknownSync(DeploymentLogType)(type)).toBe(type);
-  });
-
-  it('should reject an invalid type', () => {
-    expect(() => Schema.decodeUnknownSync(DeploymentLogType)('DEBUG')).toThrow();
-  });
-});
-
 describe('PackageManager', () => {
   const validManagers = ['npm', 'yarn', 'pnpm', 'bun'] as const;
 
@@ -94,46 +66,6 @@ describe('PackageManager', () => {
 // ---------------------------------------------------------------------------
 // Struct schemas
 // ---------------------------------------------------------------------------
-
-describe('DeploymentLog', () => {
-  it('should decode a valid log entry', () => {
-    const input = { id: 'log-1', message: 'Build started', type: 'INFO', createdAt: '2025-01-01T00:00:00Z' };
-    const result = Schema.decodeUnknownSync(DeploymentLog)(input);
-    expect(result).toEqual(input);
-  });
-
-  it('should reject a log entry with missing fields', () => {
-    expect(() => Schema.decodeUnknownSync(DeploymentLog)({ id: 'log-1' })).toThrow();
-  });
-
-  it('should reject a log entry with an invalid type', () => {
-    const input = { id: 'log-1', message: 'msg', type: 'DEBUG', createdAt: '2025-01-01T00:00:00Z' };
-    expect(() => Schema.decodeUnknownSync(DeploymentLog)(input)).toThrow();
-  });
-});
-
-describe('DeploymentLogPage', () => {
-  it('should decode a valid log page', () => {
-    const input = {
-      totalItems: 100,
-      limit: 10,
-      offset: 0,
-      items: [{ id: 'log-1', message: 'msg', type: 'INFO', createdAt: '2025-01-01T00:00:00Z' }],
-    };
-    const result = Schema.decodeUnknownSync(DeploymentLogPage)(input);
-    expect(result).toEqual(input);
-  });
-
-  it('should decode a page with empty items', () => {
-    const input = { totalItems: 0, limit: 10, offset: 0, items: [] };
-    const result = Schema.decodeUnknownSync(DeploymentLogPage)(input);
-    expect(result.items).toEqual([]);
-  });
-
-  it('should reject a page with missing totalItems', () => {
-    expect(() => Schema.decodeUnknownSync(DeploymentLogPage)({ limit: 10, offset: 0, items: [] })).toThrow();
-  });
-});
 
 describe('OAuthTokens', () => {
   it('should decode tokens with all fields', () => {

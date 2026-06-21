@@ -24,8 +24,6 @@ const makeTestLayer = () => {
     _tag: 'AuthService',
   });
 
-  // configLayer must wrap DeploymentApiService.Default so that Config.*
-  // values resolved during layer construction see our overrides.
   return Layer.provide(DeploymentApiService.Default, Layer.mergeAll(configLayer, mockAuthService)).pipe(
     Layer.provideMerge(Logger.minimumLogLevel(LogLevel.None))
   );
@@ -33,6 +31,17 @@ const makeTestLayer = () => {
 
 const depId = 'dep-123' as DeploymentId;
 const uploadId = 'upload-456' as UploadId;
+
+/** Inspect the most recent call made to the mocked global fetch, with header names lower-cased. */
+const lastFetchCall = () => {
+  const calls = vi.mocked(globalThis.fetch).mock.calls;
+  const [url, init] = calls[calls.length - 1]!;
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries((init?.headers ?? {}) as Record<string, string>)) {
+    headers[key.toLowerCase()] = value;
+  }
+  return { url: String(url), method: init?.method, body: init?.body, headers };
+};
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -54,40 +63,47 @@ describe('DeploymentApiService', () => {
   // -----------------------------------------------------------------------
 
   describe('createDeployment', () => {
-    it('should POST to the correct URL and return the deployment id', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ id: 'new-dep-id' }),
-      });
+    it('should create a deployment and return the id', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: 'new-dep-id',
+            applicationId: 'app-1',
+            status: 'PENDING',
+            createdAt: '2025-01-01T00:00:00Z',
+            updatedAt: '2025-01-01T00:00:00Z',
+          }),
+          { status: 200 }
+        )
+      );
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(Effect.provide(DeploymentApiService.createDeployment('app-1'), testLayer));
 
       expect(result).toBe('new-dep-id');
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        `${BASE_URL}/app-1/deployments`,
-        expect.objectContaining({ method: 'POST' })
-      );
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments`);
+      expect(call.method).toBe('POST');
+      expect(call.body).toBe(JSON.stringify({ applicationId: 'app-1' }));
+      expect(call.headers.authorization).toBe('Bearer test-auth-token');
     });
 
     it('should fail with DeploymentCreateError on non-OK response', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-        text: () => Promise.resolve('server error details'),
-      });
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ error: 'server error' }), { status: 500 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
         Effect.provide(DeploymentApiService.createDeployment('app-1'), testLayer).pipe(
           Effect.catchTag('DeploymentCreateError', (err) =>
-            Effect.succeed({ _tag: 'caught' as const, message: err.message, statusCode: err.statusCode })
+            Effect.succeed({ _tag: 'caught' as const, message: err.message })
           )
         )
       );
 
-      expect(result).toMatchObject({ _tag: 'caught', statusCode: 500 });
+      expect(result).toMatchObject({ _tag: 'caught' });
     });
 
     it('should fail with DeploymentCreateError when fetch throws', async () => {
@@ -105,24 +121,6 @@ describe('DeploymentApiService', () => {
       expect(result).toMatchObject({ _tag: 'caught' });
       expect((result as { message: string }).message).toContain('Network error');
     });
-
-    it('should fail with DeploymentCreateError when response has invalid schema', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ notId: 'oops' }),
-      });
-
-      const testLayer = makeTestLayer();
-      const result = await Effect.runPromise(
-        Effect.provide(DeploymentApiService.createDeployment('app-1'), testLayer).pipe(
-          Effect.catchTag('DeploymentCreateError', (err) =>
-            Effect.succeed({ _tag: 'caught' as const, message: err.message })
-          )
-        )
-      );
-
-      expect(result).toMatchObject({ _tag: 'caught', message: 'Invalid deployment response schema' });
-    });
   });
 
   // -----------------------------------------------------------------------
@@ -130,11 +128,10 @@ describe('DeploymentApiService', () => {
   // -----------------------------------------------------------------------
 
   describe('startMultipartUpload', () => {
-    it('should GET the correct URL and return the upload id', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ uploadId: 'new-upload-id' }),
-      });
+    it('should return the upload id', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ uploadId: 'new-upload-id' }), { status: 200 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -142,18 +139,16 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toBe('new-upload-id');
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        `${BASE_URL}/deployments/${depId}/pre-signed-url/start`,
-        expect.objectContaining({ method: 'GET' })
-      );
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}/upload/start`);
+      expect(call.method).toBe('POST');
     });
 
     it('should fail with UploadStartError on non-OK response', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-        text: () => Promise.resolve('service unavailable'),
-      });
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ error: 'service unavailable' }), { status: 503 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -173,11 +168,10 @@ describe('DeploymentApiService', () => {
   // -----------------------------------------------------------------------
 
   describe('getPresignedUrl', () => {
-    it('should fetch the presigned URL with correct query params', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ url: 'https://s3.example.com/presigned' }),
-      });
+    it('should return the presigned URL', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ url: 'https://s3.example.com/presigned' }), { status: 200 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -185,17 +179,17 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toBe('https://s3.example.com/presigned');
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        `${BASE_URL}/deployments/${depId}/pre-signed-url/part?uploadId=${uploadId}&partNumber=1`,
-        expect.anything()
-      );
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}/upload/part`);
+      expect(call.method).toBe('POST');
+      expect(call.body).toBe(JSON.stringify({ uploadId, partNumber: 1 }));
     });
 
     it('should fail with PresignedUrlError including partNumber on failure', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        text: () => Promise.resolve('not found'),
-      });
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ error: 'not found' }), { status: 404 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -216,10 +210,7 @@ describe('DeploymentApiService', () => {
 
   describe('uploadPart', () => {
     it('should PUT data and return partNumber + etag', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        headers: new Headers({ ETag: '"abc123"' }),
-      });
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200, headers: { ETag: '"abc123"' } }));
 
       const testLayer = makeTestLayer();
       const data = Buffer.from('test data');
@@ -228,20 +219,17 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toEqual({ partNumber: 1, etag: '"abc123"' });
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        'https://s3.example.com/part',
-        expect.objectContaining({
-          method: 'PUT',
-          body: data,
-        })
-      );
+
+      const call = lastFetchCall();
+      expect(call.url).toBe('https://s3.example.com/part');
+      expect(call.method).toBe('PUT');
+      expect(call.headers['content-type']).toBe('application/zip');
+      // The part PUT goes directly to the signed URL and carries no API auth.
+      expect(call.headers.authorization).toBeUndefined();
     });
 
     it('should fail with UploadPartError when response is not OK', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        statusText: 'Forbidden',
-      });
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response('Forbidden', { status: 403, statusText: 'Forbidden' }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -259,10 +247,7 @@ describe('DeploymentApiService', () => {
     });
 
     it('should fail with UploadPartError when no ETag is returned', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        headers: new Headers({}), // No ETag
-      });
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200, headers: {} }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -284,8 +269,8 @@ describe('DeploymentApiService', () => {
   // -----------------------------------------------------------------------
 
   describe('completeUpload', () => {
-    it('should POST the correct payload', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
+    it('should complete the upload', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 201 }));
 
       const parts = [
         { partNumber: 1, etag: '"abc"' },
@@ -295,20 +280,16 @@ describe('DeploymentApiService', () => {
       const testLayer = makeTestLayer();
       await Effect.runPromise(Effect.provide(DeploymentApiService.completeUpload(depId, uploadId, parts), testLayer));
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        `${BASE_URL}/deployments/${depId}/pre-signed-url/complete`,
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ uploadId, parts }),
-        })
-      );
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}/upload/complete`);
+      expect(call.method).toBe('POST');
+      expect(call.body).toBe(JSON.stringify({ uploadId, parts }));
     });
 
     it('should fail with UploadCompleteError on non-OK response', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        text: () => Promise.resolve('bad request'),
-      });
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ error: 'bad request' }), { status: 400 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -329,10 +310,18 @@ describe('DeploymentApiService', () => {
 
   describe('getDeploymentStatus', () => {
     it('should return the deployment status', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ status: 'ACTIVE' }),
-      });
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: depId,
+            applicationId: 'app-1',
+            status: 'ACTIVE',
+            createdAt: '2025-01-01T00:00:00Z',
+            updatedAt: '2025-01-01T00:00:00Z',
+          }),
+          { status: 200 }
+        )
+      );
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -340,13 +329,16 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toBe('ACTIVE');
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}`);
+      expect(call.method).toBe('GET');
     });
 
     it('should fail with DeploymentStatusError on non-OK response', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        text: () => Promise.resolve('not found'),
-      });
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ error: 'not found' }), { status: 404 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -358,24 +350,6 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toMatchObject({ _tag: 'caught' });
-    });
-
-    it('should fail with DeploymentStatusError on invalid status value', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ status: 'UNKNOWN_STATUS' }),
-      });
-
-      const testLayer = makeTestLayer();
-      const result = await Effect.runPromise(
-        Effect.provide(DeploymentApiService.getDeploymentStatus(depId), testLayer).pipe(
-          Effect.catchTag('DeploymentStatusError', (err) =>
-            Effect.succeed({ _tag: 'caught' as const, message: err.message })
-          )
-        )
-      );
-
-      expect(result).toMatchObject({ _tag: 'caught', message: 'Invalid deployment status response schema' });
     });
   });
 
@@ -392,10 +366,7 @@ describe('DeploymentApiService', () => {
         items: [{ id: 'log-1', message: 'Build started', type: 'INFO', createdAt: '2025-01-01T00:00:00Z' }],
       };
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(logPage),
-      });
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(logPage), { status: 200 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -405,13 +376,16 @@ describe('DeploymentApiService', () => {
       expect(result.totalItems).toBe(1);
       expect(result.items).toHaveLength(1);
       expect(result.items[0].message).toBe('Build started');
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}/logs?offset=0&limit=10`);
+      expect(call.method).toBe('GET');
     });
 
     it('should fail with DeploymentLogsFetchError on non-OK response', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        text: () => Promise.resolve('forbidden'),
-      });
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 }));
 
       const testLayer = makeTestLayer();
       const result = await Effect.runPromise(
@@ -423,24 +397,6 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toMatchObject({ _tag: 'caught' });
-    });
-
-    it('should fail with DeploymentLogsFetchError on invalid response schema', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invalid: 'schema' }),
-      });
-
-      const testLayer = makeTestLayer();
-      const result = await Effect.runPromise(
-        Effect.provide(DeploymentApiService.getLogs(depId, { offset: 0, limit: 10 }), testLayer).pipe(
-          Effect.catchTag('DeploymentLogsFetchError', (err) =>
-            Effect.succeed({ _tag: 'caught' as const, message: err.message })
-          )
-        )
-      );
-
-      expect(result).toMatchObject({ _tag: 'caught', message: 'Invalid logs response schema' });
     });
   });
 });

@@ -1,6 +1,6 @@
-import { objectToQueryString } from '@gigadrive/commons';
-import { Config, Effect, Schema } from 'effect';
-import type { DeploymentId, DeploymentLogPage, UploadId } from '../domain';
+import { GigadriveClient } from '@gigadrive/sdk';
+import { Config, Effect } from 'effect';
+import type { DeploymentId, UploadId } from '../domain';
 import {
   DeploymentAuthError,
   DeploymentCreateError,
@@ -12,30 +12,6 @@ import {
   UploadStartError,
 } from '../errors';
 import { AuthService } from './auth';
-
-// ---------------------------------------------------------------------------
-// API response schemas
-// ---------------------------------------------------------------------------
-
-const CreateDeploymentResponse = Schema.Struct({ id: Schema.String });
-const StartUploadResponse = Schema.Struct({ uploadId: Schema.String });
-const PresignedUrlResponse = Schema.Struct({ url: Schema.String });
-const DeploymentStatusResponse = Schema.Struct({
-  status: Schema.Literal('PENDING', 'BUILDING', 'PROVISIONING', 'FAILED', 'ACTIVE', 'SUSPENDED'),
-});
-const DeploymentLogPageResponse = Schema.Struct({
-  totalItems: Schema.Number,
-  limit: Schema.Number,
-  offset: Schema.Number,
-  items: Schema.Array(
-    Schema.Struct({
-      id: Schema.String,
-      message: Schema.String,
-      type: Schema.Literal('INFO', 'ERROR', 'WARN'),
-      createdAt: Schema.String,
-    })
-  ),
-});
 
 // ---------------------------------------------------------------------------
 // DeploymentApiService
@@ -50,59 +26,28 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
     const baseUrl = yield* ApiBaseUrl;
     const authService = yield* AuthService;
 
-    const getAuthHeaders: Effect.Effect<{ Authorization: string }, DeploymentAuthError> = Effect.gen(function* () {
+    const getClient: Effect.Effect<GigadriveClient, DeploymentAuthError> = Effect.gen(function* () {
       const token: string = yield* authService.getAccessToken.pipe(
         Effect.mapError((err) => new DeploymentAuthError({ message: `Authentication failed: ${err.message}` }))
       );
-      return { Authorization: `Bearer ${token}` };
+      return new GigadriveClient({ bearerToken: token, baseUrl });
     });
 
     const createDeployment = Effect.fn('DeploymentApiService.createDeployment')(function* (applicationId: string) {
       yield* Effect.annotateCurrentSpan('applicationId', applicationId);
       yield* Effect.log('Creating deployment', { applicationId });
 
-      const authHeaders = yield* getAuthHeaders;
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(`${baseUrl}/${applicationId}/deployments`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-            body: JSON.stringify({}),
-          }),
+      const client = yield* getClient;
+      const deployment = yield* Effect.tryPromise({
+        try: () => client.deployments.create({ applicationId }),
         catch: (error) =>
           new DeploymentCreateError({
             message: `Failed to create deployment: ${error instanceof Error ? error.message : String(error)}`,
           }),
       });
 
-      if (!response.ok) {
-        const body = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: () =>
-            new DeploymentCreateError({
-              message: 'Failed to read deployment creation error',
-              statusCode: response.status,
-            }),
-        });
-        return yield* Effect.fail(
-          new DeploymentCreateError({
-            message: `Failed to create deployment: ${body}`,
-            statusCode: response.status,
-          })
-        );
-      }
-
-      const json = yield* Effect.tryPromise({
-        try: () => response.json(),
-        catch: () => new DeploymentCreateError({ message: 'Failed to parse deployment response' }),
-      });
-
-      const decoded = yield* Schema.decodeUnknown(CreateDeploymentResponse)(json).pipe(
-        Effect.mapError(() => new DeploymentCreateError({ message: 'Invalid deployment response schema' }))
-      );
-
-      yield* Effect.log('Deployment created', { deploymentId: decoded.id });
-      return decoded.id as DeploymentId;
+      yield* Effect.log('Deployment created', { deploymentId: deployment.id });
+      return deployment.id as DeploymentId;
     });
 
     const startMultipartUpload = Effect.fn('DeploymentApiService.startMultipartUpload')(function* (
@@ -110,39 +55,16 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
     ) {
       yield* Effect.annotateCurrentSpan('deploymentId', deploymentId);
 
-      const authHeaders = yield* getAuthHeaders;
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(`${baseUrl}/deployments/${deploymentId}/pre-signed-url/start`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-          }),
+      const client = yield* getClient;
+      const result = yield* Effect.tryPromise({
+        try: () => client.deployments.startUpload(deploymentId),
         catch: (error) =>
           new UploadStartError({
             message: `Failed to start multipart upload: ${error instanceof Error ? error.message : String(error)}`,
           }),
       });
 
-      if (!response.ok) {
-        const body = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: () => new UploadStartError({ message: 'Failed to read upload start error' }),
-        });
-        return yield* Effect.fail(
-          new UploadStartError({ message: `Failed to start multipart upload: ${body}`, statusCode: response.status })
-        );
-      }
-
-      const json = yield* Effect.tryPromise({
-        try: () => response.json(),
-        catch: () => new UploadStartError({ message: 'Failed to parse upload start response' }),
-      });
-
-      const decoded = yield* Schema.decodeUnknown(StartUploadResponse)(json).pipe(
-        Effect.mapError(() => new UploadStartError({ message: 'Invalid upload start response schema' }))
-      );
-
-      return decoded.uploadId as UploadId;
+      return result.uploadId as UploadId;
     });
 
     const getPresignedUrl = Effect.fn('DeploymentApiService.getPresignedUrl')(function* (
@@ -150,16 +72,9 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       uploadId: UploadId,
       partNumber: number
     ) {
-      const authHeaders = yield* getAuthHeaders;
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(
-            `${baseUrl}/deployments/${deploymentId}/pre-signed-url/part?uploadId=${uploadId}&partNumber=${partNumber}`,
-            {
-              method: 'GET',
-              headers: { 'Content-Type': 'application/json', ...authHeaders },
-            }
-          ),
+      const client = yield* getClient;
+      const result = yield* Effect.tryPromise({
+        try: () => client.deployments.getPresignedUrl(deploymentId, uploadId, partNumber),
         catch: (error) =>
           new PresignedUrlError({
             message: `Failed to get presigned URL: ${error instanceof Error ? error.message : String(error)}`,
@@ -167,26 +82,7 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
           }),
       });
 
-      if (!response.ok) {
-        const body = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: () => new PresignedUrlError({ message: 'Failed to read presigned URL error', partNumber }),
-        });
-        return yield* Effect.fail(
-          new PresignedUrlError({ message: `Failed to get presigned URL: ${body}`, partNumber })
-        );
-      }
-
-      const json = yield* Effect.tryPromise({
-        try: () => response.json(),
-        catch: () => new PresignedUrlError({ message: 'Failed to parse presigned URL response', partNumber }),
-      });
-
-      const decoded = yield* Schema.decodeUnknown(PresignedUrlResponse)(json).pipe(
-        Effect.mapError(() => new PresignedUrlError({ message: 'Invalid presigned URL response schema', partNumber }))
-      );
-
-      return decoded.url;
+      return result.url;
     });
 
     const uploadPart = Effect.fn('DeploymentApiService.uploadPart')(function* (
@@ -197,16 +93,9 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       yield* Effect.annotateCurrentSpan('partNumber', partNumber);
       yield* Effect.annotateCurrentSpan('size', data.length);
 
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(presignedUrl, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/zip',
-              'Content-Length': String(data.length),
-            },
-            body: data,
-          }),
+      const client = yield* getClient;
+      const result = yield* Effect.tryPromise({
+        try: () => client.deployments.uploadPart(presignedUrl, data, partNumber),
         catch: (error) =>
           new UploadPartError({
             message: `Failed to upload part ${partNumber}: ${error instanceof Error ? error.message : String(error)}`,
@@ -214,23 +103,7 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
           }),
       });
 
-      if (!response.ok) {
-        return yield* Effect.fail(
-          new UploadPartError({
-            message: `Failed to upload part ${partNumber}: ${response.statusText}`,
-            partNumber,
-          })
-        );
-      }
-
-      const etag = response.headers.get('ETag');
-      if (!etag) {
-        return yield* Effect.fail(
-          new UploadPartError({ message: `No ETag received for part ${partNumber}`, partNumber })
-        );
-      }
-
-      return { partNumber, etag };
+      return result;
     });
 
     const completeUpload = Effect.fn('DeploymentApiService.completeUpload')(function* (
@@ -241,27 +114,14 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       yield* Effect.annotateCurrentSpan('deploymentId', deploymentId);
       yield* Effect.annotateCurrentSpan('partsCount', parts.length);
 
-      const authHeaders = yield* getAuthHeaders;
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(`${baseUrl}/deployments/${deploymentId}/pre-signed-url/complete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-            body: JSON.stringify({ uploadId, parts }),
-          }),
+      const client = yield* getClient;
+      yield* Effect.tryPromise({
+        try: () => client.deployments.completeUpload(deploymentId, uploadId, parts),
         catch: (error) =>
           new UploadCompleteError({
             message: `Failed to complete upload: ${error instanceof Error ? error.message : String(error)}`,
           }),
       });
-
-      if (!response.ok) {
-        const body = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: () => new UploadCompleteError({ message: 'Failed to read upload complete error' }),
-        });
-        return yield* Effect.fail(new UploadCompleteError({ message: `Failed to complete upload: ${body}` }));
-      }
 
       yield* Effect.log('Upload completed successfully');
     });
@@ -269,74 +129,32 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
     const getDeploymentStatus = Effect.fn('DeploymentApiService.getDeploymentStatus')(function* (
       deploymentId: DeploymentId
     ) {
-      const authHeaders = yield* getAuthHeaders;
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(`${baseUrl}/deployments/${deploymentId}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-          }),
+      const client = yield* getClient;
+      const deployment = yield* Effect.tryPromise({
+        try: () => client.deployments.get(deploymentId),
         catch: (error) =>
           new DeploymentStatusError({
             message: `Failed to get deployment status: ${error instanceof Error ? error.message : String(error)}`,
           }),
       });
 
-      if (!response.ok) {
-        const body = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: () => new DeploymentStatusError({ message: 'Failed to read deployment status error' }),
-        });
-        return yield* Effect.fail(new DeploymentStatusError({ message: `Failed to get deployment status: ${body}` }));
-      }
-
-      const json = yield* Effect.tryPromise({
-        try: () => response.json(),
-        catch: () => new DeploymentStatusError({ message: 'Failed to parse deployment status response' }),
-      });
-
-      const decoded = yield* Schema.decodeUnknown(DeploymentStatusResponse)(json).pipe(
-        Effect.mapError(() => new DeploymentStatusError({ message: 'Invalid deployment status response schema' }))
-      );
-
-      return decoded.status;
+      return deployment.status;
     });
 
     const getLogs = Effect.fn('DeploymentApiService.getLogs')(function* (
       deploymentId: DeploymentId,
       options?: { offset: number; limit: number; 'createdAt[gt]'?: string }
     ) {
-      const authHeaders = yield* getAuthHeaders;
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(`${baseUrl}/deployments/${deploymentId}/logs${objectToQueryString(options)}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-          }),
+      const client = yield* getClient;
+      const result = yield* Effect.tryPromise({
+        try: () => client.deployments.getLogs(deploymentId, options),
         catch: (error) =>
           new DeploymentLogsFetchError({
             message: `Failed to get logs: ${error instanceof Error ? error.message : String(error)}`,
           }),
       });
 
-      if (!response.ok) {
-        const body = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: () => new DeploymentLogsFetchError({ message: 'Failed to read logs error' }),
-        });
-        return yield* Effect.fail(new DeploymentLogsFetchError({ message: `Failed to get logs: ${body}` }));
-      }
-
-      const json = yield* Effect.tryPromise({
-        try: () => response.json(),
-        catch: () => new DeploymentLogsFetchError({ message: 'Failed to parse logs response' }),
-      });
-
-      const decoded = yield* Schema.decodeUnknown(DeploymentLogPageResponse)(json).pipe(
-        Effect.mapError(() => new DeploymentLogsFetchError({ message: 'Invalid logs response schema' }))
-      );
-
-      return decoded as DeploymentLogPage;
+      return result;
     });
 
     return {
