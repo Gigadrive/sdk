@@ -139,4 +139,81 @@ describe('HttpClient', () => {
       expect((e as ApiError).status).toBe(500);
     }
   });
+
+  it('should parse error response with object error and code', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'Bad input', code: 'invalid' } }), { status: 422 })
+    );
+
+    const client = createClient();
+
+    await expect(client.get('/fail')).rejects.toMatchObject({ message: 'Bad input', status: 422, code: 'invalid' });
+  });
+
+  it('should send PUT request with JSON body', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    const client = createClient();
+    await client.put('/things/1', { name: 'x' });
+
+    expect(mockFetch.mock.calls[0]![1]?.method).toBe('PUT');
+    expect(mockFetch.mock.calls[0]![1]?.body).toBe(JSON.stringify({ name: 'x' }));
+  });
+
+  it('should pass custom headers alongside a JSON body', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
+
+    const client = createClient();
+    await client.post('/things', { a: 1 }, { headers: { 'X-Custom': 'yes' } });
+
+    const headers = mockFetch.mock.calls[0]![1]?.headers as Record<string, string>;
+    expect(headers['X-Custom']).toBe('yes');
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(mockFetch.mock.calls[0]![1]?.body).toBe(JSON.stringify({ a: 1 }));
+  });
+
+  it('should send a raw FormData body without forcing a JSON content-type', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
+
+    const client = createClient();
+    const form = new FormData();
+    form.set('a', 'b');
+    await client.postRaw('/upload', form);
+
+    const init = mockFetch.mock.calls[0]![1]!;
+    expect(init.body).toBe(form);
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+  });
+
+  it('requestStream returns the raw response on success', async () => {
+    const response = new Response('hello', { status: 200 });
+    mockFetch.mockResolvedValueOnce(response);
+
+    const client = createClient();
+    const result = await client.requestStream('GET', '/stream');
+
+    expect(result).toBe(response);
+  });
+
+  it('requestStream throws ApiError on a non-ok response', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+
+    const client = createClient();
+    await expect(client.requestStream('GET', '/stream')).rejects.toThrow(ApiError);
+  });
+
+  it('does not retry a one-shot ReadableStream body on 401', async () => {
+    const tokenManager = createMockTokenManager();
+    mockFetch.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
+
+    const client = new HttpClient('https://api.example.com', tokenManager, mockFetch);
+    const body = new ReadableStream({
+      start(controller) {
+        controller.close();
+      },
+    });
+
+    await expect(client.postRaw('/upload', body)).rejects.toThrow(ApiError);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
 });

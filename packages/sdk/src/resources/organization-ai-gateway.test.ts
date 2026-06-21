@@ -39,4 +39,25 @@ describe('OrganizationAiGatewayResource', () => {
     const csv = await new OrganizationAiGatewayResource(http).usage.export('org-1');
     expect(csv).toBe('a,b\n1,2');
   });
+
+  it('lists request-level usage events with filters', async () => {
+    const http = createMockHttpClient();
+    await new OrganizationAiGatewayResource(http).usage.requests('org-1', { status: 'error', limit: 50 });
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/ai-gateway/usage/requests', {
+      query: { status: 'error', limit: 50 },
+    });
+  });
+
+  it('lists budgets', async () => {
+    const http = createMockHttpClient();
+    await new OrganizationAiGatewayResource(http).budgets.list('org-1');
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/ai-gateway/budgets');
+  });
+
+  it('creates/updates a policy via PUT and unwraps it', async () => {
+    const http = createMockHttpClient({ put: vi.fn().mockResolvedValue({ policy: { id: 'pol-2' } }) });
+    const policy = await new OrganizationAiGatewayResource(http).policies.put('org-1', { requireZdr: true });
+    expect(policy).toEqual({ id: 'pol-2' });
+    expect(http.put).toHaveBeenCalledWith('/organizations/org-1/ai-gateway/policies', { requireZdr: true });
+  });
 });

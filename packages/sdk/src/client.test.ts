@@ -62,6 +62,21 @@ describe('GigadriveClient', () => {
     expect(client.aiGateway).toBeDefined();
   });
 
+  it('should expose the newer sub-resources and high-level helpers', () => {
+    const client = new GigadriveClient({ bearerToken: 'token', fetch: mockFetch });
+
+    expect(client.organizations.aiGateway).toBeDefined();
+    expect(client.organizations.aiGateway.usage).toBeDefined();
+    expect(client.organizations.aiGateway.budgets).toBeDefined();
+    expect(client.organizations.aiGateway.policies).toBeDefined();
+    expect(client.applications.requests).toBeDefined();
+    expect(typeof client.applications.storage.upload).toBe('function');
+    expect(typeof client.applications.storage.uploadBatch).toBe('function');
+    expect(typeof client.aiGateway.chatCompletionsStream).toBe('function');
+    expect(client.aiGateway.audio).toBeDefined();
+    expect(client.aiGateway.videos).toBeDefined();
+  });
+
   it('should use custom base URL', async () => {
     const client = new GigadriveClient({
       bearerToken: 'token',

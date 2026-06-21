@@ -32,6 +32,18 @@ const makeTestLayer = () => {
 const depId = 'dep-123' as DeploymentId;
 const uploadId = 'upload-456' as UploadId;
 
+/** Inspect the most recent call made to the mocked global fetch. */
+const lastFetchCall = () => {
+  const calls = vi.mocked(globalThis.fetch).mock.calls;
+  const [url, init] = calls[calls.length - 1]!;
+  return {
+    url: String(url),
+    method: init?.method,
+    body: init?.body,
+    headers: (init?.headers ?? {}) as Record<string, string>,
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -70,6 +82,12 @@ describe('DeploymentApiService', () => {
       const result = await Effect.runPromise(Effect.provide(DeploymentApiService.createDeployment('app-1'), testLayer));
 
       expect(result).toBe('new-dep-id');
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments`);
+      expect(call.method).toBe('POST');
+      expect(call.body).toBe(JSON.stringify({ applicationId: 'app-1' }));
+      expect(call.headers.Authorization).toBe('Bearer test-auth-token');
     });
 
     it('should fail with DeploymentCreateError on non-OK response', async () => {
@@ -122,6 +140,10 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toBe('new-upload-id');
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}/upload/start`);
+      expect(call.method).toBe('POST');
     });
 
     it('should fail with UploadStartError on non-OK response', async () => {
@@ -158,6 +180,11 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toBe('https://s3.example.com/presigned');
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}/upload/part`);
+      expect(call.method).toBe('POST');
+      expect(call.body).toBe(JSON.stringify({ uploadId, partNumber: 1 }));
     });
 
     it('should fail with PresignedUrlError including partNumber on failure', async () => {
@@ -193,6 +220,13 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toEqual({ partNumber: 1, etag: '"abc123"' });
+
+      const call = lastFetchCall();
+      expect(call.url).toBe('https://s3.example.com/part');
+      expect(call.method).toBe('PUT');
+      expect(call.headers['Content-Type']).toBe('application/zip');
+      // The part PUT goes directly to the signed URL and carries no API auth.
+      expect(call.headers.Authorization).toBeUndefined();
     });
 
     it('should fail with UploadPartError when response is not OK', async () => {
@@ -247,7 +281,10 @@ describe('DeploymentApiService', () => {
       const testLayer = makeTestLayer();
       await Effect.runPromise(Effect.provide(DeploymentApiService.completeUpload(depId, uploadId, parts), testLayer));
 
-      expect(globalThis.fetch).toHaveBeenCalled();
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}/upload/complete`);
+      expect(call.method).toBe('POST');
+      expect(call.body).toBe(JSON.stringify({ uploadId, parts }));
     });
 
     it('should fail with UploadCompleteError on non-OK response', async () => {
@@ -293,6 +330,10 @@ describe('DeploymentApiService', () => {
       );
 
       expect(result).toBe('ACTIVE');
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}`);
+      expect(call.method).toBe('GET');
     });
 
     it('should fail with DeploymentStatusError on non-OK response', async () => {
@@ -336,6 +377,10 @@ describe('DeploymentApiService', () => {
       expect(result.totalItems).toBe(1);
       expect(result.items).toHaveLength(1);
       expect(result.items[0].message).toBe('Build started');
+
+      const call = lastFetchCall();
+      expect(call.url).toBe(`${BASE_URL}/deployments/${depId}/logs?offset=0&limit=10`);
+      expect(call.method).toBe('GET');
     });
 
     it('should fail with DeploymentLogsFetchError on non-OK response', async () => {
