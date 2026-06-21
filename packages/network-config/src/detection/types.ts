@@ -1,4 +1,5 @@
-import { Schema } from 'effect';
+import type { FileSystem } from '@effect/platform';
+import { Effect, Schema } from 'effect';
 import type { NormalizedConfig } from '../normalized-config';
 import type { Runtime } from '../runtime';
 
@@ -56,6 +57,11 @@ export interface FrameworkDefinition {
   priority: number;
   /** Generates deployment defaults for this framework */
   getDefaultConfig: (packageManager: PackageManager) => FrameworkDefaultConfig;
+  /** Refines defaults with project files after a framework match, e.g. framework CLI config. */
+  refineDefaultConfig?: (
+    defaults: FrameworkDefaultConfig,
+    projectFolder: string
+  ) => Effect.Effect<FrameworkDefaultConfig, never, FileSystem.FileSystem>;
 }
 
 export interface FrameworkDefaultConfig {
@@ -74,6 +80,12 @@ export interface FrameworkDefaultConfig {
   environmentVariables: Record<string, string>;
   symlinks?: Record<string, string>;
   excludeFiles?: string[];
+  package?: {
+    rootOverwrite?: string;
+    filePathMap?: Record<string, string>;
+    includeFiles?: string[];
+    excludeFiles?: string[];
+  };
 }
 
 export interface DetectionResult {

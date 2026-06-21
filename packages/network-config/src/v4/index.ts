@@ -98,7 +98,7 @@ export interface ConfigV4 extends Config {
   /**
    * Additional environment variables to set during runtime and build.
    */
-  env: Record<string, string>;
+  env?: Record<string, string>;
 
   /**
    * Optionally, specify additional services like databases to deploy.
@@ -170,6 +170,10 @@ export interface ConfigV4FunctionSettings {
    * The runtime to use for the function.
    */
   runtime?: Runtime;
+  /**
+   * Enable function response streaming. When omitted, Node and Bun runtimes stream by default.
+   */
+  streaming?: boolean;
   /**
    * Use to create symlinks on the final function. This is useful for applications that require use of the file system, since serverless functions are ephemeral and have read-only file systems, except for /tmp.
    */

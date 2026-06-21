@@ -91,7 +91,7 @@ describe('parse config v4', function () {
     const exampleFile = path.join(__dirname, 'example.yaml');
     const config = await readFixture(exampleFile);
 
-    expect(getFunctionSettings('src/index.ts', config as ConfigV4)).toEqual({
+    expect(getFunctionSettings('src/index.ts', config as unknown as ConfigV4)).toEqual({
       runtime: 'bun-1',
       memory: 128,
       max_duration: 15,
@@ -103,7 +103,7 @@ describe('parse config v4', function () {
       },
     });
 
-    expect(getFunctionSettings('src/cron.ts', config as ConfigV4)).toEqual({
+    expect(getFunctionSettings('src/cron.ts', config as unknown as ConfigV4)).toEqual({
       runtime: 'bun-1',
       memory: 128,
       max_duration: 15,
@@ -115,8 +115,8 @@ describe('parse config v4', function () {
       },
     });
 
-    expect(getFunctionSettings('app/test.ts', config as ConfigV4)).toBeUndefined();
+    expect(getFunctionSettings('app/test.ts', config as unknown as ConfigV4)).toBeUndefined();
 
-    expect(getFunctionSettings('test/index.ts', config as ConfigV4)).toBeUndefined();
+    expect(getFunctionSettings('test/index.ts', config as unknown as ConfigV4)).toBeUndefined();
   });
 });

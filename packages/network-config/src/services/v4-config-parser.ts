@@ -32,6 +32,29 @@ const DEFAULT_FUNCTION_SETTINGS: Required<Pick<ConfigV4FunctionSettings, 'memory
   includeFiles: undefined,
 };
 
+const toArray = (value: string | string[] | undefined): string[] | undefined => {
+  if (value == null) return undefined;
+  return Array.isArray(value) ? value : [value];
+};
+
+const runtimeStreamsByDefault = (runtime: ConfigV4FunctionSettings['runtime'] | undefined): boolean =>
+  runtime == null || runtime.startsWith('node-') || runtime.startsWith('bun-');
+
+const normalizeRouteDestination = (destination: string): string => {
+  const [withoutHash] = destination.split('#', 1);
+  const [withoutQuery] = withoutHash.split('?', 1);
+  return withoutQuery.replace(/^\/+/, '');
+};
+
+const destinationMatchesEntrypoint = (destination: string, entrypointPath: string): boolean => {
+  const normalizedDestination = normalizeRouteDestination(destination);
+  if (normalizedDestination === entrypointPath) return true;
+  if (!normalizedDestination.includes('$')) return false;
+
+  const pattern = normalizedDestination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\$[\w]+/g, '.+');
+  return new RegExp(`^${pattern}$`).test(entrypointPath);
+};
+
 // -- Pure helpers (no Effect needed) ----------------------------------------------------------
 
 /**
@@ -72,12 +95,21 @@ export const getFunctionSettings = (path: string, config: ConfigV4): ConfigV4Fun
 /**
  * Determines the route handler type based on destination and redirect flag.
  */
-const resolveRouteHandler = (destination: string, redirect?: boolean): NormalizedConfigRouteHandler => {
+const resolveRouteHandler = (
+  destination: string,
+  redirect: boolean | undefined,
+  entrypoints: readonly NormalizedConfigEntrypoint[] = []
+): NormalizedConfigRouteHandler => {
   const isExternal =
     destination.toLowerCase().startsWith('http://') || destination.toLowerCase().startsWith('https://');
 
   if (redirect === true) return 'HTTP_REDIRECT';
-  return isExternal ? 'HTTP_PROXY' : 'SERVERLESS_FUNCTION';
+  if (isExternal) return 'HTTP_PROXY';
+
+  const matchingEntrypoints = entrypoints.filter((item) => destinationMatchesEntrypoint(destination, item.path));
+  return matchingEntrypoints.length > 0 && matchingEntrypoints.every((entrypoint) => entrypoint.streaming === true)
+    ? 'SERVERLESS_FUNCTION_STREAMING'
+    : 'SERVERLESS_FUNCTION';
 };
 
 /** Type guard that validates a string is a known Region. */
@@ -95,10 +127,13 @@ const resolveRegions = (configRegions?: string[] | null): Region[] => {
 /**
  * Maps a V4 route definition to a NormalizedConfigRoute.
  */
-const mapRoute = (route: NonNullable<ConfigV4['routes']>[number]): NormalizedConfigRoute => ({
+const mapRoute = (
+  route: NonNullable<ConfigV4['routes']>[number],
+  entrypoints: readonly NormalizedConfigEntrypoint[]
+): NormalizedConfigRoute => ({
   path: route.source,
   destination: route.destination,
-  handler: resolveRouteHandler(route.destination, route.redirect),
+  handler: resolveRouteHandler(route.destination, route.redirect, entrypoints),
   headers: route.headers ?? {},
   methods: route.methods ?? ['ANY'],
   positiveRequirements: route.has,
@@ -116,10 +151,8 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
   if (config.functions == null) return entrypoints;
 
   for (const [fnPath, func] of Object.entries(config.functions)) {
-    const settings = getFunctionSettings(fnPath, config);
-
-    if (settings == null) {
-      yield* new FunctionConfigError({
+    if (getFunctionSettings(fnPath, config) == null) {
+      return yield* new FunctionConfigError({
         message: `Settings invalid for function at path '${fnPath}'`,
         functionPath: fnPath,
       });
@@ -138,15 +171,32 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
       if (entrypoints.some((ep) => ep.path === file)) continue;
       if (Object.keys(config.functions).some((f) => f === file && f !== fnPath)) continue;
 
+      const settings = getFunctionSettings(file, config);
+      if (settings == null) {
+        return yield* new FunctionConfigError({
+          message: `Settings invalid for function at path '${file}'`,
+          functionPath: file,
+        });
+      }
+
+      const runtime = settings.runtime ?? 'node-20';
+      const streaming = settings.streaming ?? runtimeStreamsByDefault(runtime);
+
       entrypoints.push({
         path: file,
-        runtime: settings!.runtime ?? 'node-20',
-        memory: settings!.memory ?? 128,
-        maxDuration: settings!.max_duration ?? 30,
+        runtime,
+        memory: settings.memory ?? 128,
+        maxDuration: settings.max_duration ?? 30,
         schedule: func.schedule,
         symlinks: func.symlinks,
-        streaming:
-          settings!.runtime == null || settings!.runtime.startsWith('node-') || settings!.runtime.startsWith('bun-'),
+        streaming,
+        package:
+          settings.includeFiles != null || settings.excludeFiles != null
+            ? {
+                includeFiles: toArray(settings.includeFiles),
+                excludeFiles: toArray(settings.excludeFiles),
+              }
+            : undefined,
       });
     }
   }
@@ -250,7 +300,7 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         entrypoints,
         errors: [],
         warnings: [],
-        routes: (config.routes ?? []).map(mapRoute),
+        routes: (config.routes ?? []).map((route) => mapRoute(route, entrypoints)),
       } as NormalizedConfig;
     }),
   }),

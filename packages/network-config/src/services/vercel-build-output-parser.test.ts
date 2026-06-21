@@ -27,7 +27,7 @@ const runParser = (files: Record<string, string>, config: NormalizedConfig, proj
   Effect.runPromise(
     Effect.gen(function* () {
       const parser = yield* VercelBuildOutputParser;
-      return yield* parser.parse(config, projectFolder);
+      return yield* parser.parse(structuredClone(config), projectFolder);
     }).pipe(
       Effect.provide(VercelBuildOutputParser.Default),
       Effect.provide(RawConfigReader.Default),
@@ -126,5 +126,46 @@ describe('VercelBuildOutputParser', () => {
     expect(result.assets?.overrides).toEqual({
       'index.html': { contentType: 'text/html' },
     });
+  });
+
+  it('should default Node Vercel Build Output functions to response streaming', async () => {
+    mockGetFilesForPattern.mockResolvedValueOnce(['.vercel/output/functions/api.func/.vc-config.json']);
+
+    const result = await runParser(
+      {
+        '/project/.vercel/output/config.json': JSON.stringify({ version: 3 }),
+        '/project/.vercel/output/functions/api.func/.vc-config.json': JSON.stringify({
+          handler: 'index.js',
+          runtime: 'nodejs20.x',
+          filePathMap: { 'index.js': 'index.js' },
+        }),
+      },
+      emptyConfig,
+      '/project'
+    );
+
+    expect(result.entrypoints?.[0].streaming).toBe(true);
+    expect(result.routes?.[0].handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+  });
+
+  it('should allow Vercel response streaming metadata to disable streaming', async () => {
+    mockGetFilesForPattern.mockResolvedValueOnce(['.vercel/output/functions/api.func/.vc-config.json']);
+
+    const result = await runParser(
+      {
+        '/project/.vercel/output/config.json': JSON.stringify({ version: 3 }),
+        '/project/.vercel/output/functions/api.func/.vc-config.json': JSON.stringify({
+          handler: 'index.js',
+          runtime: 'nodejs20.x',
+          supportsResponseStreaming: false,
+          filePathMap: { 'index.js': 'index.js' },
+        }),
+      },
+      emptyConfig,
+      '/project'
+    );
+
+    expect(result.entrypoints?.[0].streaming).toBe(false);
+    expect(result.routes?.[0].handler).toBe('SERVERLESS_FUNCTION');
   });
 });

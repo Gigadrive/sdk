@@ -113,7 +113,10 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
           }
         }
 
-        const streaming = runtime.startsWith('node-') || runtime.startsWith('bun-');
+        const streaming =
+          functionConfig.supportsResponseStreaming ??
+          functionConfig.experimentalResponseStreaming ??
+          runtime.startsWith('node-');
 
         let filePathMap: Record<string, string> = {};
         for (const [key, value] of Object.entries(configFilePathMap)) {

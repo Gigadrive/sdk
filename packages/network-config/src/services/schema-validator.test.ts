@@ -37,8 +37,10 @@ describe('SchemaValidator', () => {
       )
     );
 
+    if (result == null) throw new Error('Expected schema validation error to be caught');
+
     expect(result).toMatchObject({ _tag: 'caught', filePath: '/config.yaml' });
-    expect((result as { errors: string[] }).errors.length).toBeGreaterThan(0);
+    expect(result.errors.length).toBeGreaterThan(0);
   });
 
   it('should fail when required field is missing', async () => {

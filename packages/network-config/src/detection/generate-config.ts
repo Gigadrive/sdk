@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type { NormalizedConfig } from '../normalized-config';
 import { AVAILABLE_REGIONS } from '../regions';
-import type { FrameworkDefinition, PackageManager } from './types';
+import type { FrameworkDefaultConfig, FrameworkDefinition, PackageManager } from './types';
 
 /**
  * Returns the install command for the given package manager.
@@ -32,9 +32,10 @@ const getInstallCommand = (pm: PackageManager): string => {
  */
 export const generateConfig = Effect.fn('generateConfig')(function* (
   framework: FrameworkDefinition,
-  packageManager: PackageManager
+  packageManager: PackageManager,
+  refinedDefaults?: FrameworkDefaultConfig
 ) {
-  const defaults = framework.getDefaultConfig(packageManager);
+  const defaults = refinedDefaults ?? framework.getDefaultConfig(packageManager);
 
   const installCmd = defaults.installCommand ?? getInstallCommand(packageManager);
   const commands = [installCmd, ...defaults.commands];
@@ -54,6 +55,7 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
           maxDuration: defaults.maxDuration,
           streaming: defaults.streaming,
           symlinks: defaults.symlinks,
+          package: defaults.package,
         },
       ]
     : [];

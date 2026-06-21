@@ -1,5 +1,17 @@
 # @gigadrive/network-config
 
+## 3.1.1
+
+### Patch Changes
+
+- Add explicit response streaming configuration for Node functions and Vercel Build Output functions. Node and Bun functions now stream by default and can opt out with `streaming: false`; Vercel Build Output functions can opt out with `supportsResponseStreaming: false`. ([#300](https://github.com/Gigadrive/sdk/pull/300))
+
+## 3.1.0
+
+### Minor Changes
+
+- Add package include/exclude metadata to normalized function entrypoints, refine NestJS output path detection from `nest-cli.json`, and use Composer for detected PHP frameworks even when JavaScript lockfiles are present. ([#298](https://github.com/Gigadrive/sdk/pull/298))
+
 ## 3.0.1
 
 ### Patch Changes
