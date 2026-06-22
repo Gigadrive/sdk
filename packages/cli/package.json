@@ -31,14 +31,14 @@
     "@gigadrive/commons": "workspace:*",
     "@gigadrive/network-config": "workspace:*",
     "@gigadrive/sdk": "workspace:*",
-    "archiver": "^7.0.1",
+    "archiver": "^8.0.0",
     "effect": "^3.19.17",
     "ignore": "^7.0.5",
-    "open": "^10.2.0"
+    "open": "^11.0.0"
   },
   "devDependencies": {
     "@effect/language-service": "^0.84.0",
-    "@types/archiver": "^6.0.3",
+    "@types/archiver": "^8.0.0",
     "esbuild": "^0.28.0",
     "typescript": "catalog:"
   },
