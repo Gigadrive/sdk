@@ -145,6 +145,34 @@ Path aliases: `@/*` maps to `src/*`, `stories/*` maps to `stories/*`.
 - Animations: `tailwindcss-animate` plugin + custom keyframes in tailwind config.
 - Font: Resist Sans Text (extends default sans stack).
 
+### Tailwind version: we are on v3 (NOT v4)
+
+harmony runs **Tailwind CSS v3** (`tailwindcss@^3.4`, JS config `tailwind.config.ts`,
+`@tailwind base/components/utilities` directives). Do **not** use Tailwind v4-only
+utilities — v3 silently drops unknown classes (they emit no CSS), so a v4 class looks
+fine in the source but does nothing at runtime. The most common symptom is a stray
+native `:focus-visible` outline (a white ring in dark mode / black in light mode)
+where `outline-hidden` was expected.
+
+shadcn/ui components are now authored for v4, so when porting one, normalize its
+classes to v3 first. Known v4-only → v3 replacements (verified against `tailwindcss@3.4`):
+
+| v4 (no-op in v3)                                                    | v3 equivalent                                        |
+| ------------------------------------------------------------------- | ---------------------------------------------------- |
+| `outline-hidden`                                                    | `outline-none`                                       |
+| `shadow-xs`, `shadow-2xs`                                           | `shadow-sm`                                          |
+| `has-focus:` (bare pseudo shorthand)                                | `has-[:focus]:` (also `group-has-[:focus]:`)         |
+| `foo-(--bar)` CSS-var shorthand                                     | `foo-[var(--bar)]`                                   |
+| `**:` (deep-descendant variant)                                     | `[&_…]`                                              |
+| `field-sizing-*`, `text-shadow-*`, `inset-shadow-*`, `inset-ring-*` | no v3 equivalent — use an arbitrary property or drop |
+
+Note: `size-*`, `*:` (direct-child variant), `has-[:focus]`, and `foo-[--bar]`/`foo-[var(--bar)]`
+are all valid in v3.4 — leave them. To check whether a class is valid, compile a probe
+file with `packages/harmony/node_modules/.bin/tailwindcss`: if the class is absent from
+the output CSS, it's a v4-only no-op. (The v4 packages in `package.json` —
+`@tailwindcss/postcss`, `@tailwindcss/vite` — are currently unused; a real v4 migration
+is a separate, deliberate effort.)
+
 ### Exports
 
 - Barrel `src/index.ts` re-exports from `./lib`, `./hooks`, and key components.
