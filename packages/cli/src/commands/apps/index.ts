@@ -25,8 +25,12 @@ const appsListCommand = Command.make('list', { org: orgOption }, ({ org }) =>
     yield* Console.log(`\n${total} application(s).`);
   }).pipe(
     Effect.catchTags({
-      NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-      ApiRequestError: (err) => Console.error(`Failed to list applications: ${err.message}`),
+      NotAuthenticatedError: (err) =>
+        Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+          Effect.andThen(Effect.fail(err))
+        ),
+      ApiRequestError: (err) =>
+        Console.error(`Failed to list applications: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
     })
   )
 );

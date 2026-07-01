@@ -78,8 +78,10 @@ PackageManagerService    (standalone — detects npm/yarn/pnpm/bun)
 ArchiveService           (standalone — zip creation with ignore rules)
 ```
 
-All layers are composed flat in `src/index.ts`. `ApiClientService` and
-`DeploymentApiService` are provided `BaseServices` (which supplies `AuthService`):
+All layers are composed flat in `src/index.ts`. `DeploymentApiService` declares
+`dependencies: [ApiClientService.Default]`, so `ApiClientService` is already baked
+into `DeploymentApiService.Default`; both layers only need `BaseServices` for the
+transitive `AuthService` requirement:
 
 ```ts
 const BaseServices = Layer.mergeAll(
@@ -93,6 +95,8 @@ const BaseServices = Layer.mergeAll(
 ).pipe(Layer.provideMerge(AuthService.Default));
 
 const ApiClientLive = Layer.provide(ApiClientService.Default, BaseServices);
+// ApiClientService is baked into DeploymentApiService.Default via `dependencies`,
+// so DeploymentApiLive only needs BaseServices (for AuthService).
 const DeploymentApiLive = Layer.provide(DeploymentApiService.Default, BaseServices);
 
 const ServicesLive = Layer.mergeAll(BaseServices, ApiClientLive, DeploymentApiLive);
@@ -337,11 +341,11 @@ const data = Option.getOrThrow(stored);
 
 ## Environment Variables
 
-| Variable                             | Default                        | Description                      |
-| ------------------------------------ | ------------------------------ | -------------------------------- |
-| `GIGADRIVE_NETWORK_OAUTH_ISSUER_URL` | `https://idp.gigadrive.de`     | OIDC issuer URL                  |
-| `GIGADRIVE_NETWORK_OAUTH_CLIENT_ID`  | `todo_add_client_id`           | OAuth client ID (set the real first-party CLI client ID before shipping) |
-| `GIGADRIVE_API_BASE_URL`             | `https://api.gigadrive.network` | Gigadrive Network API base URL (used by `ApiClientService`) |
+| Variable                             | Default                         | Description                                                              |
+| ------------------------------------ | ------------------------------- | ------------------------------------------------------------------------ |
+| `GIGADRIVE_NETWORK_OAUTH_ISSUER_URL` | `https://idp.gigadrive.de`      | OIDC issuer URL                                                          |
+| `GIGADRIVE_NETWORK_OAUTH_CLIENT_ID`  | `todo_add_client_id`            | OAuth client ID (set the real first-party CLI client ID before shipping) |
+| `GIGADRIVE_API_BASE_URL`             | `https://api.gigadrive.network` | Gigadrive Network API base URL (used by `ApiClientService`)              |
 
 All read via `Config.string()` with defaults — never accessed via `process.env`.
 

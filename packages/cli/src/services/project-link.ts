@@ -87,23 +87,16 @@ export class ProjectLinkService extends Effect.Service<ProjectLinkService>()('Pr
 
     /** Remove the project link file, treating a missing file as success. */
     const remove = Effect.fn('ProjectLinkService.remove')(function* (projectFolder: string) {
-      yield* fs.remove(linkFile(projectFolder)).pipe(
-        Effect.mapError((error) => {
-          const cause = error instanceof Error ? error : (error as { error?: Error }).error;
-          const code = cause && typeof cause === 'object' && 'code' in cause ? (cause as { code: string }).code : '';
-          return { isNotFound: code === 'ENOENT' || String(error).includes('ENOENT'), original: error };
-        }),
-        Effect.catchAll((mapped) =>
-          mapped.isNotFound
-            ? Effect.void
-            : Effect.fail(
-                new ProjectLinkWriteError({
-                  message: 'Failed to remove project link file',
-                  cause: String(mapped.original),
-                })
-              )
-        )
-      );
+      // `force: true` makes removing a missing file a no-op (@effect/platform swallows the
+      // NotFound SystemError); genuine failures (e.g. permissions) still surface below.
+      yield* fs
+        .remove(linkFile(projectFolder), { force: true })
+        .pipe(
+          Effect.mapError(
+            (error) =>
+              new ProjectLinkWriteError({ message: 'Failed to remove project link file', cause: String(error) })
+          )
+        );
     });
 
     return { load, resolve, save, remove };

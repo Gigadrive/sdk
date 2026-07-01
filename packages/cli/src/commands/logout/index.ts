@@ -10,7 +10,8 @@ export const logoutCommand = Command.make('logout', {}, () =>
     yield* Console.log('Logged out.');
   }).pipe(
     Effect.catchTags({
-      AuthStorageWriteError: (err) => Console.error(`Failed to log out: ${err.message}`),
+      AuthStorageWriteError: (err) =>
+        Console.error(`Failed to log out: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
     })
   )
 );

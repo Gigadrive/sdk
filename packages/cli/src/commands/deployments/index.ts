@@ -25,8 +25,9 @@ const statusOption = Options.choice('status', DEPLOYMENT_STATUSES).pipe(
 
 /**
  * Resolve the application filter: an explicit `--app` wins, otherwise fall back
- * to the linked application (when the directory is linked). Never fails — an
- * unlinked directory simply yields no application filter.
+ * to the linked application. An unlinked directory yields no filter (`load`
+ * returns `Option.none`); a broken/unreadable `.gigadrive/project.json` surfaces
+ * as `ProjectLinkReadError` rather than being silently treated as unlinked.
  */
 const resolveApplicationFilter = (app: Option.Option<string>) =>
   Option.match(app, {
@@ -34,7 +35,7 @@ const resolveApplicationFilter = (app: Option.Option<string>) =>
     onNone: () =>
       Effect.gen(function* () {
         const projectLink = yield* ProjectLinkService;
-        const link = yield* projectLink.load(process.cwd()).pipe(Effect.catchAll(() => Effect.succeed(Option.none())));
+        const link = yield* projectLink.load(process.cwd());
         return Option.match(link, { onNone: () => undefined, onSome: (l) => l.applicationId });
       }),
   });
@@ -66,8 +67,13 @@ const deploymentsListCommand = Command.make(
       yield* Console.log(`\n${total} deployment(s).`);
     }).pipe(
       Effect.catchTags({
-        NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-        ApiRequestError: (err) => Console.error(`Failed to list deployments: ${err.message}`),
+        NotAuthenticatedError: (err) =>
+          Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+            Effect.andThen(Effect.fail(err))
+          ),
+        ApiRequestError: (err) =>
+          Console.error(`Failed to list deployments: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+        ProjectLinkReadError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
       })
     )
 );
@@ -96,8 +102,12 @@ const deploymentsInspectCommand = Command.make('inspect', { deploymentId: deploy
     }
   }).pipe(
     Effect.catchTags({
-      NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-      ApiRequestError: (err) => Console.error(`Failed to inspect deployment: ${err.message}`),
+      NotAuthenticatedError: (err) =>
+        Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+          Effect.andThen(Effect.fail(err))
+        ),
+      ApiRequestError: (err) =>
+        Console.error(`Failed to inspect deployment: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
     })
   )
 );

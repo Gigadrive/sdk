@@ -2,7 +2,7 @@ import { Args, Command, Options } from '@effect/cli';
 import { FileSystem } from '@effect/platform';
 import type { AiGatewayBudgetInput, AiGatewayPolicyInput } from '@gigadrive/sdk';
 import { Console, Effect, Option } from 'effect';
-import { ApiRequestError, ProjectNotLinkedError } from '../../errors';
+import { ApiRequestError, NotAuthenticatedError, ProjectLinkReadError, ProjectNotLinkedError } from '../../errors';
 import { ApiClientService } from '../../services/api-client';
 import { ProjectLinkService } from '../../services/project-link';
 
@@ -101,12 +101,17 @@ const readJsonInput = (file: Option.Option<string>) =>
     });
   });
 
-/** Shared error handlers for the governance commands. */
+/** Shared error handlers for the governance commands — log, then re-fail so the process exits non-zero. */
 const governanceErrorHandlers = {
-  NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-  ApiRequestError: (err: ApiRequestError) => Console.error(err.message),
-  ProjectNotLinkedError: (err: ProjectNotLinkedError) => Console.error(err.message),
-  ProjectLinkReadError: (err: { message: string }) => Console.error(err.message),
+  NotAuthenticatedError: (err: NotAuthenticatedError) =>
+    Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+      Effect.andThen(Effect.fail(err))
+    ),
+  ApiRequestError: (err: ApiRequestError) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+  ProjectNotLinkedError: (err: ProjectNotLinkedError) =>
+    Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+  ProjectLinkReadError: (err: ProjectLinkReadError) =>
+    Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
 };
 
 // ---------------------------------------------------------------------------
@@ -214,8 +219,11 @@ const budgetsSetCommand = Command.make('set', { org: orgOption, file: fileOption
     const parsed = yield* readJsonInput(file);
     const budgets = Array.isArray(parsed) ? parsed : (parsed as { budgets?: unknown }).budgets;
     if (!Array.isArray(budgets)) {
-      yield* Console.error('Expected a JSON array of budgets, or an object of the form { "budgets": [...] }.');
-      return;
+      return yield* Effect.fail(
+        new ApiRequestError({
+          message: 'Expected a JSON array of budgets, or an object of the form { "budgets": [...] }.',
+        })
+      );
     }
     const { items } = yield* apiClient.request((client) =>
       client.organizations.aiGateway.budgets.replace(orgId, budgets as AiGatewayBudgetInput[])
@@ -264,8 +272,11 @@ const policiesCommand = Command.make('policies', {}, () => Effect.void).pipe(
 // ---------------------------------------------------------------------------
 
 const inferenceErrorHandlers = {
-  NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-  ApiRequestError: (err: ApiRequestError) => Console.error(err.message),
+  NotAuthenticatedError: (err: NotAuthenticatedError) =>
+    Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+      Effect.andThen(Effect.fail(err))
+    ),
+  ApiRequestError: (err: ApiRequestError) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
 };
 
 const modelsListCommand = Command.make('list', {}, () =>

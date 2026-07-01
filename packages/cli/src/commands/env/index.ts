@@ -1,5 +1,6 @@
 import { Args, Command, Options } from '@effect/cli';
 import { Console, Effect, Option } from 'effect';
+import { EnvVarNotFoundError, InvalidEnvVarFormatError } from '../../errors';
 import { ApiClientService } from '../../services/api-client';
 import { ProjectLinkService } from '../../services/project-link';
 
@@ -69,10 +70,14 @@ const envListCommand = Command.make('list', { app: appOption, org: orgOption }, 
     }
   }).pipe(
     Effect.catchTags({
-      NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-      ApiRequestError: (err) => Console.error(`Failed to list environment variables: ${err.message}`),
-      ProjectNotLinkedError: (err) => Console.error(err.message),
-      ProjectLinkReadError: (err) => Console.error(err.message),
+      NotAuthenticatedError: (err) =>
+        Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+          Effect.andThen(Effect.fail(err))
+        ),
+      ApiRequestError: (err) =>
+        Console.error(`Failed to list environment variables: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      ProjectNotLinkedError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      ProjectLinkReadError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
     })
   )
 );
@@ -84,8 +89,11 @@ const envSetCommand = Command.make(
     Effect.gen(function* () {
       const separator = keyValue.indexOf('=');
       if (separator <= 0) {
-        yield* Console.error('Invalid format. Use KEY=VALUE, e.g. "gigadrive env set DATABASE_URL=postgres://...".');
-        return;
+        return yield* Effect.fail(
+          new InvalidEnvVarFormatError({
+            message: 'Invalid format. Use KEY=VALUE, e.g. "gigadrive env set DATABASE_URL=postgres://...".',
+          })
+        );
       }
       const key = keyValue.slice(0, separator);
       const value = keyValue.slice(separator + 1);
@@ -102,10 +110,15 @@ const envSetCommand = Command.make(
       yield* Console.log(`Set ${created.key}.`);
     }).pipe(
       Effect.catchTags({
-        NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-        ApiRequestError: (err) => Console.error(`Failed to set environment variable: ${err.message}`),
-        ProjectNotLinkedError: (err) => Console.error(err.message),
-        ProjectLinkReadError: (err) => Console.error(err.message),
+        InvalidEnvVarFormatError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        NotAuthenticatedError: (err) =>
+          Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+            Effect.andThen(Effect.fail(err))
+          ),
+        ApiRequestError: (err) =>
+          Console.error(`Failed to set environment variable: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+        ProjectNotLinkedError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        ProjectLinkReadError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
       })
     )
 );
@@ -126,8 +139,9 @@ const envRmCommand = Command.make(
 
       const target = items.find((v) => v.id === keyOrId || v.key === keyOrId);
       if (target === undefined) {
-        yield* Console.error(`No environment variable matching "${keyOrId}".`);
-        return;
+        return yield* Effect.fail(
+          new EnvVarNotFoundError({ message: `No environment variable matching "${keyOrId}".` })
+        );
       }
 
       yield* apiClient.request((client) =>
@@ -138,10 +152,15 @@ const envRmCommand = Command.make(
       yield* Console.log(`Removed ${target.key}.`);
     }).pipe(
       Effect.catchTags({
-        NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-        ApiRequestError: (err) => Console.error(`Failed to remove environment variable: ${err.message}`),
-        ProjectNotLinkedError: (err) => Console.error(err.message),
-        ProjectLinkReadError: (err) => Console.error(err.message),
+        EnvVarNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        NotAuthenticatedError: (err) =>
+          Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+            Effect.andThen(Effect.fail(err))
+          ),
+        ApiRequestError: (err) =>
+          Console.error(`Failed to remove environment variable: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+        ProjectNotLinkedError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        ProjectLinkReadError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
       })
     )
 );

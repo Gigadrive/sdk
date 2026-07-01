@@ -1,5 +1,6 @@
 import { Command, Options, Prompt } from '@effect/cli';
 import { Console, Effect, Option } from 'effect';
+import { ApplicationNotFoundError, NoApplicationsFoundError } from '../../errors';
 import { ApiClientService } from '../../services/api-client';
 import { ProjectLinkService } from '../../services/project-link';
 
@@ -29,10 +30,11 @@ export const linkCommand = Command.make('link', { app: appOption, org: orgOption
     const { items: apps } = yield* apiClient.request((client) => client.applications.list({ organizationId }));
 
     if (apps.length === 0) {
-      yield* Console.error(
-        'No applications found. Create one in the Gigadrive console, then run "gigadrive link" again.'
+      return yield* Effect.fail(
+        new NoApplicationsFoundError({
+          message: 'No applications found. Create one in the Gigadrive console, then run "gigadrive link" again.',
+        })
       );
-      return;
     }
 
     const explicitAppId = Option.getOrUndefined(app);
@@ -43,8 +45,11 @@ export const linkCommand = Command.make('link', { app: appOption, org: orgOption
     if (explicitAppId !== undefined) {
       const match = apps.find((a) => a.id === explicitAppId);
       if (match === undefined) {
-        yield* Console.error(`Application "${explicitAppId}" was not found among your applications.`);
-        return;
+        return yield* Effect.fail(
+          new ApplicationNotFoundError({
+            message: `Application "${explicitAppId}" was not found among your applications.`,
+          })
+        );
       }
       applicationId = match.id;
       linkedOrganizationId = match.organization.id;
@@ -68,10 +73,17 @@ export const linkCommand = Command.make('link', { app: appOption, org: orgOption
     yield* Console.log('Tip: add ".gigadrive/" to your .gitignore.');
   }).pipe(
     Effect.catchTags({
+      // Ctrl+C during the picker is a deliberate cancel — exit 0.
       QuitException: () => Console.log('Cancelled.'),
-      NotAuthenticatedError: () => Console.error('You are not logged in. Run "gigadrive login" to authenticate.'),
-      ApiRequestError: (err) => Console.error(`Failed to list applications: ${err.message}`),
-      ProjectLinkWriteError: (err) => Console.error(err.message),
+      NotAuthenticatedError: (err) =>
+        Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+          Effect.andThen(Effect.fail(err))
+        ),
+      ApiRequestError: (err) =>
+        Console.error(`Failed to list applications: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+      NoApplicationsFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      ApplicationNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      ProjectLinkWriteError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
     })
   )
 );
@@ -84,7 +96,7 @@ export const unlinkCommand = Command.make('unlink', {}, () =>
     yield* Console.log('Unlinked this directory.');
   }).pipe(
     Effect.catchTags({
-      ProjectLinkWriteError: (err) => Console.error(err.message),
+      ProjectLinkWriteError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
     })
   )
 );

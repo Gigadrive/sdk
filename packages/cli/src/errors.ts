@@ -54,6 +54,39 @@ export class ApiRequestError extends Schema.TaggedError<ApiRequestError>()('ApiR
 }) {}
 
 // ---------------------------------------------------------------------------
+// Command input errors
+// ---------------------------------------------------------------------------
+
+/** An environment-variable assignment was not in `KEY=VALUE` form. */
+export class InvalidEnvVarFormatError extends Schema.TaggedError<InvalidEnvVarFormatError>()(
+  'InvalidEnvVarFormatError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+/** No environment variable matched the requested key or ID. */
+export class EnvVarNotFoundError extends Schema.TaggedError<EnvVarNotFoundError>()('EnvVarNotFoundError', {
+  message: Schema.String,
+}) {}
+
+/** The actor has no applications to link. */
+export class NoApplicationsFoundError extends Schema.TaggedError<NoApplicationsFoundError>()(
+  'NoApplicationsFoundError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+/** The requested application ID was not among the actor's applications. */
+export class ApplicationNotFoundError extends Schema.TaggedError<ApplicationNotFoundError>()(
+  'ApplicationNotFoundError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+// ---------------------------------------------------------------------------
 // Project errors
 // ---------------------------------------------------------------------------
 
