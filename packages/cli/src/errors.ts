@@ -43,12 +43,74 @@ export class UserInfoFetchError extends Schema.TaggedError<UserInfoFetchError>()
 }) {}
 
 // ---------------------------------------------------------------------------
+// API errors
+// ---------------------------------------------------------------------------
+
+/** A request to the Gigadrive Network API failed. Wraps the SDK's `ApiError`. */
+export class ApiRequestError extends Schema.TaggedError<ApiRequestError>()('ApiRequestError', {
+  message: Schema.String,
+  statusCode: Schema.optional(Schema.Number),
+  code: Schema.optional(Schema.String),
+}) {}
+
+// ---------------------------------------------------------------------------
+// Command input errors
+// ---------------------------------------------------------------------------
+
+/** An environment-variable assignment was not in `KEY=VALUE` form. */
+export class InvalidEnvVarFormatError extends Schema.TaggedError<InvalidEnvVarFormatError>()(
+  'InvalidEnvVarFormatError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+/** No environment variable matched the requested key or ID. */
+export class EnvVarNotFoundError extends Schema.TaggedError<EnvVarNotFoundError>()('EnvVarNotFoundError', {
+  message: Schema.String,
+}) {}
+
+/** The actor has no applications to link. */
+export class NoApplicationsFoundError extends Schema.TaggedError<NoApplicationsFoundError>()(
+  'NoApplicationsFoundError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+/** The requested application ID was not among the actor's applications. */
+export class ApplicationNotFoundError extends Schema.TaggedError<ApplicationNotFoundError>()(
+  'ApplicationNotFoundError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+// ---------------------------------------------------------------------------
 // Project errors
 // ---------------------------------------------------------------------------
 
 export class ConfigNotFoundError extends Schema.TaggedError<ConfigNotFoundError>()('ConfigNotFoundError', {
   message: Schema.String,
   directory: Schema.String,
+}) {}
+
+/** The project directory has no `.gigadrive/project.json` link. */
+export class ProjectNotLinkedError extends Schema.TaggedError<ProjectNotLinkedError>()('ProjectNotLinkedError', {
+  message: Schema.String,
+  directory: Schema.String,
+}) {}
+
+/** Failed to read or parse `.gigadrive/project.json`. */
+export class ProjectLinkReadError extends Schema.TaggedError<ProjectLinkReadError>()('ProjectLinkReadError', {
+  message: Schema.String,
+  cause: Schema.optional(Schema.String),
+}) {}
+
+/** Failed to write `.gigadrive/project.json`. */
+export class ProjectLinkWriteError extends Schema.TaggedError<ProjectLinkWriteError>()('ProjectLinkWriteError', {
+  message: Schema.String,
+  cause: Schema.optional(Schema.String),
 }) {}
 
 export class ConfigParseError extends Schema.TaggedError<ConfigParseError>()('ConfigParseError', {
@@ -134,6 +196,13 @@ export class DeploymentStatusError extends Schema.TaggedError<DeploymentStatusEr
 
 export class DeploymentLogsFetchError extends Schema.TaggedError<DeploymentLogsFetchError>()(
   'DeploymentLogsFetchError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+export class DeploymentHostnamesFetchError extends Schema.TaggedError<DeploymentHostnamesFetchError>()(
+  'DeploymentHostnamesFetchError',
   {
     message: Schema.String,
   }

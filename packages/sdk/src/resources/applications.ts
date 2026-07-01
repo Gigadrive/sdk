@@ -3,7 +3,7 @@ import { ApplicationEnvVarsResource } from './application-env-vars';
 import { ApplicationRequestsResource } from './application-requests';
 import { ApplicationStorageResource } from './application-storage';
 import { BaseResource } from './base-resource';
-import type { ApplicationHostnameList } from './hostnames';
+import type { ApplicationHostnameList, HostnameAvailability, SetProductionHostnameResult } from './hostnames';
 import type { Organization } from './organizations';
 
 /** A Gigadrive Network application, belonging to an {@link Organization}. */
@@ -123,5 +123,49 @@ export class ApplicationsResource extends BaseResource {
    */
   async hostnames(applicationId: string): Promise<ApplicationHostnameList> {
     return this.httpClient.get(`/applications/${applicationId}/hostnames`);
+  }
+
+  /**
+   * Check whether a candidate production hostname label is allowed and globally
+   * available before setting it with {@link setProductionHostname}.
+   *
+   * Requires the `network:applications:read` scope.
+   *
+   * @param applicationId - The application ID (UUID).
+   * @param label - The candidate production hostname label (e.g. `"my-app"`).
+   * @returns Whether the label is available, plus a `reason` when it is not.
+   *
+   * @example
+   * ```ts
+   * const { available, reason } = await client.applications.checkHostnameAvailability('app-id', 'my-app');
+   * if (!available) console.log(`Unavailable: ${reason}`);
+   * ```
+   */
+  async checkHostnameAvailability(applicationId: string, label: string): Promise<HostnameAvailability> {
+    return this.httpClient.get(`/applications/${applicationId}/hostname/availability`, {
+      query: { label },
+    });
+  }
+
+  /**
+   * Set the application's production hostname. The production alias
+   * `{label}.gigadrive.app` is re-pointed to the latest production deployment.
+   *
+   * Requires the `network:applications:write` scope. Deployment- and
+   * function-scoped tokens cannot change the production hostname.
+   *
+   * @param applicationId - The application ID (UUID).
+   * @param label - The production hostname label (e.g. `"my-app"`). It is
+   *   normalized (slugified) server-side.
+   * @returns The saved label, the resulting hostname, and whether it is live yet.
+   *
+   * @example
+   * ```ts
+   * const { hostname, live } = await client.applications.setProductionHostname('app-id', 'my-app');
+   * console.log(live ? `Live at ${hostname}` : `Reserved ${hostname} (deploy to go live)`);
+   * ```
+   */
+  async setProductionHostname(applicationId: string, label: string): Promise<SetProductionHostnameResult> {
+    return this.httpClient.put(`/applications/${applicationId}/hostname`, { label });
   }
 }

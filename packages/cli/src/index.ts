@@ -2,11 +2,19 @@ import { Command } from '@effect/cli';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import { NetworkConfigLive } from '@gigadrive/network-config';
 import { Effect, Layer, LogLevel, Logger } from 'effect';
+import pkg from '../package.json';
+import { aiCommand } from './commands/ai';
+import { appsCommand } from './commands/apps';
 import { buildCommand } from './commands/build';
 import { debugCommand } from './commands/debug';
+import { deploymentsCommand } from './commands/deployments';
+import { envCommand } from './commands/env';
+import { linkCommand, unlinkCommand } from './commands/link';
 import { loginCommand } from './commands/login';
+import { logoutCommand } from './commands/logout';
 import { platformCommand } from './commands/platform';
 import { whoamiCommand } from './commands/whoami';
+import { ApiClientService } from './services/api-client';
 import { ArchiveService } from './services/archive';
 import { AuthService } from './services/auth';
 import { AuthStorageService } from './services/auth-storage';
@@ -14,13 +22,27 @@ import { DeploymentApiService } from './services/deployment-api';
 import { OAuthConfigService } from './services/oauth-config';
 import { PackageManagerService } from './services/package-manager';
 import { ProjectConfigService } from './services/project-config';
+import { ProjectLinkService } from './services/project-link';
 
 // ---------------------------------------------------------------------------
 // Root command with subcommands
 // ---------------------------------------------------------------------------
 
 const gigadrive = Command.make('gigadrive', {}, () => Effect.void).pipe(
-  Command.withSubcommands([loginCommand, whoamiCommand, buildCommand, debugCommand, platformCommand])
+  Command.withSubcommands([
+    loginCommand,
+    logoutCommand,
+    whoamiCommand,
+    linkCommand,
+    unlinkCommand,
+    appsCommand,
+    envCommand,
+    deploymentsCommand,
+    aiCommand,
+    buildCommand,
+    debugCommand,
+    platformCommand,
+  ])
 );
 
 // ---------------------------------------------------------------------------
@@ -29,7 +51,7 @@ const gigadrive = Command.make('gigadrive', {}, () => Effect.void).pipe(
 
 const cli = Command.run(gigadrive, {
   name: 'Gigadrive CLI',
-  version: '2.0.0',
+  version: pkg.version,
 });
 
 // ---------------------------------------------------------------------------
@@ -42,12 +64,14 @@ const BaseServices = Layer.mergeAll(
   PackageManagerService.Default,
   ArchiveService.Default,
   NetworkConfigLive,
-  ProjectConfigService.Default
+  ProjectConfigService.Default,
+  ProjectLinkService.Default
 ).pipe(Layer.provideMerge(AuthService.Default));
 
+const ApiClientLive = Layer.provide(ApiClientService.Default, BaseServices);
 const DeploymentApiLive = Layer.provide(DeploymentApiService.Default, BaseServices);
 
-const ServicesLive = Layer.mergeAll(BaseServices, DeploymentApiLive);
+const ServicesLive = Layer.mergeAll(BaseServices, ApiClientLive, DeploymentApiLive);
 
 const AppLive = Layer.mergeAll(ServicesLive, Logger.minimumLogLevel(LogLevel.Info)).pipe(
   Layer.provideMerge(NodeContext.layer)
