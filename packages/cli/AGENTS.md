@@ -17,19 +17,35 @@ packages/cli/
       oauth-config.ts           # OAuthConfigService — OIDC discovery + env config
       auth-storage.ts           # AuthStorageService — ~/.gigadrive/auth.json persistence
       auth.ts                   # AuthService — login, logout, token refresh, user info
+      api-client.ts             # ApiClientService — shared @gigadrive/sdk client factory
       project-config.ts         # ProjectConfigService — gigadrive.yaml resolution
+      project-link.ts           # ProjectLinkService — .gigadrive/project.json (app link)
       package-manager.ts        # PackageManagerService — detect npm/yarn/pnpm/bun
       archive.ts                # ArchiveService — zip archive creation
-      deployment-api.ts         # DeploymentApiService — deployment API client
+      deployment-api.ts         # DeploymentApiService — deployment flow over ApiClientService
     commands/
       login/index.ts            # `gigadrive login`
+      logout/index.ts           # `gigadrive logout`
       whoami/index.ts           # `gigadrive whoami`
+      link/index.ts             # `gigadrive link` / `gigadrive unlink`
+      apps/index.ts             # `gigadrive apps list`
+      env/index.ts              # `gigadrive env list|set|rm`
+      deployments/index.ts      # `gigadrive deployments list|inspect`
+      ai/index.ts               # `gigadrive ai usage|budgets|policies|models|chat`
       build/index.ts            # `gigadrive build`
       debug/index.ts            # `gigadrive debug` (parent)
       debug/config/index.ts     # `gigadrive debug config`
       platform/index.ts         # `gigadrive platform` (parent)
       platform/deploy/index.ts  # `gigadrive platform deploy`
 ```
+
+Every command that talks to the Gigadrive Network API obtains its client from
+**`ApiClientService`** — `getClient` for a raw `GigadriveClient` (used for
+streaming, e.g. `ai chat --stream`), or `request(fn)` to run an SDK call and map
+failures to a tagged `ApiRequestError`. `DeploymentApiService` is a thin wrapper
+over `ApiClientService` that keeps deployment-specific errors. Resource commands
+resolve their target application/organization from `ProjectLinkService`
+(`.gigadrive/project.json`), overridable with `--app` / `--org`.
 
 ## Architecture Overview
 
@@ -54,25 +70,35 @@ AuthService
   ├── OAuthConfigService (OIDC discovery, env config)
   └── AuthStorageService (file-based token persistence)
 
+ApiClientService         (requires AuthService — builds an authenticated @gigadrive/sdk client)
+DeploymentApiService     (requires ApiClientService — deployment flow + deployment errors)
 ProjectConfigService     (standalone — wraps @gigadrive/network-config)
+ProjectLinkService       (standalone — reads/writes .gigadrive/project.json)
 PackageManagerService    (standalone — detects npm/yarn/pnpm/bun)
 ArchiveService           (standalone — zip creation with ignore rules)
-DeploymentApiService     (standalone — HTTP API client)
 ```
 
-All layers are composed flat in `src/index.ts`:
+All layers are composed flat in `src/index.ts`. `ApiClientService` and
+`DeploymentApiService` are provided `BaseServices` (which supplies `AuthService`):
 
 ```ts
-const ServicesLive = Layer.mergeAll(
+const BaseServices = Layer.mergeAll(
   OAuthConfigService.Default,
   AuthStorageService.Default,
-  ProjectConfigService.Default,
   PackageManagerService.Default,
   ArchiveService.Default,
-  DeploymentApiService.Default
+  NetworkConfigLive,
+  ProjectConfigService.Default,
+  ProjectLinkService.Default
 ).pipe(Layer.provideMerge(AuthService.Default));
 
-const AppLive = Layer.mergeAll(ServicesLive, NodeContext.layer, Logger.minimumLogLevel(LogLevel.Info));
+const ApiClientLive = Layer.provide(ApiClientService.Default, BaseServices);
+const DeploymentApiLive = Layer.provide(DeploymentApiService.Default, BaseServices);
+
+const ServicesLive = Layer.mergeAll(BaseServices, ApiClientLive, DeploymentApiLive);
+const AppLive = Layer.mergeAll(ServicesLive, Logger.minimumLogLevel(LogLevel.Info)).pipe(
+  Layer.provideMerge(NodeContext.layer)
+);
 ```
 
 ## Best Practices Enforced in This Package
@@ -311,11 +337,11 @@ const data = Option.getOrThrow(stored);
 
 ## Environment Variables
 
-| Variable                             | Default                    | Description             |
-| ------------------------------------ | -------------------------- | ----------------------- |
-| `GIGADRIVE_NETWORK_OAUTH_ISSUER_URL` | `https://idp.gigadrive.de` | OIDC issuer URL         |
-| `GIGADRIVE_NETWORK_OAUTH_CLIENT_ID`  | `todo_add_client_id`       | OAuth client ID         |
-| `GIGADRIVE_API_BASE_URL`             | `http://localhost:3000`    | Deployment API base URL |
+| Variable                             | Default                        | Description                      |
+| ------------------------------------ | ------------------------------ | -------------------------------- |
+| `GIGADRIVE_NETWORK_OAUTH_ISSUER_URL` | `https://idp.gigadrive.de`     | OIDC issuer URL                  |
+| `GIGADRIVE_NETWORK_OAUTH_CLIENT_ID`  | `todo_add_client_id`           | OAuth client ID (set the real first-party CLI client ID before shipping) |
+| `GIGADRIVE_API_BASE_URL`             | `https://api.gigadrive.network` | Gigadrive Network API base URL (used by `ApiClientService`) |
 
 All read via `Config.string()` with defaults — never accessed via `process.env`.
 

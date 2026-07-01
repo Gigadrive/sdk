@@ -54,3 +54,13 @@ export const StoredAuthData = Schema.Struct({
   tokenExpirationTime: Schema.optional(Schema.Number),
 });
 export type StoredAuthData = Schema.Schema.Type<typeof StoredAuthData>;
+
+// ---------------------------------------------------------------------------
+// Project link (.gigadrive/project.json) — links a working directory to an app
+// ---------------------------------------------------------------------------
+
+export const ProjectLink = Schema.Struct({
+  applicationId: Schema.String,
+  organizationId: Schema.optional(Schema.String),
+});
+export type ProjectLink = Schema.Schema.Type<typeof ProjectLink>;

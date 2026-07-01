@@ -1,22 +1,37 @@
-import { Command } from '@effect/cli';
+import { Command, Options } from '@effect/cli';
 import { FileSystem, Path } from '@effect/platform';
 import { formatFileSize } from '@gigadrive/commons';
-import { Console, Duration, Effect, Schedule, Stream } from 'effect';
+import { Console, Duration, Effect, Option, Schedule, Stream } from 'effect';
 import * as os from 'node:os';
 import type { DeploymentId, DeploymentLog, DeploymentStatus } from '../../../domain';
 import { DeploymentFailedError, UploadPartError } from '../../../errors';
 import { ArchiveService } from '../../../services/archive';
 import { DeploymentApiService } from '../../../services/deployment-api';
 import { ProjectConfigService } from '../../../services/project-config';
+import { ProjectLinkService } from '../../../services/project-link';
 
-export const deployCommand = Command.make('deploy', {}, () =>
+const appOption = Options.text('app').pipe(
+  Options.withAlias('a'),
+  Options.withDescription('Application ID to deploy to (overrides the linked application)'),
+  Options.optional
+);
+
+export const deployCommand = Command.make('deploy', { app: appOption }, ({ app }) =>
   Effect.gen(function* () {
     const projectConfig = yield* ProjectConfigService;
     const deploymentApi = yield* DeploymentApiService;
     const archiveService = yield* ArchiveService;
+    const projectLink = yield* ProjectLinkService;
     const pathService = yield* Path.Path;
 
     const cwd = process.cwd();
+
+    // Resolve the target application: an explicit --app wins, otherwise the app
+    // linked to this directory via `gigadrive link`.
+    const applicationId = yield* Option.match(app, {
+      onSome: (id) => Effect.succeed(id),
+      onNone: () => projectLink.resolve(cwd).pipe(Effect.map((link) => link.applicationId)),
+    });
 
     // Resolve and validate config
     yield* Effect.log('Starting deploy command');
@@ -24,7 +39,7 @@ export const deployCommand = Command.make('deploy', {}, () =>
 
     // Create deployment
     yield* Console.log('Creating deployment...');
-    const deploymentId = yield* deploymentApi.createDeployment('test'); // TODO: real application ID
+    const deploymentId = yield* deploymentApi.createDeployment(applicationId);
     yield* Console.log(`Deployment ID: ${deploymentId}`);
 
     // Create and upload archive
@@ -48,6 +63,8 @@ export const deployCommand = Command.make('deploy', {}, () =>
     yield* pollDeployment(deploymentId);
   }).pipe(
     Effect.catchTags({
+      ProjectNotLinkedError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      ProjectLinkReadError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
       ConfigNotFoundError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
       ConfigParseError: (err) =>
         Console.error(`Config parse error: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
@@ -165,7 +182,17 @@ const pollDeployment = (deploymentId: DeploymentId) =>
 
         // Check terminal states
         if (newStatus === 'ACTIVE') {
-          yield* Console.log(`Deployed to https://${deploymentId}.gigadrivedev.com`);
+          // Print the real per-deployment `*.gigadrive.app` hostname. Hostname
+          // lookup is best-effort — a failure here must not fail a successful deploy.
+          const hostnames = yield* deploymentApi
+            .getHostnames(deploymentId)
+            .pipe(Effect.catchTag('DeploymentHostnamesFetchError', () => Effect.succeed([])));
+          const active = hostnames.find((h) => h.active) ?? hostnames.at(0);
+          if (active) {
+            yield* Console.log(`Deployed to https://${active.hostname}`);
+          } else {
+            yield* Console.log('Deployment is live.');
+          }
           return yield* Effect.fail('done' as const);
         }
 

@@ -48,7 +48,7 @@ export type {
 
 export type { CreateEnvVarInput, EnvVar, UpdateEnvVarInput } from './env-vars';
 
-export type { ApplicationHostnameList, Hostname } from './hostnames';
+export type { ApplicationHostnameList, Hostname, HostnameAvailability, SetProductionHostnameResult } from './hostnames';
 
 export { OrganizationsResource } from './organizations';
 export type { Organization } from './organizations';

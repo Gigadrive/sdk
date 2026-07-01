@@ -1,9 +1,9 @@
-import { GigadriveClient } from '@gigadrive/sdk';
-import { Config, Effect } from 'effect';
+import { Effect } from 'effect';
 import type { DeploymentId, UploadId } from '../domain';
 import {
   DeploymentAuthError,
   DeploymentCreateError,
+  DeploymentHostnamesFetchError,
   DeploymentLogsFetchError,
   DeploymentStatusError,
   PresignedUrlError,
@@ -11,27 +11,26 @@ import {
   UploadPartError,
   UploadStartError,
 } from '../errors';
-import { AuthService } from './auth';
+import { ApiClientService } from './api-client';
 
 // ---------------------------------------------------------------------------
 // DeploymentApiService
+//
+// A thin, deployment-focused wrapper over the shared ApiClientService. It keeps
+// its own tagged errors (DeploymentAuthError, UploadPartError, …) so the deploy
+// command's error handling and spans are unchanged.
 // ---------------------------------------------------------------------------
-
-const ApiBaseUrl = Config.string('GIGADRIVE_API_BASE_URL').pipe(Config.withDefault('http://localhost:3000'));
 
 export class DeploymentApiService extends Effect.Service<DeploymentApiService>()('DeploymentApiService', {
   accessors: true,
+  dependencies: [ApiClientService.Default],
 
   effect: Effect.gen(function* () {
-    const baseUrl = yield* ApiBaseUrl;
-    const authService = yield* AuthService;
+    const apiClient = yield* ApiClientService;
 
-    const getClient: Effect.Effect<GigadriveClient, DeploymentAuthError> = Effect.gen(function* () {
-      const token: string = yield* authService.getAccessToken.pipe(
-        Effect.mapError((err) => new DeploymentAuthError({ message: `Authentication failed: ${err.message}` }))
-      );
-      return new GigadriveClient({ bearerToken: token, baseUrl });
-    });
+    const getClient = apiClient.getClient.pipe(
+      Effect.mapError((err) => new DeploymentAuthError({ message: `Authentication failed: ${err.message}` }))
+    );
 
     const createDeployment = Effect.fn('DeploymentApiService.createDeployment')(function* (applicationId: string) {
       yield* Effect.annotateCurrentSpan('applicationId', applicationId);
@@ -157,6 +156,19 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       return result;
     });
 
+    const getHostnames = Effect.fn('DeploymentApiService.getHostnames')(function* (deploymentId: DeploymentId) {
+      const client = yield* getClient;
+      const result = yield* Effect.tryPromise({
+        try: () => client.deployments.getHostnames(deploymentId),
+        catch: (error) =>
+          new DeploymentHostnamesFetchError({
+            message: `Failed to get hostnames: ${error instanceof Error ? error.message : String(error)}`,
+          }),
+      });
+
+      return result.items;
+    });
+
     return {
       createDeployment,
       startMultipartUpload,
@@ -165,6 +177,7 @@ export class DeploymentApiService extends Effect.Service<DeploymentApiService>()
       completeUpload,
       getDeploymentStatus,
       getLogs,
+      getHostnames,
     };
   }),
 }) {}

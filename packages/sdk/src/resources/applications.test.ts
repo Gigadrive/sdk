@@ -6,6 +6,7 @@ const createMockHttpClient = (): HttpClient =>
   ({
     get: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     post: vi.fn().mockResolvedValue({}),
+    put: vi.fn().mockResolvedValue({}),
     patch: vi.fn().mockResolvedValue({}),
     delete: vi.fn().mockResolvedValue(undefined),
   }) as unknown as HttpClient;
@@ -33,6 +34,24 @@ describe('ApplicationsResource', () => {
 
     await resource.hostnames('app-1');
     expect(http.get).toHaveBeenCalledWith('/applications/app-1/hostnames');
+  });
+
+  it('should check production hostname availability', async () => {
+    const http = createMockHttpClient();
+    const resource = new ApplicationsResource(http);
+
+    await resource.checkHostnameAvailability('app-1', 'my-app');
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/hostname/availability', {
+      query: { label: 'my-app' },
+    });
+  });
+
+  it('should set the production hostname', async () => {
+    const http = createMockHttpClient();
+    const resource = new ApplicationsResource(http);
+
+    await resource.setProductionHostname('app-1', 'my-app');
+    expect(http.put).toHaveBeenCalledWith('/applications/app-1/hostname', { label: 'my-app' });
   });
 
   it('should expose envVars sub-resource', async () => {
