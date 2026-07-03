@@ -7,13 +7,11 @@
 - Add application hostname management to the SDK and broaden CLI coverage of the Gigadrive Network API. ([#307](https://github.com/Gigadrive/sdk/pull/307))
 
   **@gigadrive/sdk**
-
   - `client.applications.checkHostnameAvailability(applicationId, label)` — check whether a production hostname label is available (`GET /applications/:id/hostname/availability`).
   - `client.applications.setProductionHostname(applicationId, label)` — set the application's production hostname (`PUT /applications/:id/hostname`).
   - New exported types `HostnameAvailability` and `SetProductionHostnameResult`.
 
   **gigadrive (CLI)**
-
   - New `ApiClientService` — a single, shared factory for the authenticated `@gigadrive/sdk` client used by every API-backed command. `DeploymentApiService` now delegates to it.
   - Project linking: `gigadrive link` / `gigadrive unlink` persist the selected application to `.gigadrive/project.json`; `gigadrive platform deploy` now deploys to the linked application (or `--app`) instead of a hard-coded ID and prints the real `*.gigadrive.app` hostname on success.
   - New commands: `gigadrive apps list`, `gigadrive env list|set|rm`, `gigadrive deployments list|inspect`, `gigadrive ai usage|budgets|policies|models|chat`, and `gigadrive logout`.
@@ -24,7 +22,6 @@
   **File uploads (storage):** new high-level `client.applications.storage.upload()` that auto-computes the required SHA-256, infers content type, and uploads with progress, `AbortSignal` cancellation, and resumable retries. Supports browser `File`/`Blob`, Node `Buffer`/`Uint8Array`/`ArrayBuffer`, a Node file `path`, and Node readable `stream`s. Adds `uploadBatch()` (concurrent, per-file error isolation), `waitForCompletion()`, and `uploadSessions.uploadToUrl()`/`resumeFromUrl()`.
 
   **Correctness fixes (breaking, pre-1.0):**
-
   - AI Gateway endpoints now use the correct `/ai/v1` base path (were `/v1`).
   - Storage objects are addressed by object ID; `getAccessUrl()` now takes a `bucketId` and supports `expiresInSeconds`. Object listing supports `prefix`/`delimiter`/`cursor`/`limit` and returns `commonPrefixes`/`nextCursor`; added `getByKey()`.
   - Upload-session creation now sends the required SHA-256 checksum.
