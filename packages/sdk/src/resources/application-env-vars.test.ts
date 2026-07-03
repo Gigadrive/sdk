@@ -40,4 +40,18 @@ describe('ApplicationEnvVarsResource', () => {
     await new ApplicationEnvVarsResource(http).delete('app-1', 'var-1');
     expect(http.delete).toHaveBeenCalledWith('/applications/app-1/env-vars/var-1');
   });
+
+  it('pulls resolved env vars', async () => {
+    const http = createMockHttpClient();
+    await new ApplicationEnvVarsResource(http).pull('app-1');
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/env-vars/pull', { query: undefined });
+  });
+
+  it('pulls resolved env vars for a named environment', async () => {
+    const http = createMockHttpClient();
+    await new ApplicationEnvVarsResource(http).pull('app-1', { environment: 'preview' });
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/env-vars/pull', {
+      query: { environment: 'preview' },
+    });
+  });
 });

@@ -87,6 +87,39 @@ export class ApplicationNotFoundError extends Schema.TaggedError<ApplicationNotF
 ) {}
 
 // ---------------------------------------------------------------------------
+// Env file / local credentials errors
+// ---------------------------------------------------------------------------
+
+/** Failed to read a local `.env` (or `.gitignore`) file. */
+export class EnvFileReadError extends Schema.TaggedError<EnvFileReadError>()('EnvFileReadError', {
+  message: Schema.String,
+  cause: Schema.optional(Schema.String),
+}) {}
+
+/** Failed to write a local `.env` (or `.gitignore`) file. */
+export class EnvFileWriteError extends Schema.TaggedError<EnvFileWriteError>()('EnvFileWriteError', {
+  message: Schema.String,
+  cause: Schema.optional(Schema.String),
+}) {}
+
+/** Failed to read `~/.gigadrive/dev-keys.json`. */
+export class DevCredentialsStoreReadError extends Schema.TaggedError<DevCredentialsStoreReadError>()(
+  'DevCredentialsStoreReadError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+/** Failed to write `~/.gigadrive/dev-keys.json`. */
+export class DevCredentialsStoreWriteError extends Schema.TaggedError<DevCredentialsStoreWriteError>()(
+  'DevCredentialsStoreWriteError',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.String),
+  }
+) {}
+
+// ---------------------------------------------------------------------------
 // Project errors
 // ---------------------------------------------------------------------------
 

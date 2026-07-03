@@ -8,7 +8,11 @@ import { OAuthDiscoveryError } from '../errors';
 
 const OAuthEnvConfig = Config.all({
   issuerUrl: Config.string('GIGADRIVE_NETWORK_OAUTH_ISSUER_URL').pipe(Config.withDefault('https://idp.gigadrive.de')),
-  clientId: Config.string('GIGADRIVE_NETWORK_OAUTH_CLIENT_ID').pipe(Config.withDefault('todo_add_client_id')),
+  // Default is the first-party CLI's public OAuth client (seeded in the Network
+  // repo). Override with GIGADRIVE_NETWORK_OAUTH_CLIENT_ID per environment.
+  clientId: Config.string('GIGADRIVE_NETWORK_OAUTH_CLIENT_ID').pipe(
+    Config.withDefault('0195c11c-0000-7000-8000-000000000001')
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -22,7 +26,40 @@ const OpenIdDiscoveryDocument = Schema.Struct({
   userinfo_endpoint: Schema.optional(Schema.String),
 });
 
-const DEFAULT_SCOPE = 'offline_access openid profile email';
+/**
+ * Scopes requested at login. Identity scopes plus the Network API capability
+ * scopes the CLI exercises (applications, env vars, deployments, AI gateway) and
+ * the platform scopes needed to provision local-dev API credentials. The IDP
+ * grants only the subset the user is entitled to.
+ */
+const CLI_SCOPES = [
+  // Identity / OIDC
+  'offline_access',
+  'openid',
+  'profile',
+  'email',
+  // Network API capabilities
+  'network:applications:read',
+  'network:env_vars:read',
+  'network:env_vars:write',
+  'network:env_vars:delete',
+  'network:deployments:read',
+  'network:deployments:write',
+  'network:deployments:trigger',
+  'network:ai_gateway:chat',
+  'network:ai_gateway:models',
+  'network:ai_gateway:usage:read',
+  'network:ai_gateway:budgets:read',
+  'network:ai_gateway:budgets:write',
+  'network:ai_gateway:policies:read',
+  'network:ai_gateway:policies:write',
+  // Provisioning local-dev API credentials
+  'platform:api_keys:read',
+  'platform:api_keys:write',
+  'platform:api_keys:delete',
+] as const;
+
+const DEFAULT_SCOPE = CLI_SCOPES.join(' ');
 
 // ---------------------------------------------------------------------------
 // OAuthConfigService

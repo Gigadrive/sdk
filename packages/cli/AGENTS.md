@@ -23,13 +23,19 @@ packages/cli/
       package-manager.ts        # PackageManagerService — detect npm/yarn/pnpm/bun
       archive.ts                # ArchiveService — zip archive creation
       deployment-api.ts         # DeploymentApiService — deployment flow over ApiClientService
+      env-file.ts               # EnvFileService — write .env files (0600) + .gitignore
+      dev-credentials-store.ts  # DevCredentialsStore — ~/.gigadrive/dev-keys.json (app→key id)
+      local-credentials.ts      # LocalCredentialsService — provision/rotate local-dev API keys
+    lib/
+      dotenv.ts                 # .env serialize/parse helpers (pure)
     commands/
       login/index.ts            # `gigadrive login`
       logout/index.ts           # `gigadrive logout`
       whoami/index.ts           # `gigadrive whoami`
       link/index.ts             # `gigadrive link` / `gigadrive unlink`
       apps/index.ts             # `gigadrive apps list`
-      env/index.ts              # `gigadrive env list|set|rm`
+      env/index.ts              # `gigadrive env list|set|rm|pull`
+      setup/index.ts            # `gigadrive setup` (link + pull + provision credentials)
       deployments/index.ts      # `gigadrive deployments list|inspect`
       ai/index.ts               # `gigadrive ai usage|budgets|policies|models|chat`
       build/index.ts            # `gigadrive build`
@@ -341,11 +347,11 @@ const data = Option.getOrThrow(stored);
 
 ## Environment Variables
 
-| Variable                             | Default                         | Description                                                              |
-| ------------------------------------ | ------------------------------- | ------------------------------------------------------------------------ |
-| `GIGADRIVE_NETWORK_OAUTH_ISSUER_URL` | `https://idp.gigadrive.de`      | OIDC issuer URL                                                          |
-| `GIGADRIVE_NETWORK_OAUTH_CLIENT_ID`  | `todo_add_client_id`            | OAuth client ID (set the real first-party CLI client ID before shipping) |
-| `GIGADRIVE_API_BASE_URL`             | `https://api.gigadrive.network` | Gigadrive Network API base URL (used by `ApiClientService`)              |
+| Variable                             | Default                         | Description                                                                                       |
+| ------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GIGADRIVE_NETWORK_OAUTH_ISSUER_URL` | `https://idp.gigadrive.de`      | OIDC issuer URL                                                                                   |
+| `GIGADRIVE_NETWORK_OAUTH_CLIENT_ID`  | `0195c11c-…000001` (seeded CLI) | First-party CLI OAuth client ID. Default matches the seeded dev client; override per environment. |
+| `GIGADRIVE_API_BASE_URL`             | `https://api.gigadrive.network` | Gigadrive Network API base URL (used by `ApiClientService`)                                       |
 
 All read via `Config.string()` with defaults — never accessed via `process.env`.
 

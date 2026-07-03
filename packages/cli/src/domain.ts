@@ -64,3 +64,18 @@ export const ProjectLink = Schema.Struct({
   organizationId: Schema.optional(Schema.String),
 });
 export type ProjectLink = Schema.Schema.Type<typeof ProjectLink>;
+
+// ---------------------------------------------------------------------------
+// Local dev API-key store (~/.gigadrive/dev-keys.json)
+// Maps an application ID to the ID of the API key the CLI provisioned for local
+// development, so re-runs can rotate/revoke the previous key instead of piling
+// up. Only the key ID is stored — never the secret (which is unrecoverable).
+// ---------------------------------------------------------------------------
+
+export const DevKeyEntry = Schema.Struct({
+  apiKeyId: Schema.String,
+});
+export type DevKeyEntry = Schema.Schema.Type<typeof DevKeyEntry>;
+
+export const DevKeyStore = Schema.Record({ key: Schema.String, value: DevKeyEntry });
+export type DevKeyStore = Schema.Schema.Type<typeof DevKeyStore>;

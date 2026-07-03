@@ -1,6 +1,6 @@
 import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
-import type { CreateEnvVarInput, EnvVar, UpdateEnvVarInput } from './env-vars';
+import type { CreateEnvVarInput, EnvVar, PullEnvVarsQuery, PullEnvVarsResult, UpdateEnvVarInput } from './env-vars';
 
 /**
  * Manage environment variables scoped to an application.
@@ -23,6 +23,28 @@ export class ApplicationEnvVarsResource extends BaseResource {
    */
   async list(applicationId: string, query?: ListQuery): Promise<Paginated<EnvVar>> {
     return this.httpClient.get(`/applications/${applicationId}/env-vars`, {
+      query: query as Record<string, string | number | undefined> | undefined,
+    });
+  }
+
+  /**
+   * Pull the environment variables that apply to an application for local
+   * development. Merges organization-wide, application-wide, and (optionally)
+   * environment-specific overrides, returning only non-sensitive values — ready
+   * to write to a local `.env` file.
+   *
+   * @param applicationId - The application ID (UUID).
+   * @param query - Optional environment targeting.
+   * @returns The resolved non-sensitive variables plus the count of omitted secrets.
+   *
+   * @example
+   * ```ts
+   * const { items } = await client.applications.envVars.pull('app-id');
+   * const dotenv = items.map((v) => `${v.key}=${v.value}`).join('\n');
+   * ```
+   */
+  async pull(applicationId: string, query?: PullEnvVarsQuery): Promise<PullEnvVarsResult> {
+    return this.httpClient.get(`/applications/${applicationId}/env-vars/pull`, {
       query: query as Record<string, string | number | undefined> | undefined,
     });
   }

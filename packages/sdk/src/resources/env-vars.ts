@@ -43,3 +43,39 @@ export interface UpdateEnvVarInput {
   /** Change the sensitive flag. */
   sensitive?: boolean;
 }
+
+/**
+ * A resolved environment variable returned by the pull endpoint. Only
+ * non-sensitive variables are returned, so {@link value} is always the real value.
+ */
+export interface ResolvedEnvVar {
+  /** The variable name (e.g. `DATABASE_URL`). */
+  key: string;
+  /** The resolved variable value. */
+  value: string;
+  /** Where the resolved value came from after applying org → app → environment inheritance. */
+  source: 'organization' | 'application' | 'environment';
+}
+
+/** Query options for {@link ApplicationEnvVarsResource.pull}. */
+export interface PullEnvVarsQuery {
+  /**
+   * Resolve environment-specific overrides for this environment slug on top of
+   * the organization and application baseline. Omit for the local development
+   * baseline (organization + application-wide variables only).
+   */
+  environment?: string;
+}
+
+/** Result of pulling resolved environment variables for local development. */
+export interface PullEnvVarsResult {
+  /** Resolved, non-sensitive variables, ready to write to a local `.env` file. */
+  items: ResolvedEnvVar[];
+  /** Number of resolved variables returned. */
+  total: number;
+  /**
+   * Number of sensitive variables that were resolved but intentionally omitted.
+   * Secrets are never returned by the pull endpoint.
+   */
+  omittedSensitive: number;
+}
