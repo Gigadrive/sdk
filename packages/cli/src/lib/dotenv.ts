@@ -70,13 +70,24 @@ export const parseEnv = (content: string): Record<string, string> => {
     const key = line.slice(0, eq).trim();
     let value = line.slice(eq + 1).trim();
     if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
-      value = value
-        .slice(1, -1)
-        .replace(/\\n/g, '\n')
-        .replace(/\\r/g, '\r')
-        .replace(/\\t/g, '\t')
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, '\\');
+      // Single-pass decode: consume each backslash together with the character it
+      // escapes, left to right. A sequential chain of `.replace()` calls would
+      // mis-handle a literal backslash followed by n/r/t/" (e.g. `C:\\new` after
+      // escaping would decode `\n` before collapsing `\\`).
+      value = value.slice(1, -1).replace(/\\(\\|"|n|r|t)/g, (_, ch: string) => {
+        switch (ch) {
+          case 'n':
+            return '\n';
+          case 'r':
+            return '\r';
+          case 't':
+            return '\t';
+          case '"':
+            return '"';
+          default:
+            return '\\';
+        }
+      });
     }
     result[key] = value;
   }

@@ -3,7 +3,7 @@ import { Effect, Layer, Logger, LogLevel, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { EnvFileService } from './env-file';
 
-const makeMockFs = (files: Map<string, string>, writeOpts: Map<string, unknown>) =>
+const makeMockFs = (files: Map<string, string>, writeOpts: Map<string, unknown>, chmodModes: Map<string, number>) =>
   ({
     exists: (path: string) => Effect.succeed(files.has(path)),
     readFileString: (path: string) =>
@@ -16,6 +16,10 @@ const makeMockFs = (files: Map<string, string>, writeOpts: Map<string, unknown>)
         if (opts !== undefined) writeOpts.set(path, opts);
       }),
     makeDirectory: () => Effect.void,
+    chmod: (path: string, mode: number) =>
+      Effect.sync(() => {
+        chmodModes.set(path, mode);
+      }),
   }) as unknown as FileSystem.FileSystem;
 
 const mockPath: Path.Path = {
@@ -26,24 +30,27 @@ const mockPath: Path.Path = {
 const makeLayer = (initialFiles: Record<string, string> = {}) => {
   const files = new Map(Object.entries(initialFiles));
   const writeOpts = new Map<string, unknown>();
+  const chmodModes = new Map<string, number>();
   const platform = Layer.mergeAll(
-    Layer.succeed(FileSystem.FileSystem, makeMockFs(files, writeOpts)),
+    Layer.succeed(FileSystem.FileSystem, makeMockFs(files, writeOpts, chmodModes)),
     Layer.succeed(Path.Path, mockPath)
   );
   const layer = Layer.provide(EnvFileService.Default, platform).pipe(
     Layer.provideMerge(Logger.minimumLogLevel(LogLevel.None))
   );
-  return { layer, files, writeOpts };
+  return { layer, files, writeOpts, chmodModes };
 };
 
 describe('EnvFileService.write', () => {
-  it('serializes entries and writes with mode 0o600', async () => {
-    const { layer, files, writeOpts } = makeLayer();
+  it('serializes entries and writes with mode 0o600, tightening perms on overwrite', async () => {
+    const { layer, files, writeOpts, chmodModes } = makeLayer();
     await Effect.runPromise(
       Effect.provide(EnvFileService.write('/project/.env.local', [{ key: 'A', value: '1' }]), layer)
     );
     expect(files.get('/project/.env.local')).toContain('A=1');
     expect(writeOpts.get('/project/.env.local')).toEqual({ mode: 0o600 });
+    // Explicit chmod guards against writeFileString's mode being a no-op on overwrite.
+    expect(chmodModes.get('/project/.env.local')).toBe(0o600);
   });
 });
 

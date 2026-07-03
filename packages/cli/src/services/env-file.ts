@@ -57,6 +57,16 @@ export class EnvFileService extends Effect.Service<EnvFileService>()('EnvFileSer
             (error) => new EnvFileWriteError({ message: `Failed to write ${filePath}`, cause: String(error) })
           )
         );
+      // `mode` on writeFileString only applies when the file is created. Explicitly
+      // tighten permissions so an overwritten file (which may hold a provisioned
+      // API secret) is never left world/group-readable.
+      yield* fs
+        .chmod(filePath, 0o600)
+        .pipe(
+          Effect.mapError(
+            (error) => new EnvFileWriteError({ message: `Failed to secure ${filePath}`, cause: String(error) })
+          )
+        );
     });
 
     /**

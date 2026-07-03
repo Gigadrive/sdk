@@ -55,6 +55,13 @@ describe('parseEnv', () => {
     }
   });
 
+  it('round-trips values with a literal backslash followed by an escape letter', () => {
+    // Regression: `C:\new` must not decode the escaped `\\` as a newline.
+    for (const value of ['C:\\new', 'a\\r\\tb', 'trailing\\', '\\"quote']) {
+      expect(parseEnv(serializeEnv([{ key: 'P', value }]))['P']).toBe(value);
+    }
+  });
+
   it('ignores comments and blank lines', () => {
     const parsed = parseEnv('# comment\n\nKEY=value\n');
     expect(parsed).toEqual({ KEY: 'value' });

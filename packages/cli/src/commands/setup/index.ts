@@ -67,6 +67,12 @@ export const setupCommand = Command.make(
       let applicationId: string;
       if (Option.isSome(existingLink)) {
         applicationId = existingLink.value.applicationId;
+        // The picker (and thus --app/--org) is only consulted when unlinked.
+        if (Option.isSome(app) || Option.isSome(org)) {
+          yield* Console.log(
+            `Note: this directory is already linked to ${applicationId}; ignoring --app/--org. Run "gigadrive unlink" first to target a different application.`
+          );
+        }
       } else {
         const organizationId = Option.getOrUndefined(org);
         const { items: apps } = yield* apiClient.request((client) => client.applications.list({ organizationId }));
