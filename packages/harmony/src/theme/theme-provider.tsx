@@ -52,6 +52,14 @@ const Theme = ({
   );
   const attrs = !value ? themes : Object.values(value);
 
+  // The callbacks and effects below intentionally use minimal dependency arrays, ported verbatim
+  // from next-themes@0.4.6. The provider's configuration props (attribute, value, enableSystem,
+  // storageKey, defaultTheme, …) are static-by-contract — set once at the root layout and never
+  // changed — so the omitted deps never go stale in practice. Adding them (as
+  // react-hooks/exhaustive-deps suggests) would re-subscribe the media-query listener on every
+  // render whenever a consumer passes an inline `themes`/`value` array. Keep them minimal to match
+  // upstream behavior.
+  /* eslint-disable react-hooks/exhaustive-deps */
   const applyTheme = React.useCallback(
     (theme: string | undefined) => {
       let resolved = theme;
@@ -166,6 +174,7 @@ const Theme = ({
     }),
     [theme, setTheme, forcedTheme, resolvedTheme, enableSystem, themes]
   );
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
     <ThemeContext.Provider value={providerValue}>
