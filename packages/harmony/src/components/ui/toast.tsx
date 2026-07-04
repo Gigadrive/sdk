@@ -1,8 +1,8 @@
 'use client';
 
+import { useTheme } from '@/theme/context';
 import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { useTheme } from 'next-themes';
 import { createContext, useContext, useState } from 'react';
 import { Toaster as Sonner, toast } from 'sonner';
 

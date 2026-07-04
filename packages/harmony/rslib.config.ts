@@ -4,6 +4,11 @@ import { defineConfig } from '@rslib/core';
 
 export default defineConfig({
   source: {
+    // Bundleless entries default to `src/**`; negate co-located test files so they are not
+    // emitted into `dist` (they are still run by Vitest, which uses its own transform).
+    entry: {
+      index: ['src/**', '!src/**/*.test.ts', '!src/**/*.test.tsx'],
+    },
     include: ['src/**/*.ts', 'src/**/*.tsx', 'src/**/*.scss'],
     tsconfigPath: './tsconfig.build.json',
   },
