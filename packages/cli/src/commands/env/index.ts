@@ -1,7 +1,9 @@
-import { Args, Command, Options } from '@effect/cli';
+import { Args, Command, Options, Prompt } from '@effect/cli';
 import { Console, Effect, Option } from 'effect';
 import { EnvVarNotFoundError, InvalidEnvVarFormatError } from '../../errors';
 import { ApiClientService } from '../../services/api-client';
+import { EnvFileService } from '../../services/env-file';
+import { LocalCredentialsService } from '../../services/local-credentials';
 import { ProjectLinkService } from '../../services/project-link';
 
 const appOption = Options.text('app').pipe(
@@ -31,6 +33,30 @@ const keyValueArg = Args.text({ name: 'key=value' }).pipe(
 );
 
 const keyOrIdArg = Args.text({ name: 'key-or-id' }).pipe(Args.withDescription('Variable key or ID to remove'));
+
+const fileArg = Args.text({ name: 'file' }).pipe(
+  Args.withDescription('Output file to write (default: .env.local)'),
+  Args.optional
+);
+
+const environmentOption = Options.text('environment').pipe(
+  Options.withAlias('e'),
+  Options.withDescription('Environment slug to resolve overrides for (e.g. preview). Omit for the local baseline'),
+  Options.optional
+);
+
+const yesOption = Options.boolean('yes').pipe(
+  Options.withAlias('y'),
+  Options.withDescription('Overwrite an existing file without confirmation')
+);
+
+const withCredentialsOption = Options.boolean('with-credentials').pipe(
+  Options.withDescription('Also provision API-key credentials so the local app can call the API as this application')
+);
+
+const rotateOption = Options.boolean('rotate').pipe(
+  Options.withDescription('Force a fresh API key when provisioning credentials, revoking the previous one')
+);
 
 /**
  * Resolve which resource the command operates on: an explicit `--org` selects
@@ -165,7 +191,92 @@ const envRmCommand = Command.make(
     )
 );
 
+const envPullCommand = Command.make(
+  'pull',
+  {
+    file: fileArg,
+    app: appOption,
+    environment: environmentOption,
+    yes: yesOption,
+    withCredentials: withCredentialsOption,
+    rotate: rotateOption,
+  },
+  ({ file, app, environment, yes, withCredentials, rotate }) =>
+    Effect.gen(function* () {
+      const apiClient = yield* ApiClientService;
+      const projectLink = yield* ProjectLinkService;
+      const envFile = yield* EnvFileService;
+
+      // `env pull` always targets an application (via --app or the linked project).
+      const applicationId = yield* Option.match(app, {
+        onSome: (value) => Effect.succeed(value),
+        onNone: () => projectLink.resolve(process.cwd()).pipe(Effect.map((link) => link.applicationId)),
+      });
+      const target = Option.getOrElse(file, () => '.env.local');
+      const environmentSlug = Option.getOrUndefined(environment);
+
+      const { items, omittedSensitive } = yield* apiClient.request((client) =>
+        client.applications.envVars.pull(applicationId, environmentSlug ? { environment: environmentSlug } : undefined)
+      );
+
+      const existing = yield* envFile.read(target);
+      if (Option.isSome(existing) && !yes) {
+        const overwrite = yield* Prompt.run(
+          Prompt.confirm({ message: `${target} already exists. Overwrite?`, initial: false })
+        );
+        if (!overwrite) {
+          return yield* Console.log('Cancelled.');
+        }
+      }
+
+      let credentialEntries: { key: string; value: string }[] = [];
+      if (withCredentials) {
+        const localCredentials = yield* LocalCredentialsService;
+        credentialEntries = yield* localCredentials.provision({
+          applicationId,
+          rotate,
+          existingContent: Option.getOrUndefined(existing),
+        });
+      }
+
+      const entries = [...items.map((v) => ({ key: v.key, value: v.value })), ...credentialEntries];
+      yield* envFile.write(target, entries);
+      const gitignored = yield* envFile.ensureGitignored(process.cwd(), target);
+
+      yield* Console.log(
+        `Pulled ${items.length} environment variable(s)${withCredentials ? ' and API credentials' : ''} to ${target}.`
+      );
+      if (omittedSensitive > 0) {
+        yield* Console.log(
+          `Skipped ${omittedSensitive} sensitive variable(s); secrets live only in production/preview environments.`
+        );
+      }
+      if (gitignored) {
+        yield* Console.log(`Added ${target} to .gitignore.`);
+      }
+    }).pipe(
+      Effect.catchTags({
+        // Ctrl+C during the overwrite prompt is a deliberate cancel — exit 0.
+        QuitException: () => Console.log('Cancelled.'),
+        NotAuthenticatedError: (err) =>
+          Console.error('You are not logged in. Run "gigadrive login" to authenticate.').pipe(
+            Effect.andThen(Effect.fail(err))
+          ),
+        ApiRequestError: (err) =>
+          Console.error(`Failed to pull environment variables: ${err.message}`).pipe(Effect.andThen(Effect.fail(err))),
+        ProjectNotLinkedError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        ProjectLinkReadError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        EnvFileReadError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        EnvFileWriteError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        DevCredentialsStoreReadError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+        DevCredentialsStoreWriteError: (err) => Console.error(err.message).pipe(Effect.andThen(Effect.fail(err))),
+      })
+    )
+);
+
 const envBase = Command.make('env', {}, () => Effect.void);
 
 /** `gigadrive env` — manage environment variables for the linked app or an organization. */
-export const envCommand = envBase.pipe(Command.withSubcommands([envListCommand, envSetCommand, envRmCommand]));
+export const envCommand = envBase.pipe(
+  Command.withSubcommands([envListCommand, envSetCommand, envRmCommand, envPullCommand])
+);

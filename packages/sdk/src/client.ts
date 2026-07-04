@@ -2,6 +2,7 @@ import { readEnv, resolveCredentialProvider } from './auth/credential-provider';
 import { TokenManager } from './auth/token-manager';
 import { HttpClient } from './http-client';
 import { AiGatewayResource } from './resources/ai-gateway';
+import { ApiKeysResource } from './resources/api-keys';
 import { ApplicationsResource } from './resources/applications';
 import { DeploymentsResource } from './resources/deployments';
 import { OrganizationsResource } from './resources/organizations';
@@ -166,6 +167,8 @@ export class GigadriveClient {
   readonly deployments: DeploymentsResource;
   /** AI Gateway — OpenAI-compatible chat completions and model listing. */
   readonly aiGateway: AiGatewayResource;
+  /** Application-scoped API key management (create, list, revoke). */
+  readonly apiKeys: ApiKeysResource;
 
   constructor(config: GigadriveClientConfig = {}) {
     const baseUrl = config.baseUrl ?? readEnv('GIGADRIVE_API_BASE_URL') ?? DEFAULT_BASE_URL;
@@ -181,5 +184,6 @@ export class GigadriveClient {
     this.applications = new ApplicationsResource(httpClient);
     this.deployments = new DeploymentsResource(httpClient);
     this.aiGateway = new AiGatewayResource(httpClient);
+    this.apiKeys = new ApiKeysResource(httpClient);
   }
 }

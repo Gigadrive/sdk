@@ -7,7 +7,6 @@
 - Replace `Select` with the canonical shadcn implementation. ([#306](https://github.com/Gigadrive/sdk/pull/306))
 
   **BREAKING:**
-
   - Removes the indicator `Context` and the `indicatorPosition` / `indicatorVisibility` / `indicator` props on `Select`, along with the `SelectIndicator` export. `SelectItem` now always renders the built-in right-aligned checkmark (`SelectPrimitive.ItemIndicator`); to customise the indicator, fork or wrap `SelectItem` and override that markup/styles.
   - Trigger `size` is now `sm` | `default` (previously `sm` | `md` | `lg`); the default is `default`.
   - `SelectContent` now defaults to `item-aligned` positioning (previously `popper`). Pass `position="popper"` to restore the old behaviour.

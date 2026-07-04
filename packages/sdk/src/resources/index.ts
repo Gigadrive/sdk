@@ -46,7 +46,17 @@ export type {
   UploadPart,
 } from './deployments';
 
-export type { CreateEnvVarInput, EnvVar, UpdateEnvVarInput } from './env-vars';
+export type {
+  CreateEnvVarInput,
+  EnvVar,
+  PullEnvVarsQuery,
+  PullEnvVarsResult,
+  ResolvedEnvVar,
+  UpdateEnvVarInput,
+} from './env-vars';
+
+export { ApiKeysResource } from './api-keys';
+export type { ApiKey, CreateApiKeyInput, CreateApiKeyResult, ListApiKeysQuery } from './api-keys';
 
 export type { ApplicationHostnameList, Hostname, HostnameAvailability, SetProductionHostnameResult } from './hostnames';
 

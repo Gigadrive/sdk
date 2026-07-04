@@ -53,14 +53,16 @@ describe('OAuthConfigService.getConfig', () => {
     const testLayer = makeTestLayer();
     const result = await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, testLayer));
 
-    expect(result).toEqual({
-      clientId: 'test-client-id',
-      issuer: 'https://idp.example.com',
-      authorizeUrl: 'https://idp.example.com/authorize',
-      tokenUrl: 'https://idp.example.com/token',
-      scope: 'offline_access openid profile email',
-      userinfoUrl: 'https://idp.example.com/userinfo',
-    });
+    expect(result.clientId).toBe('test-client-id');
+    expect(result.issuer).toBe('https://idp.example.com');
+    expect(result.authorizeUrl).toBe('https://idp.example.com/authorize');
+    expect(result.tokenUrl).toBe('https://idp.example.com/token');
+    expect(result.userinfoUrl).toBe('https://idp.example.com/userinfo');
+    // Identity scopes plus the Network API + platform capability scopes the CLI requests.
+    expect(result.scope).toContain('offline_access');
+    expect(result.scope).toContain('openid');
+    expect(result.scope).toContain('network:env_vars:read');
+    expect(result.scope).toContain('platform:api_keys:write');
   });
 
   it('should call the correct discovery URL', async () => {

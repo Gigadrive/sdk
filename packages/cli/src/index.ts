@@ -13,12 +13,16 @@ import { linkCommand, unlinkCommand } from './commands/link';
 import { loginCommand } from './commands/login';
 import { logoutCommand } from './commands/logout';
 import { platformCommand } from './commands/platform';
+import { setupCommand } from './commands/setup';
 import { whoamiCommand } from './commands/whoami';
 import { ApiClientService } from './services/api-client';
 import { ArchiveService } from './services/archive';
 import { AuthService } from './services/auth';
 import { AuthStorageService } from './services/auth-storage';
 import { DeploymentApiService } from './services/deployment-api';
+import { DevCredentialsStore } from './services/dev-credentials-store';
+import { EnvFileService } from './services/env-file';
+import { LocalCredentialsService } from './services/local-credentials';
 import { OAuthConfigService } from './services/oauth-config';
 import { PackageManagerService } from './services/package-manager';
 import { ProjectConfigService } from './services/project-config';
@@ -42,6 +46,7 @@ const gigadrive = Command.make('gigadrive', {}, () => Effect.void).pipe(
     buildCommand,
     debugCommand,
     platformCommand,
+    setupCommand,
   ])
 );
 
@@ -65,13 +70,18 @@ const BaseServices = Layer.mergeAll(
   ArchiveService.Default,
   NetworkConfigLive,
   ProjectConfigService.Default,
-  ProjectLinkService.Default
+  ProjectLinkService.Default,
+  EnvFileService.Default,
+  DevCredentialsStore.Default
 ).pipe(Layer.provideMerge(AuthService.Default));
 
 const ApiClientLive = Layer.provide(ApiClientService.Default, BaseServices);
 const DeploymentApiLive = Layer.provide(DeploymentApiService.Default, BaseServices);
+// LocalCredentialsService bakes in ApiClientService + DevCredentialsStore via its
+// `dependencies`, so it only needs BaseServices (for the transitive AuthService).
+const LocalCredentialsLive = Layer.provide(LocalCredentialsService.Default, BaseServices);
 
-const ServicesLive = Layer.mergeAll(BaseServices, ApiClientLive, DeploymentApiLive);
+const ServicesLive = Layer.mergeAll(BaseServices, ApiClientLive, DeploymentApiLive, LocalCredentialsLive);
 
 const AppLive = Layer.mergeAll(ServicesLive, Logger.minimumLogLevel(LogLevel.Info)).pipe(
   Layer.provideMerge(NodeContext.layer)
