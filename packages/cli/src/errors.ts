@@ -28,6 +28,28 @@ export class TokenExchangeError extends Schema.TaggedError<TokenExchangeError>()
   statusCode: Schema.optional(Schema.Number),
 }) {}
 
+/** The device authorization request (RFC 8628 §3.1) failed. */
+export class DeviceAuthorizationError extends Schema.TaggedError<DeviceAuthorizationError>()(
+  'DeviceAuthorizationError',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.String),
+  }
+) {}
+
+/** The user denied the device login on the verification page (`access_denied`). */
+export class AuthorizationDeniedError extends Schema.TaggedError<AuthorizationDeniedError>()(
+  'AuthorizationDeniedError',
+  {
+    message: Schema.String,
+  }
+) {}
+
+/** The device/user code expired before the user approved it (`expired_token`). */
+export class DeviceCodeExpiredError extends Schema.TaggedError<DeviceCodeExpiredError>()('DeviceCodeExpiredError', {
+  message: Schema.String,
+}) {}
+
 export class TokenRefreshError extends Schema.TaggedError<TokenRefreshError>()('TokenRefreshError', {
   message: Schema.String,
   statusCode: Schema.optional(Schema.Number),

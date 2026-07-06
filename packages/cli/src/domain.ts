@@ -43,10 +43,25 @@ export const OAuthClientConfig = Schema.Struct({
   issuer: Schema.String,
   authorizeUrl: Schema.String,
   tokenUrl: Schema.String,
+  deviceAuthorizeUrl: Schema.String,
   scope: Schema.String,
   userinfoUrl: Schema.String,
 });
 export type OAuthClientConfig = Schema.Schema.Type<typeof OAuthClientConfig>;
+
+/**
+ * Response from the OAuth 2.0 Device Authorization Endpoint (RFC 8628 §3.2).
+ * `verification_uri_complete` and `interval` are RECOMMENDED/OPTIONAL per the spec.
+ */
+export const DeviceAuthorizationResponse = Schema.Struct({
+  device_code: Schema.String,
+  user_code: Schema.String,
+  verification_uri: Schema.String,
+  verification_uri_complete: Schema.optional(Schema.String),
+  expires_in: Schema.Number,
+  interval: Schema.optional(Schema.Number),
+});
+export type DeviceAuthorizationResponse = Schema.Schema.Type<typeof DeviceAuthorizationResponse>;
 
 export const StoredAuthData = Schema.Struct({
   refreshToken: Schema.String,
