@@ -15,7 +15,10 @@ export const loginCommand = Command.make('login', {}, () =>
     yield* Console.log(`You are now logged in as ${name}.`);
   }).pipe(
     Effect.catchTags({
-      LoginFlowError: (err: { message: string }) => Console.error(`Login failed: ${err.message}`),
+      LoginFlowError: (err: { message: string }) => Console.error(err.message),
+      DeviceAuthorizationError: (err: { message: string }) => Console.error(`Login failed: ${err.message}`),
+      AuthorizationDeniedError: (err: { message: string }) => Console.error(err.message),
+      DeviceCodeExpiredError: (err: { message: string }) => Console.error(err.message),
       TokenExchangeError: (err: { message: string }) => Console.error(`Login failed: ${err.message}`),
       OAuthDiscoveryError: (err: { message: string }) => Console.error(`Login failed: ${err.message}`),
       AuthStorageWriteError: (err: { message: string }) => Console.error(`Failed to save credentials: ${err.message}`),

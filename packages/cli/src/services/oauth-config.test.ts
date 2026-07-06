@@ -11,6 +11,7 @@ const validDiscoveryDoc = {
   authorization_endpoint: 'https://idp.example.com/authorize',
   token_endpoint: 'https://idp.example.com/token',
   userinfo_endpoint: 'https://idp.example.com/userinfo',
+  device_authorization_endpoint: 'https://idp.example.com/device_authorization',
 };
 
 const makeTestLayer = (envOverrides?: Record<string, string>) => {
@@ -57,6 +58,7 @@ describe('OAuthConfigService.getConfig', () => {
     expect(result.issuer).toBe('https://idp.example.com');
     expect(result.authorizeUrl).toBe('https://idp.example.com/authorize');
     expect(result.tokenUrl).toBe('https://idp.example.com/token');
+    expect(result.deviceAuthorizeUrl).toBe('https://idp.example.com/device_authorization');
     expect(result.userinfoUrl).toBe('https://idp.example.com/userinfo');
     // Identity scopes plus the Network API + platform capability scopes the CLI requests.
     expect(result.scope).toContain('offline_access');
@@ -186,6 +188,7 @@ describe('OAuthConfigService.getConfig', () => {
           authorization_endpoint: 'https://idp.example.com/authorize',
           token_endpoint: 'https://idp.example.com/token',
           userinfo_endpoint: 'https://idp.example.com/userinfo',
+          device_authorization_endpoint: 'https://idp.example.com/device_authorization',
         }),
     });
 
@@ -193,5 +196,33 @@ describe('OAuthConfigService.getConfig', () => {
     const result = await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, testLayer));
 
     expect(result.issuer).toBe('https://idp.example.com');
+  });
+
+  it('should fail with OAuthDiscoveryError when device_authorization_endpoint is missing', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          issuer: 'https://idp.example.com',
+          authorization_endpoint: 'https://idp.example.com/authorize',
+          token_endpoint: 'https://idp.example.com/token',
+          userinfo_endpoint: 'https://idp.example.com/userinfo',
+          // Missing device_authorization_endpoint
+        }),
+    });
+
+    const testLayer = makeTestLayer();
+    const result = await Effect.runPromise(
+      Effect.provide(OAuthConfigService.getConfig, testLayer).pipe(
+        Effect.catchTag('OAuthDiscoveryError', (err) =>
+          Effect.succeed({ _tag: 'caught' as const, message: err.message })
+        )
+      )
+    );
+
+    expect(result).toMatchObject({
+      _tag: 'caught',
+      message: 'OIDC discovery returned incomplete endpoints',
+    });
   });
 });

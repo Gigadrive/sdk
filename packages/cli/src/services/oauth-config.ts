@@ -24,6 +24,7 @@ const OpenIdDiscoveryDocument = Schema.Struct({
   authorization_endpoint: Schema.optional(Schema.String),
   token_endpoint: Schema.optional(Schema.String),
   userinfo_endpoint: Schema.optional(Schema.String),
+  device_authorization_endpoint: Schema.optional(Schema.String),
 });
 
 /**
@@ -114,7 +115,12 @@ export class OAuthConfigService extends Effect.Service<OAuthConfigService>()('OA
         )
       );
 
-      if (!decoded.authorization_endpoint || !decoded.token_endpoint || !decoded.userinfo_endpoint) {
+      if (
+        !decoded.authorization_endpoint ||
+        !decoded.token_endpoint ||
+        !decoded.userinfo_endpoint ||
+        !decoded.device_authorization_endpoint
+      ) {
         return yield* Effect.fail(
           new OAuthDiscoveryError({
             message: 'OIDC discovery returned incomplete endpoints',
@@ -127,6 +133,7 @@ export class OAuthConfigService extends Effect.Service<OAuthConfigService>()('OA
         issuer: decoded.issuer ?? issuerBase,
         authorizeUrl: decoded.authorization_endpoint,
         tokenUrl: decoded.token_endpoint,
+        deviceAuthorizeUrl: decoded.device_authorization_endpoint,
         scope: DEFAULT_SCOPE,
         userinfoUrl: decoded.userinfo_endpoint,
       };
