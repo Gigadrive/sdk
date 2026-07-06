@@ -360,4 +360,38 @@ describe('AuthService.login (device flow)', () => {
 
     expect(result).toMatchObject({ _tag: 'no-refresh' });
   });
+
+  // Regression for the interactive race: `watchCopyKey` never completes on its own,
+  // so plain `Effect.race` (which waits for a *success*) would hang when the poll
+  // fails. `raceFirst` must let the denial settle. Forces the TTY path so the
+  // copy-key watcher participates; the test hanging here would mean the bug is back.
+  it('settles (does not hang) in the interactive TTY path when the request is denied', async () => {
+    stubFetch([jsonResponse(400, { error: 'access_denied' })]);
+
+    const stdin = process.stdin as unknown as Record<string, unknown>;
+    const saved = {
+      isTTY: stdin.isTTY,
+      setRawMode: stdin.setRawMode,
+      resume: stdin.resume,
+      setEncoding: stdin.setEncoding,
+      pause: stdin.pause,
+    };
+    stdin.isTTY = true;
+    stdin.setRawMode = () => process.stdin;
+    stdin.resume = () => process.stdin;
+    stdin.setEncoding = () => process.stdin;
+    stdin.pause = () => process.stdin;
+
+    try {
+      const testLayer = makeAuthTestLayer(Option.none());
+      const result = await Effect.runPromise(
+        Effect.provide(AuthService.login, testLayer).pipe(
+          Effect.catchTag('AuthorizationDeniedError', () => Effect.succeed({ _tag: 'denied' as const }))
+        )
+      );
+      expect(result).toMatchObject({ _tag: 'denied' });
+    } finally {
+      Object.assign(stdin, saved);
+    }
+  });
 });

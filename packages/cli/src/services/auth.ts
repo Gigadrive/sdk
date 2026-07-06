@@ -22,6 +22,14 @@ const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 /** Fallback poll interval (seconds) when the provider omits `interval`. */
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
 
+/**
+ * Per-request timeout (seconds) for the device-authorization request and each
+ * token poll. `fetch` has no default timeout, so without this a hung connection
+ * would stall the poll loop and the RFC 8628 `expires_in` deadline (which is only
+ * checked between requests) would never be enforced.
+ */
+const REQUEST_TIMEOUT_SECONDS = 30;
+
 // ---------------------------------------------------------------------------
 // AuthService
 // ---------------------------------------------------------------------------
@@ -85,7 +93,12 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
             () => new DeviceAuthorizationError({ message: 'Invalid device authorization response schema' })
           )
         );
-      });
+      }).pipe(
+        Effect.timeoutFail({
+          duration: Duration.seconds(REQUEST_TIMEOUT_SECONDS),
+          onTimeout: () => new DeviceAuthorizationError({ message: 'Device authorization request timed out' }),
+        })
+      );
 
     // A single poll of the token endpoint (RFC 8628 §3.4). Translates the RFC 8628
     // §3.5 poll errors into control-flow values; any other failure is fatal.
@@ -159,7 +172,15 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
             );
           }
 
-          const result = yield* pollTokenOnce(config, device.device_code);
+          const result = yield* pollTokenOnce(config, device.device_code).pipe(
+            // A hung poll must not stall the loop: on timeout treat it as pending so
+            // the next iteration re-checks the expiry deadline.
+            Effect.timeoutTo({
+              duration: Duration.seconds(REQUEST_TIMEOUT_SECONDS),
+              onSuccess: (value) => value,
+              onTimeout: () => ({ kind: 'pending' }) as const,
+            })
+          );
           switch (result.kind) {
             case 'tokens':
               return result.tokens;
@@ -231,9 +252,9 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
       );
 
       if (interactive) {
-        yield* Effect.sync(() => {
-          void open(verificationUriComplete);
-        });
+        // Best-effort: the URL is printed above regardless. Route through the Effect
+        // runtime so a spawn/DISPLAY failure can't become an unhandled rejection.
+        yield* Effect.tryPromise(() => open(verificationUriComplete)).pipe(Effect.catchAll(() => Effect.void));
         yield* Console.log('We tried to open your browser automatically. If it did not open, use the URL above.');
         yield* Console.log('Press "c" to copy the URL to your clipboard, or Ctrl+C to cancel.');
       }
@@ -241,7 +262,10 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
       yield* Console.log('\nWaiting for you to approve the login…');
 
       const poll = pollForToken(config, device);
-      const tokens = yield* interactive ? poll.pipe(Effect.race(watchCopyKey(verificationUriComplete))) : poll;
+      // `watchCopyKey` never completes on its own, so use `raceFirst` (settles on the
+      // first effect to finish, success or failure) — plain `race` waits for a success
+      // and would hang here when the poll fails (e.g. denied/expired).
+      const tokens = yield* interactive ? poll.pipe(Effect.raceFirst(watchCopyKey(verificationUriComplete))) : poll;
 
       if (!tokens.refresh_token) {
         return yield* Effect.fail(
