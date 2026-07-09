@@ -2,6 +2,8 @@ import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 import { OrganizationAiGatewayResource } from './organization-ai-gateway';
 import { OrganizationEnvVarsResource } from './organization-env-vars';
+import { OrganizationMembersResource } from './organization-members';
+import { OrganizationProductsResource } from './organization-products';
 
 /** A Gigadrive Network organization. */
 export interface Organization {
@@ -17,6 +19,12 @@ export interface Organization {
   createdAt: string;
   /** ISO 8601 last-updated timestamp. */
   updatedAt: string;
+}
+
+/** Input for creating an organization. */
+export interface CreateOrganizationInput {
+  /** Display name for the new organization. */
+  name: string;
 }
 
 /**
@@ -59,10 +67,32 @@ export class OrganizationsResource extends BaseResource {
    */
   readonly aiGateway: OrganizationAiGatewayResource;
 
+  /**
+   * List organization members and membership roles.
+   *
+   * @example
+   * ```ts
+   * const { items } = await client.organizations.members.list('org-id');
+   * ```
+   */
+  readonly members: OrganizationMembersResource;
+
+  /**
+   * Inspect product entitlements and activate organization product plans.
+   *
+   * @example
+   * ```ts
+   * const check = await client.organizations.products.checkEntitlement('org-id', 'office');
+   * ```
+   */
+  readonly products: OrganizationProductsResource;
+
   constructor(...args: ConstructorParameters<typeof BaseResource>) {
     super(...args);
     this.envVars = new OrganizationEnvVarsResource(this.httpClient);
     this.aiGateway = new OrganizationAiGatewayResource(this.httpClient);
+    this.members = new OrganizationMembersResource(this.httpClient);
+    this.products = new OrganizationProductsResource(this.httpClient);
   }
 
   /**
@@ -81,5 +111,40 @@ export class OrganizationsResource extends BaseResource {
     return this.httpClient.get('/organizations', {
       query: query as Record<string, string | number | undefined> | undefined,
     });
+  }
+
+  /**
+   * Get a single organization by ID.
+   *
+   * @param organizationId - Organization to retrieve.
+   * @returns The organization.
+   *
+   * @example
+   * ```ts
+   * const org = await client.organizations.get('org-id');
+   * console.log(org.name, org.slug);
+   * ```
+   */
+  async get(organizationId: string): Promise<Organization> {
+    return this.httpClient.get(`/organizations/${organizationId}`);
+  }
+
+  /**
+   * Create a new organization.
+   *
+   * Requires a user-backed token with the `platform:organizations:write` scope.
+   * The authenticated user becomes the organization owner.
+   *
+   * @param input - Organization creation input.
+   * @returns The created organization.
+   *
+   * @example
+   * ```ts
+   * const org = await client.organizations.create({ name: 'Acme Corp' });
+   * console.log(org.id, org.slug);
+   * ```
+   */
+  async create(input: CreateOrganizationInput): Promise<Organization> {
+    return this.httpClient.post('/organizations', input);
   }
 }

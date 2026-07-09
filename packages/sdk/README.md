@@ -29,6 +29,33 @@ const { items: organizations } = await client.organizations.list();
 const { items: applications } = await client.applications.list();
 ```
 
+## Organizations and product entitlements
+
+Organizations are the top-level account containers for Gigadrive products.
+Beyond listing orgs, the SDK can create organizations, inspect members, and
+check or activate product entitlements:
+
+```ts
+// Create an organization (user-backed token + platform:organizations:write)
+const org = await client.organizations.create({ name: 'Acme Corp' });
+
+// Fetch one organization and its members
+const details = await client.organizations.get(org.id);
+const { items: members } = await client.organizations.members.list(org.id);
+
+// Inspect product access / entitlements
+const { items: products } = await client.organizations.products.list(org.id);
+const office = await client.organizations.products.get(org.id, 'office');
+const check = await client.organizations.products.checkEntitlement(org.id, 'office');
+
+// Activate a local product plan (owner/admin user token)
+if (!check.hasAccess) {
+  await client.organizations.products.startSubscription(org.id, 'office', { plan: 'free' });
+}
+
+console.log(details.name, members.length, office.hasAccess, products.length);
+```
+
 ## Authentication
 
 Authentication is handled for you — tokens are fetched, cached, and refreshed
