@@ -100,32 +100,19 @@ export interface OrganizationProductEntitlementCheck {
   hasAccess: boolean;
 }
 
-/** Result of activating an organization product plan. */
-export interface OrganizationProductSubscriptionActivation {
-  /** Result kind for a successful local plan activation. */
-  kind: 'activated';
-  /** Activated subscription. */
-  subscription: OrganizationProductSubscription;
-}
-
-/** Input for activating an organization product plan. */
-export interface StartOrganizationProductSubscriptionInput {
-  /** Plan slug defined for the product in the product registry. */
-  plan: string;
-}
-
 /**
- * Inspect and manage organization product access / entitlements.
+ * Inspect organization product access / entitlements.
  *
  * Accessed via {@link OrganizationsResource.products}.
+ *
+ * Subscriptions are read-only through the public API — plan changes happen in
+ * Gigadrive product surfaces, not via the SDK.
  *
  * @example
  * ```ts
  * const { items } = await client.organizations.products.list('org-id');
  * const check = await client.organizations.products.checkEntitlement('org-id', 'office');
- * if (!check.hasAccess) {
- *   await client.organizations.products.startSubscription('org-id', 'office', { plan: 'free' });
- * }
+ * console.log(check.hasAccess);
  * ```
  */
 export class OrganizationProductsResource extends BaseResource {
@@ -178,33 +165,5 @@ export class OrganizationProductsResource extends BaseResource {
    */
   async checkEntitlement(organizationId: string, product: string): Promise<OrganizationProductEntitlementCheck> {
     return this.httpClient.get(`/organizations/${organizationId}/products/${product}/entitlement`);
-  }
-
-  /**
-   * Activate or switch the local product plan for an organization-scoped product.
-   *
-   * Requires a user-backed token with organization owner/admin rights and the
-   * `platform:organizations:write` scope. Plan activation immediately syncs the
-   * corresponding organization product entitlement.
-   *
-   * @param organizationId - Organization that should receive the subscription.
-   * @param product - Product slug from the product registry.
-   * @param input - Plan activation input.
-   * @returns Activated subscription result.
-   *
-   * @example
-   * ```ts
-   * const result = await client.organizations.products.startSubscription('org-id', 'office', {
-   *   plan: 'team',
-   * });
-   * console.log(result.subscription.status);
-   * ```
-   */
-  async startSubscription(
-    organizationId: string,
-    product: string,
-    input: StartOrganizationProductSubscriptionInput
-  ): Promise<OrganizationProductSubscriptionActivation> {
-    return this.httpClient.post(`/organizations/${organizationId}/products/${product}/subscriptions`, input);
   }
 }

@@ -34,14 +34,4 @@ describe('OrganizationProductsResource', () => {
     await resource.checkEntitlement('org-1', 'network');
     expect(http.get).toHaveBeenCalledWith('/organizations/org-1/products/network/entitlement');
   });
-
-  it('should start an organization product subscription', async () => {
-    const http = createMockHttpClient();
-    const resource = new OrganizationProductsResource(http);
-
-    await resource.startSubscription('org-1', 'office', { plan: 'free' });
-    expect(http.post).toHaveBeenCalledWith('/organizations/org-1/products/office/subscriptions', {
-      plan: 'free',
-    });
-  });
 });

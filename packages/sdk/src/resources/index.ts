@@ -72,7 +72,6 @@ export type {
   OrganizationProductEntitlement,
   OrganizationProductEntitlementCheck,
   OrganizationProductSubscription,
-  OrganizationProductSubscriptionActivation,
   ProductAccessMode,
   ProductAccessResolutionSource,
   ProductDefaultAccessPolicy,
@@ -80,7 +79,6 @@ export type {
   ProductEntitlementStatus,
   ProductPlan,
   ProductSubscriptionStatus,
-  StartOrganizationProductSubscriptionInput,
 } from './organization-products';
 
 export {

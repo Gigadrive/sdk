@@ -43,17 +43,12 @@ const org = await client.organizations.create({ name: 'Acme Corp' });
 const details = await client.organizations.get(org.id);
 const { items: members } = await client.organizations.members.list(org.id);
 
-// Inspect product access / entitlements
+// Inspect product access / entitlements (read-only)
 const { items: products } = await client.organizations.products.list(org.id);
 const office = await client.organizations.products.get(org.id, 'office');
 const check = await client.organizations.products.checkEntitlement(org.id, 'office');
 
-// Activate a local product plan (owner/admin user token)
-if (!check.hasAccess) {
-  await client.organizations.products.startSubscription(org.id, 'office', { plan: 'free' });
-}
-
-console.log(details.name, members.length, office.hasAccess, products.length);
+console.log(details.name, members.length, office.hasAccess, check.hasAccess, products.length);
 ```
 
 ## Authentication
