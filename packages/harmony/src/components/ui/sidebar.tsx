@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, PanelLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PanelLeft } from 'lucide-react';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -20,25 +20,33 @@ const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = '3rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
-// ─── Shared class constants ──────────────────────────────────────────────────
+// ─── Shared class constants (Network layered-sidebar chrome) ─────────────────
 
 const ITEM_BASE = cn(
-  'flex w-full items-center gap-2 rounded-md px-2 py-1.5',
-  'text-sm text-sidebar-foreground/80 outline-none',
-  'transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+  'group relative flex w-full items-center justify-between rounded-lg pl-3 pr-3 py-2',
+  'text-sm text-muted-foreground outline-none',
+  'transition-all duration-150 hover:bg-muted hover:text-foreground',
   'focus-visible:ring-2 focus-visible:ring-sidebar-ring',
   'disabled:pointer-events-none disabled:opacity-50'
 );
 
-const ITEM_ACTIVE =
-  'bg-primary/[0.08] text-primary font-medium [&_svg]:text-primary hover:bg-primary/[0.12] hover:text-primary';
+const ITEM_ACTIVE = 'bg-primary/10 text-primary font-medium hover:bg-primary/15 hover:text-primary';
 
 const ITEM_COLLAPSED = cn(
-  'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center',
+  'group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center',
+  'group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:gap-0',
   'group-data-[collapsible=icon]:[&>span]:hidden',
+  'group-data-[collapsible=icon]:[&>.sidebar-item-label]:hidden',
   'group-data-[collapsible=icon]:[&>.sidebar-badge]:hidden',
   'group-data-[collapsible=icon]:[&>.sidebar-chevron]:hidden'
 );
+
+const ITEM_BADGE = cn(
+  'sidebar-badge ml-auto px-1.5 py-0 text-[10px] font-medium',
+  'rounded-md bg-secondary text-secondary-foreground'
+);
+
+const ACTIVE_INDICATOR = 'pointer-events-none absolute inset-y-0 left-0 my-auto h-5 w-[3px] rounded-r-full bg-primary';
 
 // ─── Layer animation variants ────────────────────────────────────────────────
 
@@ -657,23 +665,26 @@ SidebarContent.displayName = 'SidebarContent';
 
 // ─── LayerBackButton (internal) ──────────────────────────────────────────────
 
-function LayerBackButton({ title, icon, onClick }: { title: string; icon?: SidebarIcon; onClick: () => void }) {
+function LayerBackButton({ title, onClick }: { title: string; icon?: SidebarIcon; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-1 rounded-md px-1.5 py-1 mb-1',
-        'text-xs font-medium text-sidebar-foreground/60',
-        'hover:text-sidebar-foreground hover:bg-sidebar-accent',
-        'transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-        'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:mb-0'
-      )}
-    >
-      <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
-      {renderSidebarIcon(icon, 'h-3.5 w-3.5 shrink-0 group-data-[collapsible=icon]:hidden')}
-      <span className="truncate group-data-[collapsible=icon]:hidden">{title}</span>
-    </button>
+    <div className="px-0 pb-1 group-data-[collapsible=icon]:px-0">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Go back to ${title}`}
+        className={cn(
+          'group/back flex w-full items-center gap-2.5 rounded-lg px-3 py-2 outline-none',
+          'text-sm text-muted-foreground',
+          'transition-all duration-150 hover:bg-muted/70 hover:text-foreground',
+          'focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+          'group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center',
+          'group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:p-0'
+        )}
+      >
+        <ChevronLeft className="size-4 shrink-0 transition-transform duration-150 group-hover/back:-translate-x-0.5 group-data-[collapsible=icon]:group-hover/back:translate-x-0" />
+        <span className="truncate font-medium group-data-[collapsible=icon]:hidden">{title}</span>
+      </button>
+    </div>
   );
 }
 
@@ -686,19 +697,22 @@ const SidebarGroup = React.forwardRef<
   }
 >(({ className, label, children, ...props }, ref) => (
   <div ref={ref} data-sidebar="group" className={cn('flex w-full min-w-0 flex-col', className)} {...props}>
-    {label && (
+    {label ? (
       <div
         data-sidebar="group-label"
-        className={cn(
-          'flex h-7 shrink-0 items-center px-2 text-[0.6875rem] font-medium tracking-wide uppercase',
-          'text-sidebar-foreground/40 select-none',
-          'group-data-[collapsible=icon]:hidden'
-        )}
+        className={cn('px-3 pb-1.5 pt-5 first:pt-3 select-none', 'group-data-[collapsible=icon]:hidden')}
       >
-        {label}
+        {typeof label === 'string' || typeof label === 'number' ? (
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">{label}</span>
+        ) : (
+          label
+        )}
       </div>
-    )}
-    <ul data-sidebar="menu" className="flex w-full min-w-0 flex-col gap-0.5">
+    ) : null}
+    <ul
+      data-sidebar="menu"
+      className="flex w-full min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1"
+    >
       {children}
     </ul>
   </div>
@@ -777,19 +791,35 @@ function DeclarativeSidebarItem({ item }: { item: SidebarNavItem }) {
     [hasLayer, item.layer, layerCtx]
   );
 
+  const iconClass = cn('size-4 shrink-0', item.isActive ? 'text-primary' : 'text-muted-foreground');
+
   const content = (
     <>
-      {renderSidebarIcon(item.icon, 'h-4 w-4 shrink-0')}
-      <span className="truncate mt-[var(--text-correction)]">{item.title}</span>
+      <span className="sidebar-item-label flex min-w-0 items-center gap-2.5">
+        {renderSidebarIcon(item.icon, iconClass)}
+        <span className="truncate">{item.title}</span>
+      </span>
+      {item.badge != null ? <span className={ITEM_BADGE}>{item.badge}</span> : null}
       {hasLayer ? (
-        <ChevronLeft className="sidebar-chevron ml-auto h-3.5 w-3.5 shrink-0 rotate-180 text-sidebar-foreground/40" />
-      ) : null}
-      {item.badge != null ? (
-        <span className="sidebar-badge ml-auto flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-xs font-medium tabular-nums text-sidebar-foreground/60">
-          {item.badge}
-        </span>
+        <ChevronRight
+          className={cn(
+            'sidebar-chevron ml-2 size-4 shrink-0',
+            item.isActive ? 'text-primary' : 'text-muted-foreground'
+          )}
+        />
       ) : null}
     </>
+  );
+
+  const collapsedContent = (
+    <span
+      className={cn(
+        'flex size-4 items-center justify-center',
+        item.isActive ? 'text-primary' : 'text-muted-foreground'
+      )}
+    >
+      {renderSidebarIcon(item.icon, 'size-4 shrink-0')}
+    </span>
   );
 
   const buttonClasses = cn(ITEM_BASE, ITEM_COLLAPSED, item.isActive && ITEM_ACTIVE);
@@ -798,41 +828,39 @@ function DeclarativeSidebarItem({ item }: { item: SidebarNavItem }) {
   if (hasLayer) {
     button = (
       <button type="button" className={buttonClasses} onClick={handleClick} aria-label={item.title}>
-        {content}
+        {isCollapsed && !isMobile ? collapsedContent : content}
       </button>
     );
   } else if (item.href) {
     button = (
-      <LinkComponent href={item.href} className={buttonClasses} onClick={handleClick}>
-        {content}
+      <LinkComponent href={item.href} className={buttonClasses} onClick={handleClick} aria-label={item.title}>
+        {isCollapsed && !isMobile ? collapsedContent : content}
       </LinkComponent>
     );
   } else {
     return null;
   }
 
-  const indicator = item.isActive ? (
-    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-primary group-data-[collapsible=icon]:hidden" />
-  ) : null;
+  const indicator = item.isActive ? <span className={ACTIVE_INDICATOR} /> : null;
 
   if (isCollapsed && !isMobile) {
     return (
       <li className="relative">
-        {indicator}
         <Tooltip>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" align="center" className={hasLayer ? 'p-0' : undefined}>
+          <TooltipContent side="right" sideOffset={8} className={hasLayer ? 'p-0' : undefined}>
             {hasLayer ? <CollapsedLayerFlyout item={item} /> : item.title}
           </TooltipContent>
         </Tooltip>
+        {indicator}
       </li>
     );
   }
 
   return (
     <li className="relative">
-      {indicator}
       {button}
+      {indicator}
     </li>
   );
 }
@@ -889,62 +917,77 @@ const SidebarItem = React.forwardRef<
 
   const content = (
     <>
-      {Icon && <Icon className="h-4 w-4 shrink-0" />}
-      <span className="truncate mt-[var(--text-correction)]">{title}</span>
-      {hasChildren && (
-        <ChevronLeft className="sidebar-chevron ml-auto h-3.5 w-3.5 shrink-0 rotate-180 text-sidebar-foreground/40" />
-      )}
-      {badge != null && (
-        <span className="sidebar-badge ml-auto flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-xs font-medium tabular-nums text-sidebar-foreground/60">
-          {badge}
-        </span>
-      )}
+      <span className="sidebar-item-label flex min-w-0 items-center gap-2.5">
+        {Icon ? (
+          <Icon className={cn('size-4 shrink-0', effectiveActive ? 'text-primary' : 'text-muted-foreground')} />
+        ) : null}
+        <span className="truncate">{title}</span>
+      </span>
+      {badge != null ? <span className={ITEM_BADGE}>{badge}</span> : null}
+      {hasChildren ? (
+        <ChevronRight
+          className={cn(
+            'sidebar-chevron ml-2 size-4 shrink-0',
+            effectiveActive ? 'text-primary' : 'text-muted-foreground'
+          )}
+        />
+      ) : null}
     </>
   );
 
+  const collapsedContent = (
+    <span
+      className={cn(
+        'flex size-4 items-center justify-center',
+        effectiveActive ? 'text-primary' : 'text-muted-foreground'
+      )}
+    >
+      {Icon ? <Icon className="size-4 shrink-0" /> : null}
+    </span>
+  );
+
+  const isCollapsed = state === 'collapsed';
   const buttonClasses = cn(ITEM_BASE, ITEM_COLLAPSED, effectiveActive && ITEM_ACTIVE, className);
+  const showCollapsedChrome = isCollapsed && !isMobile;
 
   const button = href ? (
     (() => {
       const Comp = as || 'a';
       return (
-        <Comp href={href} className={buttonClasses} onClick={handleClick}>
-          {content}
+        <Comp href={href} className={buttonClasses} onClick={handleClick} aria-label={title}>
+          {showCollapsedChrome ? collapsedContent : content}
         </Comp>
       );
     })()
   ) : (
-    <button className={buttonClasses} onClick={handleClick}>
-      {content}
+    <button type="button" className={buttonClasses} onClick={handleClick} aria-label={title}>
+      {showCollapsedChrome ? collapsedContent : content}
     </button>
   );
 
-  const isCollapsed = state === 'collapsed';
   const effectiveTooltip = isCollapsed ? (tooltip ?? title) : tooltip;
   const showTooltip = effectiveTooltip && !isMobile;
 
-  const indicator = effectiveActive && (
-    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-primary group-data-[collapsible=icon]:hidden" />
-  );
+  const indicator = effectiveActive ? <span className={ACTIVE_INDICATOR} /> : null;
 
   if (showTooltip) {
     return (
       <li ref={ref} className="relative" {...props}>
-        {indicator}
         <Tooltip>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" align="center">
+          <TooltipContent side="right" sideOffset={8} align="center">
             {effectiveTooltip}
           </TooltipContent>
         </Tooltip>
+        {indicator}
       </li>
     );
   }
 
   return (
     <li ref={ref} className="relative" {...props}>
-      {indicator}
       {button}
+      {indicator}
     </li>
   );
 });

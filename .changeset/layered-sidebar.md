@@ -10,6 +10,11 @@ framework router links) to drive nested nav from a declarative tree, while
 keeping the existing children-based layer API. New exports: `SidebarNavItem`,
 `SidebarNavSection`, `SidebarNavLayer`, and `useSidebarLayer`.
 
+Layer chrome (back/title control, section labels, nav items, active indicator,
+and collapsed icon buttons) follows the Network console layered-sidebar styles
+so the open-sourced sidebar matches the product UI rather than the older Harmony
+item chrome.
+
 Also ports shadcn `scroll-fade` / `scroll-fade-x` / edge variants (and
 `no-scrollbar`) as a Tailwind v3 plugin, and applies `scroll-fade` to the
 sidebar content scroller, `SidebarInset`, and `ScrollArea` viewport.
