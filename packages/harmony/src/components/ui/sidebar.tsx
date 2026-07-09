@@ -83,7 +83,8 @@ const layerTransition = {
 
 type SidebarVariant = 'default' | 'inset';
 
-type SidebarIcon = React.ComponentType<{ className?: string }> | React.ReactNode;
+/** Icon accepted by declarative sidebar nav items and layers. */
+export type SidebarIcon = React.ComponentType<{ className?: string }> | React.ReactNode;
 
 interface SidebarContextValue {
   state: 'expanded' | 'collapsed';
@@ -126,16 +127,19 @@ export interface SidebarNavLayer {
   sections: SidebarNavSection[];
 }
 
-type LayerEntry = {
-  id: string;
+/** Imperative layer entry pushed by nested `SidebarItem` children. */
+export type SidebarLayerEntry = {
   title: string;
   icon?: SidebarIcon;
   children: React.ReactNode;
 };
 
-type LayerContextValue = {
+type LayerEntry = SidebarLayerEntry & { id: string };
+
+/** Value returned by {@link useSidebarLayer}. */
+export type SidebarLayerContextValue = {
   /** Imperative push used by nested SidebarItem children. */
-  pushLayer: (entry: Omit<LayerEntry, 'id'>) => void;
+  pushLayer: (entry: SidebarLayerEntry) => void;
   /** Declarative push used when SidebarContent is driven by `rootLayer`. */
   pushNavLayer: (layer: SidebarNavLayer) => void;
   popLayer: () => void;
@@ -147,7 +151,7 @@ type LayerContextValue = {
 // ─── Contexts ────────────────────────────────────────────────────────────────
 
 const SidebarCtx = React.createContext<SidebarContextValue | null>(null);
-const LayerCtx = React.createContext<LayerContextValue | null>(null);
+const LayerCtx = React.createContext<SidebarLayerContextValue | null>(null);
 
 type SidebarLayoutValue = {
   side: 'left' | 'right';
@@ -597,7 +601,7 @@ const SidebarContent = React.forwardRef<HTMLDivElement, SidebarContentProps>(
       setImperativeStack([]);
     }, [isDeclarative, routeKey]);
 
-    const pushLayer = React.useCallback((entry: Omit<LayerEntry, 'id'>) => {
+    const pushLayer = React.useCallback((entry: SidebarLayerEntry) => {
       setDirection(1);
       setImperativeStack((prev) => [...prev, { ...entry, id: `layer-${++layerIdCounter.current}` }]);
     }, []);
@@ -638,7 +642,7 @@ const SidebarContent = React.forwardRef<HTMLDivElement, SidebarContentProps>(
     const currentNav = isDeclarative ? navStack[navStack.length - 1] : null;
     const currentKey = currentImperative ? currentImperative.id : currentNav ? currentNav.id : 'root';
 
-    const layerCtxValue = React.useMemo<LayerContextValue>(
+    const layerCtxValue = React.useMemo<SidebarLayerContextValue>(
       () => ({ pushLayer, pushNavLayer, popLayer, depth, linkAs }),
       [pushLayer, pushNavLayer, popLayer, depth, linkAs]
     );
@@ -701,7 +705,7 @@ function LayerBackButton({ title, onClick }: { title: string; icon?: SidebarIcon
       <button
         type="button"
         onClick={onClick}
-        aria-label={`Go back to ${title}`}
+        aria-label="Go back"
         className={cn(
           'group/back flex w-full items-center gap-2.5 rounded-lg px-3 py-2 outline-none',
           'text-sm text-muted-foreground',

@@ -343,9 +343,34 @@ function buildDeclarativeRoot(pathname: string): SidebarNavLayer {
   };
 }
 
+function DeclarativeDemoLink({
+  href,
+  onNavigate,
+  ...props
+}: React.ComponentProps<'a'> & { onNavigate: (href: string) => void }) {
+  return (
+    <a
+      href={href}
+      {...props}
+      onClick={(event) => {
+        event.preventDefault();
+        if (typeof href === 'string') onNavigate(href);
+        props.onClick?.(event);
+      }}
+    />
+  );
+}
+
 function DeclarativeLayersDemo({ initialPath = '/app' }: { initialPath?: string }) {
   const [pathname, setPathname] = React.useState(initialPath);
   const rootLayer = React.useMemo(() => buildDeclarativeRoot(pathname), [pathname]);
+  const DemoLink = React.useMemo(
+    () =>
+      function DemoLink(props: React.ComponentProps<'a'>) {
+        return <DeclarativeDemoLink {...props} onNavigate={setPathname} />;
+      },
+    []
+  );
 
   return (
     <SidebarProvider>
@@ -359,7 +384,7 @@ function DeclarativeLayersDemo({ initialPath = '/app' }: { initialPath?: string 
               <span className="text-sm font-semibold tracking-tight">Acme Inc</span>
             </div>
           </SidebarHeader>
-          <SidebarContent rootLayer={rootLayer} pathname={pathname} />
+          <SidebarContent rootLayer={rootLayer} pathname={pathname} linkAs={DemoLink} />
           <SidebarFooter>
             <div className="flex items-center gap-2.5 px-2 py-1">
               <Avatar className="h-7 w-7">

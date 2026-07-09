@@ -3,14 +3,7 @@
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarItem,
-  SidebarProvider,
-  type SidebarNavLayer,
-} from './sidebar';
+import { Sidebar, SidebarContent, SidebarGroup, SidebarItem, SidebarProvider, type SidebarNavLayer } from './sidebar';
 
 function mockMatchMedia(matches = false): void {
   window.matchMedia = (query: string) =>
@@ -90,7 +83,8 @@ describe('SidebarContent declarative layers', () => {
     renderDeclarative('/org/app/settings/variables');
 
     const panel = currentLayerPanel();
-    expect(within(panel).getByRole('button', { name: /Go back to App/ })).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Go back' })).toBeTruthy();
+    expect(within(panel).getByText('App')).toBeTruthy();
     expect(within(panel).getByText('Deployments')).toBeTruthy();
     expect(within(panel).getByText('Settings')).toBeTruthy();
     expect(within(panel).queryByText('Home')).toBeNull();
@@ -129,7 +123,7 @@ describe('SidebarContent declarative layers', () => {
     renderDeclarative('/org/app/deployments');
     expect(within(currentLayerPanel()).getByText('Deployments')).toBeTruthy();
 
-    fireEvent.click(within(currentLayerPanel()).getByRole('button', { name: /Go back to App/ }));
+    fireEvent.click(within(currentLayerPanel()).getByRole('button', { name: 'Go back' }));
 
     const panel = currentLayerPanel();
     expect(within(panel).getByText('Home')).toBeTruthy();
