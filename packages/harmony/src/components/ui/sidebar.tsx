@@ -185,6 +185,15 @@ function useLayer() {
   return React.useContext(LayerCtx);
 }
 
+/**
+ * Access the layer controller for the enclosing {@link SidebarContent}.
+ *
+ * Provides imperative and declarative layer navigation (push/pop) plus the
+ * current depth and the element type used to render `href` links.
+ *
+ * @returns The {@link SidebarLayerContextValue} for the nearest `SidebarContent`.
+ * @throws {Error} If called outside of a `SidebarContent`.
+ */
 function useSidebarLayer() {
   const context = React.useContext(LayerCtx);
   if (!context) {
@@ -233,11 +242,13 @@ function findDeepestLayerPath(layer: SidebarNavLayer, pathname: string): Sidebar
 
 function renderSidebarIcon(icon: SidebarIcon | undefined, className: string) {
   if (!icon) return null;
-  if (React.isValidElement(icon)) {
-    return icon;
+  // A component type (function) receives the icon className; any other
+  // ReactNode (element, string, number, fragment, array) renders as-is.
+  if (typeof icon === 'function') {
+    const Icon = icon as React.ComponentType<{ className?: string }>;
+    return <Icon className={className} />;
   }
-  const Icon = icon as React.ComponentType<{ className?: string }>;
-  return <Icon className={className} />;
+  return icon;
 }
 
 // ─── SidebarProvider ─────────────────────────────────────────────────────────
@@ -647,20 +658,24 @@ const SidebarContent = React.forwardRef<HTMLDivElement, SidebarContentProps>(
       [pushLayer, pushNavLayer, popLayer, depth, linkAs]
     );
 
+    // `pathname` drives the active layer stack in declarative mode; a missing
+    // value would silently collapse to the root layer, so fail fast instead.
+    if (isDeclarative && pathname == null) {
+      throw new Error('SidebarContent requires a `pathname` prop when `rootLayer` is set.');
+    }
+
     let body: React.ReactNode;
     if (currentImperative) {
       body = (
         <>
-          <LayerBackButton title={currentImperative.title} icon={currentImperative.icon} onClick={popLayer} />
+          <LayerBackButton title={currentImperative.title} onClick={popLayer} />
           {currentImperative.children}
         </>
       );
     } else if (isDeclarative && currentNav) {
       body = (
         <>
-          {navStack.length > 1 ? (
-            <LayerBackButton title={currentNav.title} icon={currentNav.icon} onClick={popLayer} />
-          ) : null}
+          {navStack.length > 1 ? <LayerBackButton title={currentNav.title} onClick={popLayer} /> : null}
           <DeclarativeLayerView layer={currentNav} />
         </>
       );
@@ -699,7 +714,7 @@ SidebarContent.displayName = 'SidebarContent';
 
 // ─── LayerBackButton (internal) ──────────────────────────────────────────────
 
-function LayerBackButton({ title, onClick }: { title: string; icon?: SidebarIcon; onClick: () => void }) {
+function LayerBackButton({ title, onClick }: { title: string; onClick: () => void }) {
   return (
     <div className="w-full pb-1 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center">
       <button
