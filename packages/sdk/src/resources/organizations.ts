@@ -25,6 +25,8 @@ export interface Organization {
 export interface CreateOrganizationInput {
   /** Display name for the new organization. */
   name: string;
+  /** Optional URL-safe slug. Generated from the name when omitted. */
+  slug?: string;
 }
 
 /**
@@ -78,7 +80,8 @@ export class OrganizationsResource extends BaseResource {
   readonly members: OrganizationMembersResource;
 
   /**
-   * Inspect product entitlements and activate organization product plans.
+   * Inspect organization product entitlements. Read-only through the public
+   * API — plan changes happen in Gigadrive product surfaces, not via the SDK.
    *
    * @example
    * ```ts

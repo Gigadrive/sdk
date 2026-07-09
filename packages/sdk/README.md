@@ -33,7 +33,7 @@ const { items: applications } = await client.applications.list();
 
 Organizations are the top-level account containers for Gigadrive products.
 Beyond listing orgs, the SDK can create organizations, inspect members, and
-check or activate product entitlements:
+check product entitlements (read-only; the SDK does not activate or change plans):
 
 ```ts
 // Create an organization (user-backed token + platform:organizations:write)

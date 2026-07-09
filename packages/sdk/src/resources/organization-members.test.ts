@@ -16,6 +16,14 @@ describe('OrganizationMembersResource', () => {
     const resource = new OrganizationMembersResource(http);
 
     await resource.list('org-1');
-    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/members');
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/members', { query: undefined });
+  });
+
+  it('should forward pagination query when listing members', async () => {
+    const http = createMockHttpClient();
+    const resource = new OrganizationMembersResource(http);
+
+    await resource.list('org-1', { page: 2, perPage: 10 });
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/members', { query: { page: 2, perPage: 10 } });
   });
 });

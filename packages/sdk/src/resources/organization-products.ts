@@ -1,4 +1,4 @@
-import type { Paginated } from '../http-client';
+import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 
 /** Product access mode from the code-defined product registry. */
@@ -120,6 +120,7 @@ export class OrganizationProductsResource extends BaseResource {
    * List effective product access for every organization-scoped product.
    *
    * @param organizationId - Organization whose product access should be listed.
+   * @param query - Optional pagination.
    * @returns A paginated list of product access summaries.
    *
    * @example
@@ -130,8 +131,10 @@ export class OrganizationProductsResource extends BaseResource {
    * }
    * ```
    */
-  async list(organizationId: string): Promise<Paginated<OrganizationProductAccess>> {
-    return this.httpClient.get(`/organizations/${organizationId}/products`);
+  async list(organizationId: string, query?: ListQuery): Promise<Paginated<OrganizationProductAccess>> {
+    return this.httpClient.get(`/organizations/${organizationId}/products`, {
+      query: query as Record<string, string | number | undefined> | undefined,
+    });
   }
 
   /**

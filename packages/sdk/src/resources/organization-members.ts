@@ -1,4 +1,4 @@
-import type { Paginated } from '../http-client';
+import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 
 /** Organization membership role used for administration privileges. */
@@ -40,6 +40,7 @@ export class OrganizationMembersResource extends BaseResource {
    * List the users who belong to an organization.
    *
    * @param organizationId - Organization whose members should be listed.
+   * @param query - Optional pagination.
    * @returns A paginated list of organization members.
    *
    * @example
@@ -48,7 +49,9 @@ export class OrganizationMembersResource extends BaseResource {
    * console.log(`Found ${total} members`);
    * ```
    */
-  async list(organizationId: string): Promise<Paginated<OrganizationMember>> {
-    return this.httpClient.get(`/organizations/${organizationId}/members`);
+  async list(organizationId: string, query?: ListQuery): Promise<Paginated<OrganizationMember>> {
+    return this.httpClient.get(`/organizations/${organizationId}/members`, {
+      query: query as Record<string, string | number | undefined> | undefined,
+    });
   }
 }

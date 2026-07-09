@@ -16,7 +16,15 @@ describe('OrganizationProductsResource', () => {
     const resource = new OrganizationProductsResource(http);
 
     await resource.list('org-1');
-    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/products');
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/products', { query: undefined });
+  });
+
+  it('should forward pagination query when listing products', async () => {
+    const http = createMockHttpClient();
+    const resource = new OrganizationProductsResource(http);
+
+    await resource.list('org-1', { page: 3, perPage: 5 });
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/products', { query: { page: 3, perPage: 5 } });
   });
 
   it('should get a single organization product', async () => {
