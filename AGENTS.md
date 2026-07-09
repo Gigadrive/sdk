@@ -182,3 +182,28 @@ The detection module in `packages/network-config/src/detection/` auto-detects we
   called on both file-parsed and auto-detected configs
 - When a user config exists alongside a detected framework, framework defaults fill gaps
   (user config always takes precedence)
+
+## Cursor Cloud specific instructions
+
+The startup update script runs `pnpm install`; dependencies are ready on boot. Standard
+commands live in the sections above (`pnpm build|lint|format|typecheck|test`). Notes below
+are the non-obvious gotchas discovered when running this repo end to end.
+
+- **Build before test / typecheck / running the CLI.** Workspace packages resolve
+  cross-package imports through their `dist/` outputs (see the `exports` maps), so a fresh
+  checkout must run `pnpm build` first. Without it, `pnpm test` fails with e.g.
+  `Failed to resolve entry for package "@gigadrive/build-utils"` and `pnpm typecheck`
+  (`dependsOn: ^build`) is unreliable. This is the single most common setup gotcha here.
+- **CLI (`gigadrive` / `gn`).** After `pnpm build`, run it directly with
+  `node packages/cli/dist/index.mjs <command>` (e.g. `--help`, `--version`,
+  `debug config`). `pnpm --filter gigadrive dev` just rebuilds then runs `dist/index.mjs`.
+  `debug config` auto-detects the framework of the current working directory — a quick
+  no-auth smoke test. Commands that hit the Gigadrive API/OAuth need network + credentials.
+- **Harmony Storybook (the GUI app).** `pnpm --filter @gigadrive/harmony storybook` serves
+  the dev server on port 6006 (`--host 0.0.0.0`). Caveat: the Vite dev preview iframe serves
+  unbundled ESM modules and fires hundreds of concurrent requests, which can exhaust a
+  headless/constrained browser's connection pool (`net::ERR_INSUFFICIENT_RESOURCES`, blank
+  canvas, or an "Aw Snap" tab crash) even though the server itself is healthy. To view
+  components reliably in such a browser, build a static Storybook with
+  `pnpm --filter @gigadrive/harmony storybook:build` and serve `packages/harmony/storybook-static`
+  (e.g. `python3 -m http.server 6007` from that dir) — the bundled chunks load fine.
