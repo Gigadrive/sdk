@@ -643,7 +643,7 @@ const SidebarContent = React.forwardRef<HTMLDivElement, SidebarContentProps>(
               animate="center"
               exit="exit"
               transition={layerTransition}
-              className="flex flex-col gap-1 overflow-y-auto overflow-x-hidden p-2 h-full"
+              className="scroll-fade flex h-full flex-col gap-1 overflow-x-hidden overflow-y-auto p-2"
             >
               {body}
             </motion.div>
@@ -982,7 +982,7 @@ const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<'main
       ref={ref}
       data-sidebar="inset"
       className={cn(
-        'flex-1 overflow-y-auto',
+        'scroll-fade flex-1 overflow-y-auto',
         isInset &&
           'my-2 rounded-xl border border-border/60 bg-background shadow-[0_1px_3px_0_rgb(0_0_0/0.04),0_1px_2px_-1px_rgb(0_0_0/0.04),0_0_0_1px_rgb(0_0_0/0.02)]',
         !isInset && 'bg-background',

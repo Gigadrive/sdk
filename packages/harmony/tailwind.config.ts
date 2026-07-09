@@ -7,6 +7,8 @@ import animate from 'tailwindcss-animate';
 import colors from 'tailwindcss/colors';
 import { fontFamily as _fontFamily } from 'tailwindcss/defaultTheme';
 
+import { scrollFadePlugin } from './scroll-fade-plugin';
+
 const config = {
   darkMode: ['class'],
   content: [
@@ -132,7 +134,7 @@ const config = {
       },
     },
   },
-  plugins: [forms, typography, animate],
+  plugins: [forms, typography, animate, scrollFadePlugin],
   safelist: [
     {
       pattern: /^to-(\w+-600|-\w+-700|-\w+-100)$/,
