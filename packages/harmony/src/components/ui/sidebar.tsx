@@ -17,13 +17,14 @@ const SIDEBAR_COOKIE_NAME = 'sidebar_state';
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_WIDTH_MOBILE = '18rem';
-const SIDEBAR_WIDTH_ICON = '3rem';
+/** Fits size-9 icon buttons with p-2 content padding (Network rail width). */
+const SIDEBAR_WIDTH_ICON = '3.25rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
 // ─── Shared class constants (Network layered-sidebar chrome) ─────────────────
 
 const ITEM_BASE = cn(
-  'group relative flex w-full items-center justify-between rounded-lg pl-3 pr-3 py-2',
+  'group/menu-item relative flex w-full items-center justify-between rounded-lg pl-3 pr-3 py-2',
   'text-sm text-muted-foreground outline-none',
   'transition-all duration-150 hover:bg-muted hover:text-foreground',
   'focus-visible:ring-2 focus-visible:ring-sidebar-ring',
@@ -33,9 +34,10 @@ const ITEM_BASE = cn(
 const ITEM_ACTIVE = 'bg-primary/10 text-primary font-medium hover:bg-primary/15 hover:text-primary';
 
 const ITEM_COLLAPSED = cn(
-  'group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center',
-  'group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:gap-0',
-  'group-data-[collapsible=icon]:[&>span]:hidden',
+  // Override w-full from ITEM_BASE so icon buttons stay square in the rail.
+  'group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!w-9',
+  'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0',
+  'group-data-[collapsible=icon]:gap-0',
   'group-data-[collapsible=icon]:[&>.sidebar-item-label]:hidden',
   'group-data-[collapsible=icon]:[&>.sidebar-badge]:hidden',
   'group-data-[collapsible=icon]:[&>.sidebar-chevron]:hidden'
@@ -46,7 +48,12 @@ const ITEM_BADGE = cn(
   'rounded-md bg-secondary text-secondary-foreground'
 );
 
-const ACTIVE_INDICATOR = 'pointer-events-none absolute inset-y-0 left-0 my-auto h-5 w-[3px] rounded-r-full bg-primary';
+function activeIndicatorClass(side: 'left' | 'right') {
+  return cn(
+    'pointer-events-none absolute inset-y-0 my-auto h-5 w-[3px] bg-primary',
+    side === 'left' ? 'left-0 rounded-r-full' : 'right-0 rounded-l-full'
+  );
+}
 
 // ─── Layer animation variants ────────────────────────────────────────────────
 
@@ -142,12 +149,24 @@ type LayerContextValue = {
 const SidebarCtx = React.createContext<SidebarContextValue | null>(null);
 const LayerCtx = React.createContext<LayerContextValue | null>(null);
 
+type SidebarLayoutValue = {
+  side: 'left' | 'right';
+  /** Always render icon-only item chrome (e.g. a fixed right toolbar rail). */
+  iconRail: boolean;
+};
+
+const SidebarLayoutCtx = React.createContext<SidebarLayoutValue>({ side: 'left', iconRail: false });
+
 function useSidebar() {
   const context = React.useContext(SidebarCtx);
   if (!context) {
     throw new Error('useSidebar must be used within a SidebarProvider.');
   }
   return context;
+}
+
+function useSidebarLayout() {
+  return React.useContext(SidebarLayoutCtx);
 }
 
 /**
@@ -340,23 +359,33 @@ const Sidebar = React.forwardRef<
   React.ComponentProps<'div'> & {
     side?: 'left' | 'right';
     collapsible?: 'offcanvas' | 'icon' | 'none';
+    /**
+     * Force icon-only item chrome regardless of open/collapsed state.
+     * Useful for fixed toolbar rails (`collapsible="none"` + icon width).
+     */
+    iconRail?: boolean;
   }
->(({ side = 'left', collapsible = 'offcanvas', className, children, ...props }, ref) => {
+>(({ side = 'left', collapsible = 'offcanvas', iconRail = false, className, children, ...props }, ref) => {
   const { isMobile, state, openMobile, setOpenMobile, toggleSidebar, hasNavbar, variant } = useSidebar();
   const isInset = variant === 'inset';
+
+  const content = <SidebarLayoutCtx.Provider value={{ side, iconRail }}>{children}</SidebarLayoutCtx.Provider>;
 
   if (collapsible === 'none') {
     return (
       <div
         ref={ref}
         className={cn(
-          'flex h-full w-[var(--sidebar-width)] flex-col text-sidebar-foreground',
+          'group flex h-full flex-col text-sidebar-foreground',
+          iconRail ? 'w-[var(--sidebar-width-icon)]' : 'w-[var(--sidebar-width)]',
           isInset ? 'bg-transparent' : 'bg-background',
           className
         )}
+        data-side={side}
+        data-collapsible={iconRail ? 'icon' : ''}
         {...props}
       >
-        {children}
+        {content}
       </div>
     );
   }
@@ -367,11 +396,12 @@ const Sidebar = React.forwardRef<
         <SheetContent
           data-sidebar="sidebar"
           data-mobile="true"
+          data-side={side}
           className="w-[var(--sidebar-width)] bg-background p-0 text-sidebar-foreground [&>button]:hidden"
           style={{ '--sidebar-width': SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
           side={side}
         >
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div className="flex h-full w-full flex-col">{content}</div>
         </SheetContent>
       </Sheet>
     );
@@ -401,7 +431,7 @@ const Sidebar = React.forwardRef<
             isInset ? 'bg-transparent' : 'bg-background'
           )}
         >
-          {children}
+          {content}
         </div>
       </div>
     );
@@ -418,7 +448,7 @@ const Sidebar = React.forwardRef<
       {/* Spacer that reserves layout width */}
       <div
         className={cn(
-          'relative h-screen w-[var(--sidebar-width)] bg-transparent transition-[width] duration-200 ease-linear',
+          'relative h-svh w-[var(--sidebar-width)] bg-transparent transition-[width] duration-200 ease-linear',
           'group-data-[collapsible=offcanvas]:w-0',
           'group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]'
         )}
@@ -427,10 +457,10 @@ const Sidebar = React.forwardRef<
       {/* Fixed sidebar panel */}
       <div
         className={cn(
-          'fixed inset-y-0 z-10 hidden h-screen w-[var(--sidebar-width)] transition-[left,right,width] duration-200 ease-linear md:flex',
+          'fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] duration-200 ease-linear md:flex',
           side === 'left'
-            ? 'left-0 group-data-[collapsible=offcanvas]:-left-[var(--sidebar-width)]'
-            : 'right-0 group-data-[collapsible=offcanvas]:-right-[var(--sidebar-width)]',
+            ? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
+            : 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',
           'group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]',
           !isInset && (side === 'left' ? 'border-r border-sidebar-border' : 'border-l border-sidebar-border'),
           className
@@ -441,7 +471,7 @@ const Sidebar = React.forwardRef<
           data-sidebar="sidebar"
           className={cn('flex h-full w-full flex-col overflow-x-hidden', isInset ? 'bg-transparent' : 'bg-background')}
         >
-          {children}
+          {content}
         </div>
 
         {/* Resize handle for toggling */}
@@ -449,7 +479,7 @@ const Sidebar = React.forwardRef<
           className={cn(
             'absolute top-0 bottom-0 w-1.5 cursor-ew-resize transition-colors z-20',
             'hover:bg-sidebar-border/60',
-            side === 'left' ? 'right-0 -translate-x-px' : 'left-0 translate-x-px'
+            side === 'left' ? 'right-0' : 'left-0'
           )}
           onClick={toggleSidebar}
           aria-label="Toggle sidebar"
@@ -651,7 +681,7 @@ const SidebarContent = React.forwardRef<HTMLDivElement, SidebarContentProps>(
               animate="center"
               exit="exit"
               transition={layerTransition}
-              className="scroll-fade flex h-full flex-col gap-1 overflow-x-hidden overflow-y-auto p-2"
+              className="scroll-fade flex h-full flex-col gap-1 overflow-x-hidden overflow-y-auto p-2 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-1.5"
             >
               {body}
             </motion.div>
@@ -667,7 +697,7 @@ SidebarContent.displayName = 'SidebarContent';
 
 function LayerBackButton({ title, onClick }: { title: string; icon?: SidebarIcon; onClick: () => void }) {
   return (
-    <div className="px-0 pb-1 group-data-[collapsible=icon]:px-0">
+    <div className="w-full pb-1 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center">
       <button
         type="button"
         onClick={onClick}
@@ -677,8 +707,9 @@ function LayerBackButton({ title, onClick }: { title: string; icon?: SidebarIcon
           'text-sm text-muted-foreground',
           'transition-all duration-150 hover:bg-muted/70 hover:text-foreground',
           'focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-          'group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center',
-          'group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:p-0'
+          'group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!w-9',
+          'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0',
+          'group-data-[collapsible=icon]:p-0'
         )}
       >
         <ChevronLeft className="size-4 shrink-0 transition-transform duration-150 group-hover/back:-translate-x-0.5 group-data-[collapsible=icon]:group-hover/back:translate-x-0" />
@@ -776,10 +807,12 @@ function CollapsedLayerFlyout({ item }: { item: SidebarNavItem }) {
 
 function DeclarativeSidebarItem({ item }: { item: SidebarNavItem }) {
   const { isMobile, state } = useSidebar();
+  const { side, iconRail } = useSidebarLayout();
   const layerCtx = useLayer();
-  const isCollapsed = state === 'collapsed';
+  const isCollapsed = iconRail || state === 'collapsed';
   const LinkComponent = layerCtx?.linkAs ?? 'a';
   const hasLayer = item.layer != null;
+  const tooltipSide = side === 'right' ? 'left' : 'right';
 
   const handleClick = React.useCallback(
     (e: React.MouseEvent) => {
@@ -814,7 +847,7 @@ function DeclarativeSidebarItem({ item }: { item: SidebarNavItem }) {
   const collapsedContent = (
     <span
       className={cn(
-        'flex size-4 items-center justify-center',
+        'sidebar-item-icon flex size-4 items-center justify-center',
         item.isActive ? 'text-primary' : 'text-muted-foreground'
       )}
     >
@@ -841,14 +874,14 @@ function DeclarativeSidebarItem({ item }: { item: SidebarNavItem }) {
     return null;
   }
 
-  const indicator = item.isActive ? <span className={ACTIVE_INDICATOR} /> : null;
+  const indicator = item.isActive ? <span className={activeIndicatorClass(side)} /> : null;
 
   if (isCollapsed && !isMobile) {
     return (
-      <li className="relative">
+      <li className="relative flex w-full justify-center group-data-[collapsible=icon]:w-auto">
         <Tooltip>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8} className={hasLayer ? 'p-0' : undefined}>
+          <TooltipContent side={tooltipSide} sideOffset={8} className={hasLayer ? 'p-0' : undefined}>
             {hasLayer ? <CollapsedLayerFlyout item={item} /> : item.title}
           </TooltipContent>
         </Tooltip>
@@ -899,8 +932,10 @@ const SidebarItem = React.forwardRef<
   }
 >(({ className, icon: Icon, title, href, isActive, badge, tooltip, children, as, ...props }, ref) => {
   const { isMobile, state } = useSidebar();
+  const { side, iconRail } = useSidebarLayout();
   const layerCtx = useLayer();
   const hasChildren = React.Children.count(children) > 0;
+  const tooltipSide = side === 'right' ? 'left' : 'right';
 
   const childActive = hasChildren && hasActiveDescendant(children);
   const effectiveActive = isActive || childActive;
@@ -938,7 +973,7 @@ const SidebarItem = React.forwardRef<
   const collapsedContent = (
     <span
       className={cn(
-        'flex size-4 items-center justify-center',
+        'sidebar-item-icon flex size-4 items-center justify-center',
         effectiveActive ? 'text-primary' : 'text-muted-foreground'
       )}
     >
@@ -946,9 +981,9 @@ const SidebarItem = React.forwardRef<
     </span>
   );
 
-  const isCollapsed = state === 'collapsed';
+  const isCollapsed = iconRail || state === 'collapsed';
   const buttonClasses = cn(ITEM_BASE, ITEM_COLLAPSED, effectiveActive && ITEM_ACTIVE, className);
-  const showCollapsedChrome = isCollapsed && !isMobile;
+  const showCollapsedChrome = (iconRail || isCollapsed) && !isMobile;
 
   const button = href ? (
     (() => {
@@ -966,16 +1001,20 @@ const SidebarItem = React.forwardRef<
   );
 
   const effectiveTooltip = isCollapsed ? (tooltip ?? title) : tooltip;
-  const showTooltip = effectiveTooltip && !isMobile;
+  const showTooltip = Boolean(effectiveTooltip) && !isMobile;
 
-  const indicator = effectiveActive ? <span className={ACTIVE_INDICATOR} /> : null;
+  const indicator = effectiveActive ? <span className={activeIndicatorClass(side)} /> : null;
 
   if (showTooltip) {
     return (
-      <li ref={ref} className="relative" {...props}>
+      <li
+        ref={ref}
+        className="relative flex w-full group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center"
+        {...props}
+      >
         <Tooltip>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8} align="center">
+          <TooltipContent side={tooltipSide} sideOffset={8} align="center">
             {effectiveTooltip}
           </TooltipContent>
         </Tooltip>
@@ -985,7 +1024,11 @@ const SidebarItem = React.forwardRef<
   }
 
   return (
-    <li ref={ref} className="relative" {...props}>
+    <li
+      ref={ref}
+      className="relative flex w-full group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center"
+      {...props}
+    >
       {button}
       {indicator}
     </li>

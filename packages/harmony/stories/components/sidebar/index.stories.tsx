@@ -420,13 +420,13 @@ export const DeclarativeNestedSettings: Story = {
 // ─── CollapsibleIcon ─────────────────────────────────────────────────────────
 
 function CollapsibleIconContent() {
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, state } = useSidebar();
 
   return (
     <div className="flex h-screen w-full">
       <Sidebar collapsible="icon">
         <SidebarHeader>
-          <div className="flex items-center gap-2.5 px-2 py-1">
+          <div className="flex items-center gap-2.5 px-2 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground">
               <Zap className="h-4 w-4 text-background" />
             </div>
@@ -458,7 +458,7 @@ function CollapsibleIconContent() {
       </Sidebar>
       <main className="flex-1 p-8 bg-background">
         <Button onClick={toggleSidebar} variant="outline" size="sm" className="mb-6">
-          Toggle Sidebar
+          {state === 'collapsed' ? 'Expand Sidebar' : 'Collapse Sidebar'}
         </Button>
         <h1 className="text-2xl font-bold tracking-tight">Icon Collapse</h1>
         <p className="mt-1.5 text-muted-foreground">
@@ -471,7 +471,7 @@ function CollapsibleIconContent() {
 
 function CollapsibleIconDemo() {
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <CollapsibleIconContent />
     </SidebarProvider>
   );
@@ -763,11 +763,7 @@ function DualSidebarDemo() {
             Full navigation sidebar on the left, icon-only toolbar sidebar on the right.
           </p>
         </main>
-        <Sidebar
-          side="right"
-          collapsible="none"
-          className="w-[var(--sidebar-width-icon)] border-l border-sidebar-border"
-        >
+        <Sidebar side="right" collapsible="none" iconRail className="border-l border-sidebar-border">
           <SidebarContent>
             <SidebarGroup>
               <SidebarItem icon={Search} title="Search" href="#" tooltip="Search" />
@@ -872,11 +868,7 @@ function AppLayoutDemo() {
           </div>
         </main>
 
-        <Sidebar
-          side="right"
-          collapsible="none"
-          className="w-[var(--sidebar-width-icon)] border-l border-sidebar-border"
-        >
+        <Sidebar side="right" collapsible="none" iconRail className="border-l border-sidebar-border">
           <SidebarContent>
             <SidebarGroup>
               <SidebarItem icon={Search} title="Search" href="#" tooltip="Search" />
@@ -1031,7 +1023,7 @@ function InsetLayoutDemo() {
           </div>
         </SidebarInset>
 
-        <Sidebar side="right" collapsible="none" className="w-[var(--sidebar-width-icon)]">
+        <Sidebar side="right" collapsible="none" iconRail>
           <SidebarContent>
             <SidebarGroup>
               <SidebarItem icon={Search} title="Search" href="#" tooltip="Search" />
