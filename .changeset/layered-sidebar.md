@@ -2,9 +2,10 @@
 '@gigadrive/harmony': minor
 ---
 
-Open-source the declarative layered sidebar from the Network console.
+Open-source the Network console's declarative layered navigation into Harmony's
+existing `Sidebar`.
 
-Adds `@gigadrive/harmony/layered-sidebar` — a pathname-driven nested navigation
-primitive (`LayeredSidebarProvider`, `LayeredSidebarContent`, and related types)
-that composes with Harmony's existing `Sidebar` chrome. Pass `linkAs` for
-framework router links (e.g. Next.js `Link`); defaults to `'a'`.
+`SidebarContent` now accepts optional `rootLayer` + `pathname` (and `linkAs` for
+framework router links) to drive nested nav from a declarative tree, while
+keeping the existing children-based layer API. New exports: `SidebarNavItem`,
+`SidebarNavSection`, `SidebarNavLayer`, and `useSidebarLayer`.
