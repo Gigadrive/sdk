@@ -296,19 +296,10 @@ const data = Option.getOrThrow(stored);
 1. Create `src/commands/<name>/index.ts`
 2. Define the command with `Command.make`:
    ```ts
-   export const myCommand = Command.make(
-     'my-command',
-     {
-       /* args/options */
-     },
-     (config) =>
-       Effect.gen(function* () {
-         // command handler
-       }).pipe(
-         Effect.catchTags({
-           /* error handlers */
-         })
-       )
+   export const myCommand = Command.make('my-command', {/* args/options */}, (config) =>
+     Effect.gen(function* () {
+       // command handler
+     }).pipe(Effect.catchTags({/* error handlers */}))
    );
    ```
 3. Register it in `src/index.ts` via `Command.withSubcommands`
@@ -321,9 +312,7 @@ const data = Option.getOrThrow(stored);
    ```ts
    export class MyService extends Effect.Service<MyService>()('MyService', {
      accessors: true,
-     dependencies: [
-       /* other services */
-     ],
+     dependencies: [/* other services */],
      effect: Effect.gen(function* () {
        // ...
        return { method1, method2 };

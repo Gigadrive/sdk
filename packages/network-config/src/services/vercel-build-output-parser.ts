@@ -159,16 +159,13 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
         const configRoutes =
           config.routes
             ?.filter((r) => 'dest' in r && r.dest === `/${functionName}`)
-            .map(
-              (r) =>
-                ({
-                  path: ('src' in r ? r.src : undefined) ?? `/${functionName}`,
-                  methods: ['ANY'] as NormalizedConfigRouteMethod[],
-                  headers: {},
-                  destination: functionEntrypointPath,
-                  handler: handlerType,
-                }) as NormalizedConfigRoute
-            ) ?? [];
+            .map((r) => ({
+              path: ('src' in r ? r.src : undefined) ?? `/${functionName}`,
+              methods: ['ANY'] as NormalizedConfigRouteMethod[],
+              headers: {},
+              destination: functionEntrypointPath,
+              handler: handlerType,
+            })) ?? [];
 
         if (!result.routes) {
           result.routes = [];
@@ -186,7 +183,7 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
             ...getMonorepoFiles(projectFolder, result.entrypoints?.map((e) => e.package?.filePathMap ?? {}) ?? []),
           ],
         },
-      } as Partial<NormalizedConfig>;
+      };
     });
 
     return { parse };

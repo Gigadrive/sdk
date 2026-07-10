@@ -5,7 +5,6 @@ import { minimatch } from 'minimatch';
 import safeRegex from 'safe-regex2';
 import { FunctionConfigError } from '../errors';
 import type {
-  NormalizedConfig,
   NormalizedConfigEntrypoint,
   NormalizedConfigRoute,
   NormalizedConfigRouteHandler,
@@ -301,7 +300,7 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         errors: [],
         warnings: [],
         routes: (config.routes ?? []).map((route) => mapRoute(route, entrypoints)),
-      } as NormalizedConfig;
+      };
     }),
   }),
 }) {}

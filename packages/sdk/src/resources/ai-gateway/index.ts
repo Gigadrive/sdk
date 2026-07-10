@@ -52,6 +52,7 @@ export class AiGatewayAudioResource extends BaseResource {
     form.set('file', toBlob(file), filename ?? 'audio');
     for (const [key, value] of Object.entries(rest)) {
       if (value === undefined || value === null) continue;
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- narrows to primitive so no-base-to-string is satisfied
       form.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value as string | number | boolean));
     }
     return this.httpClient.postRaw(`${BASE}/audio/transcriptions`, form, options?.headers);

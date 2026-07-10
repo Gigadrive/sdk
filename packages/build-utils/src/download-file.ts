@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
-import { ReadableStream as WebReadableStream } from 'stream/web';
 
 /**
  * Downloads a file from a URL using streaming to avoid loading it into memory
@@ -27,8 +26,7 @@ export async function downloadFile(url: string, outputPath: string): Promise<voi
     }
 
     // Convert Web ReadableStream to Node.js Readable Stream
-    // Using type assertion to handle the type mismatch
-    const nodeStream = Readable.fromWeb(response.body as unknown as WebReadableStream<Uint8Array>);
+    const nodeStream = Readable.fromWeb(response.body);
 
     // Create write stream
     const fileStream = fs.createWriteStream(outputPath);

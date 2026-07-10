@@ -49,7 +49,7 @@ export class DevCredentialsStore extends Effect.Service<DevCredentialsStore>()('
       const present = yield* fs
         .exists(storeFile)
         .pipe(Effect.mapError(() => new DevCredentialsStoreReadError({ message: 'Failed to check dev-keys.json' })));
-      if (!present) return {} as DevKeyStore;
+      if (!present) return {};
 
       const data = yield* fs
         .readFileString(storeFile, 'utf8')
