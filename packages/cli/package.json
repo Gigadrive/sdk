@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.86.0",
-    "@types/archiver": "^6.0.3",
+    "@types/archiver": "^6.0.4",
     "esbuild": "^0.28.0",
     "typescript": "catalog:"
   },
