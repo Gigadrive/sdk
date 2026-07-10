@@ -4,13 +4,7 @@ import { detectPackageManager } from './detect-package-manager';
 import { FRAMEWORK_DEFINITIONS } from './frameworks';
 import { generateConfig } from './generate-config';
 import { readDependencies } from './read-dependencies';
-import type {
-  DetectionResult,
-  FrameworkDefinition,
-  FrameworkDetectionItem,
-  ManifestParseError,
-  ManifestReadError,
-} from './types';
+import type { FrameworkDefinition, FrameworkDetectionItem, ManifestParseError, ManifestReadError } from './types';
 import { FrameworkNotDetectedError } from './types';
 
 /**
@@ -123,7 +117,7 @@ export const detectFramework = Effect.fn('detectFramework')(function* (projectFo
         : defaults;
       const config = yield* generateConfig(framework, packageManager, refinedDefaults);
 
-      return { framework, packageManager, config } as DetectionResult;
+      return { framework, packageManager, config };
     }
   }
 

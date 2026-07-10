@@ -27,7 +27,7 @@ export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfi
         const filePath = pathService.join(projectFolder, name);
         const exists = yield* fs.exists(filePath).pipe(Effect.catchAll(() => Effect.succeed(false)));
         if (exists) {
-          return filePath as string | null;
+          return filePath;
         }
       }
       return null as string | null;

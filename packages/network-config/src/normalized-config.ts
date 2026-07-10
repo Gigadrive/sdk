@@ -176,11 +176,7 @@ export interface NormalizedConfigRoute {
 }
 
 export type NormalizedConfigRouteHandler =
-  | 'SERVERLESS_FUNCTION'
-  | 'SERVERLESS_FUNCTION_STREAMING'
-  | 'HTTP_REDIRECT'
-  | 'HTTP_PROXY'
-  | 'ASSET';
+  'SERVERLESS_FUNCTION' | 'SERVERLESS_FUNCTION_STREAMING' | 'HTTP_REDIRECT' | 'HTTP_PROXY' | 'ASSET';
 
 export type NormalizedConfigRouteMethod = 'ANY' | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 

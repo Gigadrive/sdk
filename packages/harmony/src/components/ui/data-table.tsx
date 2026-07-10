@@ -218,6 +218,7 @@ export function DataTable<TData>({
         ...(col.cell && { cell: ({ row }) => col.cell!(row.original) }),
         enableSorting: col.sortable,
         enableHiding: col.hideable !== false,
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- attaches the local `width` meta field to TanStack's ColumnMeta
         meta: {
           width: col.width,
         } as ColumnMeta,
@@ -365,6 +366,7 @@ export function DataTable<TData>({
                     {headerGroup.headers.map((header) => {
                       const column = userColumns.find((col) => col.id === header.column.id);
                       const currentSort = sorting?.id === header.column.id ? sorting.direction : null;
+                      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- reads the local `width` meta field
                       const columnMeta = header.column.columnDef.meta as ColumnMeta | undefined;
 
                       return (
@@ -439,6 +441,7 @@ export function DataTable<TData>({
                 table.getRowModel().rows.map((row) => (
                   <TableRow key={row.id}>
                     {row.getVisibleCells().map((cell) => {
+                      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- reads the local `width` meta field
                       const cellMeta = cell.column.columnDef.meta as ColumnMeta | undefined;
                       return (
                         <TableCell key={cell.id} className={cn(cellPaddingClasses[size], cellMeta?.width)}>
