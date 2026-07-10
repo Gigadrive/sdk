@@ -28,7 +28,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^22.18.7"
+    "@types/node": "^24.13.3"
   },
   "publishConfig": {
     "access": "public"
