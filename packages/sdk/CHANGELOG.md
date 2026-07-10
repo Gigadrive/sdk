@@ -1,5 +1,15 @@
 # @gigadrive/sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- Add organization management and product entitlement APIs to the SDK. ([#315](https://github.com/Gigadrive/sdk/pull/315))
+
+  `client.organizations` now supports `get` and `create`, plus nested
+  `members.list` and `products` helpers for listing product access and checking
+  entitlements. Product subscriptions are read-only through the public API.
+
 ## 0.3.0
 
 ### Minor Changes

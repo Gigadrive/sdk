@@ -1,5 +1,23 @@
 # gigadrive
 
+## 2.4.0
+
+### Minor Changes
+
+- Replace the CLI login's local callback server with the OAuth 2.0 Device Authorization Grant (RFC 8628). ([#311](https://github.com/Gigadrive/sdk/pull/311))
+
+  `gigadrive login` no longer starts a local HTTP server or binds an ephemeral port to catch a
+  browser redirect. Instead it requests a device/user code, opens your browser to the verification
+  page (with the code prefilled), and polls for approval — so login now works cleanly over SSH, in
+  containers, and other headless environments. When run in a TTY the browser opens automatically and
+  you can press `c` to copy the verification URL; in a non-interactive shell it prints the URL and
+  code and polls without a browser.
+
+### Patch Changes
+
+- Updated dependencies [[`3305e61`](https://github.com/Gigadrive/sdk/commit/3305e61c0f08930003abe05dc64664c1e269dbd1)]:
+  - @gigadrive/sdk@0.4.0
+
 ## 2.3.0
 
 ### Minor Changes
