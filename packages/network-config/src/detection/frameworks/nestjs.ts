@@ -23,7 +23,7 @@ const parseNestCliJson = (content: string): NestCliJson | undefined => {
   try {
     const parsed: unknown = JSON.parse(content);
     if (!isRecord(parsed)) return undefined;
-    return parsed as NestCliJson;
+    return parsed;
   } catch {
     return undefined;
   }

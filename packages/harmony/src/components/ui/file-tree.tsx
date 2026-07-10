@@ -129,7 +129,7 @@ const Tree = forwardRef<HTMLDivElement, TreeViewProps>(
         }}
       >
         <div className={cn('size-full', className)}>
-          <ScrollArea ref={ref} className="h-full relative px-2" dir={dir as Direction}>
+          <ScrollArea ref={ref} className="h-full relative px-2" dir={dir}>
             <AccordionPrimitive.Root
               {...props}
               type="multiple"
@@ -137,7 +137,7 @@ const Tree = forwardRef<HTMLDivElement, TreeViewProps>(
               value={expandedItems}
               className="flex flex-col gap-1"
               onValueChange={(value) => setExpandedItems((prev) => [...(prev ?? []), value[0]])}
-              dir={dir as Direction}
+              dir={dir}
             >
               {children}
             </AccordionPrimitive.Root>

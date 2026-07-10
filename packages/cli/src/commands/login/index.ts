@@ -9,7 +9,7 @@ export const loginCommand = Command.make('login', {}, () =>
     const auth = yield* AuthService;
     yield* auth.login;
 
-    const info = yield* auth.getUserInfo.pipe(Effect.catchAll(() => Effect.succeed({} as Record<string, unknown>)));
+    const info = yield* auth.getUserInfo.pipe(Effect.catchAll(() => Effect.succeed({})));
 
     const name = auth.inferUserName(info);
     yield* Console.log(`You are now logged in as ${name}.`);
