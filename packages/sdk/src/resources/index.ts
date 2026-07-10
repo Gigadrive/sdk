@@ -61,7 +61,25 @@ export type { ApiKey, CreateApiKeyInput, CreateApiKeyResult, ListApiKeysQuery } 
 export type { ApplicationHostnameList, Hostname, HostnameAvailability, SetProductionHostnameResult } from './hostnames';
 
 export { OrganizationsResource } from './organizations';
-export type { Organization } from './organizations';
+export type { CreateOrganizationInput, Organization } from './organizations';
+
+export { OrganizationMembersResource } from './organization-members';
+export type { OrganizationMember, OrganizationMembershipRole } from './organization-members';
+
+export { OrganizationProductsResource } from './organization-products';
+export type {
+  OrganizationProductAccess,
+  OrganizationProductEntitlement,
+  OrganizationProductEntitlementCheck,
+  OrganizationProductSubscription,
+  ProductAccessMode,
+  ProductAccessResolutionSource,
+  ProductDefaultAccessPolicy,
+  ProductDefinition,
+  ProductEntitlementStatus,
+  ProductPlan,
+  ProductSubscriptionStatus,
+} from './organization-products';
 
 export {
   AiGatewayBudgetsResource,

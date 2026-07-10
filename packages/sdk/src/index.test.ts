@@ -21,6 +21,8 @@ describe('public exports', () => {
       'OrganizationsResource',
       'OrganizationEnvVarsResource',
       'OrganizationAiGatewayResource',
+      'OrganizationMembersResource',
+      'OrganizationProductsResource',
       'ApplicationsResource',
       'ApplicationEnvVarsResource',
       'ApplicationRequestsResource',
