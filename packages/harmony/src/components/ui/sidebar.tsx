@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, PanelLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PanelLeft } from 'lucide-react';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -17,28 +17,43 @@ const SIDEBAR_COOKIE_NAME = 'sidebar_state';
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_WIDTH_MOBILE = '18rem';
-const SIDEBAR_WIDTH_ICON = '3rem';
+/** Fits size-9 icon buttons with p-2 content padding (Network rail width). */
+const SIDEBAR_WIDTH_ICON = '3.25rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
-// ─── Shared class constants ──────────────────────────────────────────────────
+// ─── Shared class constants (Network layered-sidebar chrome) ─────────────────
 
 const ITEM_BASE = cn(
-  'flex w-full items-center gap-2 rounded-md px-2 py-1.5',
-  'text-sm text-sidebar-foreground/80 outline-none',
-  'transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+  'group/menu-item relative flex w-full items-center justify-between rounded-lg pl-3 pr-3 py-2',
+  'text-sm text-muted-foreground outline-none',
+  'transition-all duration-150 hover:bg-muted hover:text-foreground',
   'focus-visible:ring-2 focus-visible:ring-sidebar-ring',
   'disabled:pointer-events-none disabled:opacity-50'
 );
 
-const ITEM_ACTIVE =
-  'bg-primary/[0.08] text-primary font-medium [&_svg]:text-primary hover:bg-primary/[0.12] hover:text-primary';
+const ITEM_ACTIVE = 'bg-primary/10 text-primary font-medium hover:bg-primary/15 hover:text-primary';
 
 const ITEM_COLLAPSED = cn(
-  'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center',
-  'group-data-[collapsible=icon]:[&>span]:hidden',
+  // Override w-full from ITEM_BASE so icon buttons stay square in the rail.
+  'group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!w-9',
+  'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0',
+  'group-data-[collapsible=icon]:gap-0',
+  'group-data-[collapsible=icon]:[&>.sidebar-item-label]:hidden',
   'group-data-[collapsible=icon]:[&>.sidebar-badge]:hidden',
   'group-data-[collapsible=icon]:[&>.sidebar-chevron]:hidden'
 );
+
+const ITEM_BADGE = cn(
+  'sidebar-badge ml-auto px-1.5 py-0 text-[10px] font-medium',
+  'rounded-md bg-secondary text-secondary-foreground'
+);
+
+function activeIndicatorClass(side: 'left' | 'right') {
+  return cn(
+    'pointer-events-none absolute inset-y-0 my-auto h-5 w-[3px] bg-primary',
+    side === 'left' ? 'left-0 rounded-r-full' : 'right-0 rounded-l-full'
+  );
+}
 
 // ─── Layer animation variants ────────────────────────────────────────────────
 
@@ -68,6 +83,9 @@ const layerTransition = {
 
 type SidebarVariant = 'default' | 'inset';
 
+/** Icon accepted by declarative sidebar nav items and layers. */
+export type SidebarIcon = React.ComponentType<{ className?: string }> | React.ReactNode;
+
 interface SidebarContextValue {
   state: 'expanded' | 'collapsed';
   open: boolean;
@@ -80,23 +98,68 @@ interface SidebarContextValue {
   variant: SidebarVariant;
 }
 
-type LayerEntry = {
+/**
+ * Declarative nav item for pathname-driven layered sidebars.
+ * Nest a {@link SidebarNavLayer} on `layer` to push a sub-view on click.
+ */
+export interface SidebarNavItem {
   id: string;
   title: string;
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: SidebarIcon;
+  href?: string;
+  /** Additional URL prefixes that should match this item for layer detection. */
+  matchPaths?: string[];
+  layer?: SidebarNavLayer;
+  badge?: React.ReactNode;
+  isActive?: boolean;
+}
+
+export interface SidebarNavSection {
+  id: string;
+  title: string;
+  items: SidebarNavItem[];
+}
+
+export interface SidebarNavLayer {
+  id: string;
+  title: string;
+  icon?: SidebarIcon;
+  sections: SidebarNavSection[];
+}
+
+/** Imperative layer entry pushed by nested `SidebarItem` children. */
+export type SidebarLayerEntry = {
+  title: string;
+  icon?: SidebarIcon;
   children: React.ReactNode;
 };
 
-type LayerContextValue = {
-  pushLayer: (entry: Omit<LayerEntry, 'id'>) => void;
+type LayerEntry = SidebarLayerEntry & { id: string };
+
+/** Value returned by {@link useSidebarLayer}. */
+export type SidebarLayerContextValue = {
+  /** Imperative push used by nested SidebarItem children. */
+  pushLayer: (entry: SidebarLayerEntry) => void;
+  /** Declarative push used when SidebarContent is driven by `rootLayer`. */
+  pushNavLayer: (layer: SidebarNavLayer) => void;
   popLayer: () => void;
   depth: number;
+  /** Element type used to render `href` links in declarative mode. */
+  linkAs: React.ElementType;
 };
 
 // ─── Contexts ────────────────────────────────────────────────────────────────
 
 const SidebarCtx = React.createContext<SidebarContextValue | null>(null);
-const LayerCtx = React.createContext<LayerContextValue | null>(null);
+const LayerCtx = React.createContext<SidebarLayerContextValue | null>(null);
+
+type SidebarLayoutValue = {
+  side: 'left' | 'right';
+  /** Always render icon-only item chrome (e.g. a fixed right toolbar rail). */
+  iconRail: boolean;
+};
+
+const SidebarLayoutCtx = React.createContext<SidebarLayoutValue>({ side: 'left', iconRail: false });
 
 function useSidebar() {
   const context = React.useContext(SidebarCtx);
@@ -104,6 +167,10 @@ function useSidebar() {
     throw new Error('useSidebar must be used within a SidebarProvider.');
   }
   return context;
+}
+
+function useSidebarLayout() {
+  return React.useContext(SidebarLayoutCtx);
 }
 
 /**
@@ -116,6 +183,72 @@ function useSidebarOptional() {
 
 function useLayer() {
   return React.useContext(LayerCtx);
+}
+
+/**
+ * Access the layer controller for the enclosing {@link SidebarContent}.
+ *
+ * Provides imperative and declarative layer navigation (push/pop) plus the
+ * current depth and the element type used to render `href` links.
+ *
+ * @returns The {@link SidebarLayerContextValue} for the nearest `SidebarContent`.
+ * @throws {Error} If called outside of a `SidebarContent`.
+ */
+function useSidebarLayer() {
+  const context = React.useContext(LayerCtx);
+  if (!context) {
+    throw new Error('useSidebarLayer must be used within SidebarContent.');
+  }
+  return context;
+}
+
+function matchesPath(pathname: string, basePath: string): boolean {
+  return pathname === basePath || pathname.startsWith(`${basePath}/`);
+}
+
+/**
+ * Walk a declarative layer tree and return the deepest stack whose items match `pathname`.
+ * Nested layers are preferred over leaf href matches at the same depth.
+ */
+function findDeepestLayerPath(layer: SidebarNavLayer, pathname: string): SidebarNavLayer[] {
+  for (const section of layer.sections) {
+    for (const item of section.items) {
+      if (item.layer) {
+        const deeper = findDeepestLayerPath(item.layer, pathname);
+        if (deeper.length > 0) {
+          return [layer, ...deeper];
+        }
+      }
+    }
+  }
+
+  for (const section of layer.sections) {
+    for (const item of section.items) {
+      if (item.href && matchesPath(pathname, item.href)) {
+        return [layer];
+      }
+      if (item.matchPaths) {
+        for (const matchPath of item.matchPaths) {
+          if (matchesPath(pathname, matchPath)) {
+            return [layer];
+          }
+        }
+      }
+    }
+  }
+
+  return [];
+}
+
+function renderSidebarIcon(icon: SidebarIcon | undefined, className: string) {
+  if (!icon) return null;
+  // A component type (function) receives the icon className; any other
+  // ReactNode (element, string, number, fragment, array) renders as-is.
+  if (typeof icon === 'function') {
+    const Icon = icon as React.ComponentType<{ className?: string }>;
+    return <Icon className={className} />;
+  }
+  return icon;
 }
 
 // ─── SidebarProvider ─────────────────────────────────────────────────────────
@@ -241,23 +374,33 @@ const Sidebar = React.forwardRef<
   React.ComponentProps<'div'> & {
     side?: 'left' | 'right';
     collapsible?: 'offcanvas' | 'icon' | 'none';
+    /**
+     * Force icon-only item chrome regardless of open/collapsed state.
+     * Useful for fixed toolbar rails (`collapsible="none"` + icon width).
+     */
+    iconRail?: boolean;
   }
->(({ side = 'left', collapsible = 'offcanvas', className, children, ...props }, ref) => {
+>(({ side = 'left', collapsible = 'offcanvas', iconRail = false, className, children, ...props }, ref) => {
   const { isMobile, state, openMobile, setOpenMobile, toggleSidebar, hasNavbar, variant } = useSidebar();
   const isInset = variant === 'inset';
+
+  const content = <SidebarLayoutCtx.Provider value={{ side, iconRail }}>{children}</SidebarLayoutCtx.Provider>;
 
   if (collapsible === 'none') {
     return (
       <div
         ref={ref}
         className={cn(
-          'flex h-full w-[var(--sidebar-width)] flex-col text-sidebar-foreground',
+          'group flex h-full flex-col text-sidebar-foreground',
+          iconRail ? 'w-[var(--sidebar-width-icon)]' : 'w-[var(--sidebar-width)]',
           isInset ? 'bg-transparent' : 'bg-background',
           className
         )}
+        data-side={side}
+        data-collapsible={iconRail ? 'icon' : ''}
         {...props}
       >
-        {children}
+        {content}
       </div>
     );
   }
@@ -268,11 +411,12 @@ const Sidebar = React.forwardRef<
         <SheetContent
           data-sidebar="sidebar"
           data-mobile="true"
+          data-side={side}
           className="w-[var(--sidebar-width)] bg-background p-0 text-sidebar-foreground [&>button]:hidden"
           style={{ '--sidebar-width': SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
           side={side}
         >
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div className="flex h-full w-full flex-col">{content}</div>
         </SheetContent>
       </Sheet>
     );
@@ -302,7 +446,7 @@ const Sidebar = React.forwardRef<
             isInset ? 'bg-transparent' : 'bg-background'
           )}
         >
-          {children}
+          {content}
         </div>
       </div>
     );
@@ -319,7 +463,7 @@ const Sidebar = React.forwardRef<
       {/* Spacer that reserves layout width */}
       <div
         className={cn(
-          'relative h-screen w-[var(--sidebar-width)] bg-transparent transition-[width] duration-200 ease-linear',
+          'relative h-svh w-[var(--sidebar-width)] bg-transparent transition-[width] duration-200 ease-linear',
           'group-data-[collapsible=offcanvas]:w-0',
           'group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]'
         )}
@@ -328,10 +472,10 @@ const Sidebar = React.forwardRef<
       {/* Fixed sidebar panel */}
       <div
         className={cn(
-          'fixed inset-y-0 z-10 hidden h-screen w-[var(--sidebar-width)] transition-[left,right,width] duration-200 ease-linear md:flex',
+          'fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] duration-200 ease-linear md:flex',
           side === 'left'
-            ? 'left-0 group-data-[collapsible=offcanvas]:-left-[var(--sidebar-width)]'
-            : 'right-0 group-data-[collapsible=offcanvas]:-right-[var(--sidebar-width)]',
+            ? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
+            : 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',
           'group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]',
           !isInset && (side === 'left' ? 'border-r border-sidebar-border' : 'border-l border-sidebar-border'),
           className
@@ -342,7 +486,7 @@ const Sidebar = React.forwardRef<
           data-sidebar="sidebar"
           className={cn('flex h-full w-full flex-col overflow-x-hidden', isInset ? 'bg-transparent' : 'bg-background')}
         >
-          {children}
+          {content}
         </div>
 
         {/* Resize handle for toggling */}
@@ -350,7 +494,7 @@ const Sidebar = React.forwardRef<
           className={cn(
             'absolute top-0 bottom-0 w-1.5 cursor-ew-resize transition-colors z-20',
             'hover:bg-sidebar-border/60',
-            side === 'left' ? 'right-0 -translate-x-px' : 'left-0 translate-x-px'
+            side === 'left' ? 'right-0' : 'left-0'
           )}
           onClick={toggleSidebar}
           aria-label="Toggle sidebar"
@@ -424,30 +568,120 @@ SidebarFooter.displayName = 'SidebarFooter';
 
 // ─── SidebarContent (Layer Engine) ───────────────────────────────────────────
 
-const SidebarContent = React.forwardRef<HTMLDivElement, React.ComponentProps<'div'>>(
-  ({ className, children, ...props }, ref) => {
-    const layerIdCounter = React.useRef(0);
-    const [layerStack, setLayerStack] = React.useState<LayerEntry[]>([]);
-    const [direction, setDirection] = React.useState<1 | -1>(1);
+export interface SidebarContentProps extends React.ComponentProps<'div'> {
+  /**
+   * Declarative root layer. When set, `SidebarContent` renders the active layer
+   * from this tree (driven by `pathname`) instead of composing children.
+   */
+  rootLayer?: SidebarNavLayer;
+  /**
+   * Current location pathname used to derive the active layer stack.
+   * Required when `rootLayer` is provided.
+   */
+  pathname?: string;
+  /**
+   * Component used to render items with an `href` in declarative mode.
+   * Defaults to `'a'`. Pass a framework router link (e.g. Next.js `Link`).
+   */
+  linkAs?: React.ElementType;
+}
 
-    const pushLayer = React.useCallback((entry: Omit<LayerEntry, 'id'>) => {
+const SidebarContent = React.forwardRef<HTMLDivElement, SidebarContentProps>(
+  ({ className, children, rootLayer, pathname, linkAs = 'a', ...props }, ref) => {
+    const layerIdCounter = React.useRef(0);
+    const [imperativeStack, setImperativeStack] = React.useState<LayerEntry[]>([]);
+    const [direction, setDirection] = React.useState<1 | -1>(1);
+    const [navOverride, setNavOverride] = React.useState<{
+      routeKey: string;
+      stack: SidebarNavLayer[];
+    } | null>(null);
+
+    const isDeclarative = rootLayer != null;
+
+    const routeKey = isDeclarative ? `${rootLayer.id}:${pathname ?? ''}` : '';
+    const derivedNavStack = React.useMemo(() => {
+      if (!rootLayer) return [] as SidebarNavLayer[];
+      const path = findDeepestLayerPath(rootLayer, pathname ?? '');
+      return path.length > 0 ? path : [rootLayer];
+    }, [rootLayer, pathname]);
+
+    const navStack = isDeclarative && navOverride?.routeKey === routeKey ? navOverride.stack : derivedNavStack;
+
+    React.useEffect(() => {
+      if (!isDeclarative) return;
+      setImperativeStack([]);
+    }, [isDeclarative, routeKey]);
+
+    const pushLayer = React.useCallback((entry: SidebarLayerEntry) => {
       setDirection(1);
-      setLayerStack((prev) => [...prev, { ...entry, id: `layer-${++layerIdCounter.current}` }]);
+      setImperativeStack((prev) => [...prev, { ...entry, id: `layer-${++layerIdCounter.current}` }]);
     }, []);
+
+    const pushNavLayer = React.useCallback(
+      (layer: SidebarNavLayer) => {
+        if (!isDeclarative) return;
+        setDirection(1);
+        setNavOverride((prev) => {
+          const baseStack = prev?.routeKey === routeKey ? prev.stack : derivedNavStack;
+          return { routeKey, stack: [...baseStack, layer] };
+        });
+        setImperativeStack([]);
+      },
+      [derivedNavStack, isDeclarative, routeKey]
+    );
+
+    const imperativeStackRef = React.useRef(imperativeStack);
+    imperativeStackRef.current = imperativeStack;
 
     const popLayer = React.useCallback(() => {
       setDirection(-1);
-      setLayerStack((prev) => prev.slice(0, -1));
-    }, []);
+      if (imperativeStackRef.current.length > 0) {
+        setImperativeStack((prev) => prev.slice(0, -1));
+        return;
+      }
+      if (isDeclarative) {
+        setNavOverride((navPrev) => {
+          const baseStack = navPrev?.routeKey === routeKey ? navPrev.stack : derivedNavStack;
+          return { routeKey, stack: baseStack.length > 1 ? baseStack.slice(0, -1) : baseStack };
+        });
+      }
+    }, [derivedNavStack, isDeclarative, routeKey]);
 
-    const depth = layerStack.length;
-    const currentLayer = depth > 0 ? layerStack[depth - 1] : null;
-    const currentKey = currentLayer ? currentLayer.id : 'root';
+    const depth = isDeclarative ? Math.max(0, navStack.length - 1) + imperativeStack.length : imperativeStack.length;
 
-    const layerCtxValue = React.useMemo<LayerContextValue>(
-      () => ({ pushLayer, popLayer, depth }),
-      [pushLayer, popLayer, depth]
+    const currentImperative = imperativeStack.length > 0 ? imperativeStack[imperativeStack.length - 1] : null;
+    const currentNav = isDeclarative ? navStack[navStack.length - 1] : null;
+    const currentKey = currentImperative ? currentImperative.id : currentNav ? currentNav.id : 'root';
+
+    const layerCtxValue = React.useMemo<SidebarLayerContextValue>(
+      () => ({ pushLayer, pushNavLayer, popLayer, depth, linkAs }),
+      [pushLayer, pushNavLayer, popLayer, depth, linkAs]
     );
+
+    // `pathname` drives the active layer stack in declarative mode; a missing
+    // value would silently collapse to the root layer, so fail fast instead.
+    if (isDeclarative && pathname == null) {
+      throw new Error('SidebarContent requires a `pathname` prop when `rootLayer` is set.');
+    }
+
+    let body: React.ReactNode;
+    if (currentImperative) {
+      body = (
+        <>
+          <LayerBackButton title={currentImperative.title} onClick={popLayer} />
+          {currentImperative.children}
+        </>
+      );
+    } else if (isDeclarative && currentNav) {
+      body = (
+        <>
+          {navStack.length > 1 ? <LayerBackButton title={currentNav.title} onClick={popLayer} /> : null}
+          <DeclarativeLayerView layer={currentNav} />
+        </>
+      );
+    } else {
+      body = children;
+    }
 
     return (
       <div
@@ -466,16 +700,9 @@ const SidebarContent = React.forwardRef<HTMLDivElement, React.ComponentProps<'di
               animate="center"
               exit="exit"
               transition={layerTransition}
-              className="flex flex-col gap-1 overflow-y-auto overflow-x-hidden p-2 h-full"
+              className="scroll-fade flex h-full flex-col gap-1 overflow-x-hidden overflow-y-auto p-2 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-1.5"
             >
-              {currentLayer ? (
-                <>
-                  <LayerBackButton title={currentLayer.title} Icon={currentLayer.icon} onClick={popLayer} />
-                  {currentLayer.children}
-                </>
-              ) : (
-                children
-              )}
+              {body}
             </motion.div>
           </AnimatePresence>
         </LayerCtx.Provider>
@@ -487,30 +714,27 @@ SidebarContent.displayName = 'SidebarContent';
 
 // ─── LayerBackButton (internal) ──────────────────────────────────────────────
 
-function LayerBackButton({
-  title,
-  Icon,
-  onClick,
-}: {
-  title: string;
-  Icon?: React.ComponentType<{ className?: string }>;
-  onClick: () => void;
-}) {
+function LayerBackButton({ title, onClick }: { title: string; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-1 rounded-md px-1.5 py-1 mb-1',
-        'text-xs font-medium text-sidebar-foreground/60',
-        'hover:text-sidebar-foreground hover:bg-sidebar-accent',
-        'transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-        'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:mb-0'
-      )}
-    >
-      <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
-      {Icon && <Icon className="h-3.5 w-3.5 shrink-0 group-data-[collapsible=icon]:hidden" />}
-      <span className="truncate group-data-[collapsible=icon]:hidden">{title}</span>
-    </button>
+    <div className="w-full pb-1 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="Go back"
+        className={cn(
+          'group/back flex w-full items-center gap-2.5 rounded-lg px-3 py-2 outline-none',
+          'text-sm text-muted-foreground',
+          'transition-all duration-150 hover:bg-muted/70 hover:text-foreground',
+          'focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+          'group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!w-9',
+          'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0',
+          'group-data-[collapsible=icon]:p-0'
+        )}
+      >
+        <ChevronLeft className="size-4 shrink-0 transition-transform duration-150 group-hover/back:-translate-x-0.5 group-data-[collapsible=icon]:group-hover/back:translate-x-0" />
+        <span className="truncate font-medium group-data-[collapsible=icon]:hidden">{title}</span>
+      </button>
+    </div>
   );
 }
 
@@ -523,24 +747,175 @@ const SidebarGroup = React.forwardRef<
   }
 >(({ className, label, children, ...props }, ref) => (
   <div ref={ref} data-sidebar="group" className={cn('flex w-full min-w-0 flex-col', className)} {...props}>
-    {label && (
+    {label ? (
       <div
         data-sidebar="group-label"
-        className={cn(
-          'flex h-7 shrink-0 items-center px-2 text-[0.6875rem] font-medium tracking-wide uppercase',
-          'text-sidebar-foreground/40 select-none',
-          'group-data-[collapsible=icon]:hidden'
-        )}
+        className={cn('px-3 pb-1.5 pt-5 first:pt-3 select-none', 'group-data-[collapsible=icon]:hidden')}
       >
-        {label}
+        {typeof label === 'string' || typeof label === 'number' ? (
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">{label}</span>
+        ) : (
+          label
+        )}
       </div>
-    )}
-    <ul data-sidebar="menu" className="flex w-full min-w-0 flex-col gap-0.5">
+    ) : null}
+    <ul
+      data-sidebar="menu"
+      className="flex w-full min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1"
+    >
       {children}
     </ul>
   </div>
 ));
 SidebarGroup.displayName = 'SidebarGroup';
+
+// ─── Declarative layer rendering ─────────────────────────────────────────────
+
+function DeclarativeLayerView({ layer }: { layer: SidebarNavLayer }) {
+  return (
+    <>
+      {layer.sections.map((section) => (
+        <SidebarGroup key={section.id} label={section.title || undefined}>
+          {section.items.map((item) => (
+            <DeclarativeSidebarItem key={item.id} item={item} />
+          ))}
+        </SidebarGroup>
+      ))}
+    </>
+  );
+}
+
+function CollapsedLayerFlyout({ item }: { item: SidebarNavItem }) {
+  const layerCtx = useLayer();
+  const LinkComponent = layerCtx?.linkAs ?? 'a';
+
+  if (!item.layer) return null;
+
+  return (
+    <div className="min-w-[180px] py-2">
+      <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {item.title}
+      </div>
+      {item.layer.sections.map((section) => (
+        <div key={section.id}>
+          {section.items.map((subItem) =>
+            subItem.href ? (
+              <LinkComponent
+                key={subItem.id}
+                href={subItem.href}
+                className={cn(
+                  'flex items-center gap-2.5 px-3 py-2 text-sm transition-all duration-150',
+                  subItem.isActive
+                    ? 'bg-primary/10 font-medium text-primary hover:bg-primary/15'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
+              >
+                {renderSidebarIcon(
+                  subItem.icon,
+                  cn('size-4 shrink-0', subItem.isActive ? 'text-primary' : 'text-muted-foreground')
+                )}
+                <span className="truncate">{subItem.title}</span>
+              </LinkComponent>
+            ) : null
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DeclarativeSidebarItem({ item }: { item: SidebarNavItem }) {
+  const { isMobile, state } = useSidebar();
+  const { side, iconRail } = useSidebarLayout();
+  const layerCtx = useLayer();
+  const isCollapsed = iconRail || state === 'collapsed';
+  const LinkComponent = layerCtx?.linkAs ?? 'a';
+  const hasLayer = item.layer != null;
+  const tooltipSide = side === 'right' ? 'left' : 'right';
+
+  const handleClick = React.useCallback(
+    (e: React.MouseEvent) => {
+      if (hasLayer && item.layer && layerCtx) {
+        e.preventDefault();
+        layerCtx.pushNavLayer(item.layer);
+      }
+    },
+    [hasLayer, item.layer, layerCtx]
+  );
+
+  const iconClass = cn('size-4 shrink-0', item.isActive ? 'text-primary' : 'text-muted-foreground');
+
+  const content = (
+    <>
+      <span className="sidebar-item-label flex min-w-0 items-center gap-2.5">
+        {renderSidebarIcon(item.icon, iconClass)}
+        <span className="truncate">{item.title}</span>
+      </span>
+      {item.badge != null ? <span className={ITEM_BADGE}>{item.badge}</span> : null}
+      {hasLayer ? (
+        <ChevronRight
+          className={cn(
+            'sidebar-chevron ml-2 size-4 shrink-0',
+            item.isActive ? 'text-primary' : 'text-muted-foreground'
+          )}
+        />
+      ) : null}
+    </>
+  );
+
+  const collapsedContent = (
+    <span
+      className={cn(
+        'sidebar-item-icon flex size-4 items-center justify-center',
+        item.isActive ? 'text-primary' : 'text-muted-foreground'
+      )}
+    >
+      {renderSidebarIcon(item.icon, 'size-4 shrink-0')}
+    </span>
+  );
+
+  const buttonClasses = cn(ITEM_BASE, ITEM_COLLAPSED, item.isActive && ITEM_ACTIVE);
+
+  let button: React.ReactNode;
+  if (hasLayer) {
+    button = (
+      <button type="button" className={buttonClasses} onClick={handleClick} aria-label={item.title}>
+        {isCollapsed && !isMobile ? collapsedContent : content}
+      </button>
+    );
+  } else if (item.href) {
+    button = (
+      <LinkComponent href={item.href} className={buttonClasses} onClick={handleClick} aria-label={item.title}>
+        {isCollapsed && !isMobile ? collapsedContent : content}
+      </LinkComponent>
+    );
+  } else {
+    return null;
+  }
+
+  const indicator = item.isActive ? <span className={activeIndicatorClass(side)} /> : null;
+
+  if (isCollapsed && !isMobile) {
+    return (
+      <li className="relative flex w-full justify-center group-data-[collapsible=icon]:w-auto">
+        <Tooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent side={tooltipSide} sideOffset={8} className={hasLayer ? 'p-0' : undefined}>
+            {hasLayer ? <CollapsedLayerFlyout item={item} /> : item.title}
+          </TooltipContent>
+        </Tooltip>
+        {indicator}
+      </li>
+    );
+  }
+
+  return (
+    <li className="relative">
+      {button}
+      {indicator}
+    </li>
+  );
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -576,8 +951,10 @@ const SidebarItem = React.forwardRef<
   }
 >(({ className, icon: Icon, title, href, isActive, badge, tooltip, children, as, ...props }, ref) => {
   const { isMobile, state } = useSidebar();
+  const { side, iconRail } = useSidebarLayout();
   const layerCtx = useLayer();
   const hasChildren = React.Children.count(children) > 0;
+  const tooltipSide = side === 'right' ? 'left' : 'right';
 
   const childActive = hasChildren && hasActiveDescendant(children);
   const effectiveActive = isActive || childActive;
@@ -594,62 +971,85 @@ const SidebarItem = React.forwardRef<
 
   const content = (
     <>
-      {Icon && <Icon className="h-4 w-4 shrink-0" />}
-      <span className="truncate mt-[var(--text-correction)]">{title}</span>
-      {hasChildren && (
-        <ChevronLeft className="sidebar-chevron ml-auto h-3.5 w-3.5 shrink-0 rotate-180 text-sidebar-foreground/40" />
-      )}
-      {badge != null && (
-        <span className="sidebar-badge ml-auto flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-xs font-medium tabular-nums text-sidebar-foreground/60">
-          {badge}
-        </span>
-      )}
+      <span className="sidebar-item-label flex min-w-0 items-center gap-2.5">
+        {Icon ? (
+          <Icon className={cn('size-4 shrink-0', effectiveActive ? 'text-primary' : 'text-muted-foreground')} />
+        ) : null}
+        <span className="truncate">{title}</span>
+      </span>
+      {badge != null ? <span className={ITEM_BADGE}>{badge}</span> : null}
+      {hasChildren ? (
+        <ChevronRight
+          className={cn(
+            'sidebar-chevron ml-2 size-4 shrink-0',
+            effectiveActive ? 'text-primary' : 'text-muted-foreground'
+          )}
+        />
+      ) : null}
     </>
   );
 
+  const collapsedContent = (
+    <span
+      className={cn(
+        'sidebar-item-icon flex size-4 items-center justify-center',
+        effectiveActive ? 'text-primary' : 'text-muted-foreground'
+      )}
+    >
+      {Icon ? <Icon className="size-4 shrink-0" /> : null}
+    </span>
+  );
+
+  const isCollapsed = iconRail || state === 'collapsed';
   const buttonClasses = cn(ITEM_BASE, ITEM_COLLAPSED, effectiveActive && ITEM_ACTIVE, className);
+  const showCollapsedChrome = (iconRail || isCollapsed) && !isMobile;
 
   const button = href ? (
     (() => {
       const Comp = as || 'a';
       return (
-        <Comp href={href} className={buttonClasses} onClick={handleClick}>
-          {content}
+        <Comp href={href} className={buttonClasses} onClick={handleClick} aria-label={title}>
+          {showCollapsedChrome ? collapsedContent : content}
         </Comp>
       );
     })()
   ) : (
-    <button className={buttonClasses} onClick={handleClick}>
-      {content}
+    <button type="button" className={buttonClasses} onClick={handleClick} aria-label={title}>
+      {showCollapsedChrome ? collapsedContent : content}
     </button>
   );
 
-  const isCollapsed = state === 'collapsed';
   const effectiveTooltip = isCollapsed ? (tooltip ?? title) : tooltip;
-  const showTooltip = effectiveTooltip && !isMobile;
+  const showTooltip = Boolean(effectiveTooltip) && !isMobile;
 
-  const indicator = effectiveActive && (
-    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-primary group-data-[collapsible=icon]:hidden" />
-  );
+  const indicator = effectiveActive ? <span className={activeIndicatorClass(side)} /> : null;
 
   if (showTooltip) {
     return (
-      <li ref={ref} className="relative" {...props}>
-        {indicator}
+      <li
+        ref={ref}
+        className="relative flex w-full group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center"
+        {...props}
+      >
         <Tooltip>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" align="center">
+          <TooltipContent side={tooltipSide} sideOffset={8} align="center">
             {effectiveTooltip}
           </TooltipContent>
         </Tooltip>
+        {indicator}
       </li>
     );
   }
 
   return (
-    <li ref={ref} className="relative" {...props}>
-      {indicator}
+    <li
+      ref={ref}
+      className="relative flex w-full group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center"
+      {...props}
+    >
       {button}
+      {indicator}
     </li>
   );
 });
@@ -687,7 +1087,7 @@ const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<'main
       ref={ref}
       data-sidebar="inset"
       className={cn(
-        'flex-1 overflow-y-auto',
+        'scroll-fade flex-1 overflow-y-auto',
         isInset &&
           'my-2 rounded-xl border border-border/60 bg-background shadow-[0_1px_3px_0_rgb(0_0_0/0.04),0_1px_2px_-1px_rgb(0_0_0/0.04),0_0_0_1px_rgb(0_0_0/0.02)]',
         !isInset && 'bg-background',
@@ -713,5 +1113,6 @@ export {
   SidebarSkeleton,
   SidebarTrigger,
   useSidebar,
+  useSidebarLayer,
   useSidebarOptional,
 };

@@ -94,6 +94,7 @@ describe('OAuthClientConfig', () => {
     issuer: 'https://idp.example.com',
     authorizeUrl: 'https://idp.example.com/authorize',
     tokenUrl: 'https://idp.example.com/token',
+    deviceAuthorizeUrl: 'https://idp.example.com/device_authorization',
     scope: 'openid profile email',
     userinfoUrl: 'https://idp.example.com/userinfo',
   };

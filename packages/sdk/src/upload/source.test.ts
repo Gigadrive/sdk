@@ -87,8 +87,7 @@ describe('resolveUploadSource', () => {
       // The resolved tusFile is an unread fs.ReadStream; close it before deleting
       // the temp file so its lazy open does not race with cleanup.
       const stream = resolved?.tusFile as
-        | { on?: (e: string, cb: () => void) => void; destroy?: () => void }
-        | undefined;
+        { on?: (e: string, cb: () => void) => void; destroy?: () => void } | undefined;
       stream?.on?.('error', () => undefined);
       stream?.destroy?.();
       rmSync(dir, { recursive: true, force: true });

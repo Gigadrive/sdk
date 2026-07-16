@@ -1,5 +1,45 @@
 # gigadrive
 
+## 2.4.0
+
+### Minor Changes
+
+- Replace the CLI login's local callback server with the OAuth 2.0 Device Authorization Grant (RFC 8628). ([#311](https://github.com/Gigadrive/sdk/pull/311))
+
+  `gigadrive login` no longer starts a local HTTP server or binds an ephemeral port to catch a
+  browser redirect. Instead it requests a device/user code, opens your browser to the verification
+  page (with the code prefilled), and polls for approval — so login now works cleanly over SSH, in
+  containers, and other headless environments. When run in a TTY the browser opens automatically and
+  you can press `c` to copy the verification URL; in a non-interactive shell it prints the URL and
+  code and polls without a browser.
+
+### Patch Changes
+
+- Updated dependencies [[`3305e61`](https://github.com/Gigadrive/sdk/commit/3305e61c0f08930003abe05dc64664c1e269dbd1)]:
+  - @gigadrive/sdk@0.4.0
+
+## 2.3.0
+
+### Minor Changes
+
+- Add `gigadrive env pull` and `gigadrive setup` for local development ([#308](https://github.com/Gigadrive/sdk/pull/308))
+
+  - `gigadrive env pull [file]` pulls a project's resolved, non-sensitive environment
+    variables to a local `.env.local` (written 0600 and added to `.gitignore`).
+    `--with-credentials` additionally provisions least-privilege, application-scoped
+    API credentials (`GIGADRIVE_CLIENT_ID` / `GIGADRIVE_CLIENT_SECRET` /
+    `GIGADRIVE_API_BASE_URL`) with rotate/reuse so the local app can call the API.
+  - `gigadrive setup` wires up a fresh checkout end to end: link (if needed) → pull →
+    provision credentials.
+  - CLI login now requests the Network API capability scopes it uses.
+  - SDK: `client.applications.envVars.pull(...)` and a new `client.apiKeys` resource
+    (create / list / delete).
+
+### Patch Changes
+
+- Updated dependencies [[`b85680a`](https://github.com/Gigadrive/sdk/commit/b85680a5737a1bbc999e44e95020e2b1f883417d)]:
+  - @gigadrive/sdk@0.3.0
+
 ## 2.2.0
 
 ### Minor Changes

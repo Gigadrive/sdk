@@ -19,13 +19,31 @@ describe('OrganizationsResource', () => {
     expect(http.get).toHaveBeenCalledWith('/organizations', { query: undefined });
   });
 
-  it('should expose the aiGateway governance sub-resource', () => {
+  it('should get an organization', async () => {
+    const http = createMockHttpClient();
+    const resource = new OrganizationsResource(http);
+
+    await resource.get('org-1');
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1');
+  });
+
+  it('should create an organization', async () => {
+    const http = createMockHttpClient();
+    const resource = new OrganizationsResource(http);
+
+    await resource.create({ name: 'Acme Corp' });
+    expect(http.post).toHaveBeenCalledWith('/organizations', { name: 'Acme Corp' });
+  });
+
+  it('should expose nested organization sub-resources', () => {
     const http = createMockHttpClient();
     const resource = new OrganizationsResource(http);
 
     expect(resource.aiGateway.usage).toBeDefined();
     expect(resource.aiGateway.budgets).toBeDefined();
     expect(resource.aiGateway.policies).toBeDefined();
+    expect(resource.members).toBeDefined();
+    expect(resource.products).toBeDefined();
   });
 });
 

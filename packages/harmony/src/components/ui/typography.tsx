@@ -104,9 +104,10 @@ type ListProps = {
 export const List = forwardRef<HTMLUListElement | HTMLOListElement, ListProps>(
   ({ children, className, ordered, ...props }, ref) => {
     const Component = ordered ? 'ol' : 'ul';
+    const componentRef = ref as React.LegacyRef<HTMLUListElement> & React.LegacyRef<HTMLOListElement>;
     return (
       <Component
-        ref={ref as React.LegacyRef<HTMLUListElement> & React.LegacyRef<HTMLOListElement>}
+        ref={componentRef}
         className={cn(
           TYPOGRAPHY_STYLES.list.base,
           TYPOGRAPHY_STYLES.paragraph.base,

@@ -12,7 +12,7 @@ export const deepMerge = <T extends object>(target: T, ...partials: Partial<T>[]
   const isObject = (item: unknown): item is object => item !== null && typeof item === 'object';
 
   if (!isObject(target)) {
-    return target as T;
+    return target;
   }
 
   for (const partial of partials) {

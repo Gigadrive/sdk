@@ -38,13 +38,13 @@
   },
   "devDependencies": {
     "@effect/platform": "^0.96.0",
-    "@effect/platform-node": "^0.106.0",
-    "@types/node": "^22.18.7",
+    "@effect/platform-node": "^0.107.0",
+    "@types/node": "^24.13.3",
     "effect": "^3.19.17",
     "esbuild": "^0.28.0"
   },
   "peerDependencies": {
-    "@effect/platform": "^0.94.5",
+    "@effect/platform": "^0.94.5 || ^0.96.0",
     "effect": "^3.19.17"
   },
   "publishConfig": {

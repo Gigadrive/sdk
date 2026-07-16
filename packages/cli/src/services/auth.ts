@@ -1,43 +1,34 @@
-import { Console, Effect, Option } from 'effect';
-import * as crypto from 'node:crypto';
-import * as http from 'node:http';
+import { Console, Duration, Effect, Option, Schema } from 'effect';
+import process from 'node:process';
 import open from 'open';
-import type { OAuthClientConfig, StoredAuthData } from '../domain';
+import { DeviceAuthorizationResponse, type OAuthClientConfig, type StoredAuthData } from '../domain';
 import {
+  AuthorizationDeniedError,
+  DeviceAuthorizationError,
+  DeviceCodeExpiredError,
   LoginFlowError,
   NotAuthenticatedError,
   TokenExchangeError,
   TokenRefreshError,
   UserInfoFetchError,
 } from '../errors';
+import { writeClipboard } from '../lib/clipboard';
 import { AuthStorageService } from './auth-storage';
 import { OAuthConfigService } from './oauth-config';
 
-// Simple HTML escaping to prevent reflected XSS when rendering user input
-const escapeHtml = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/\//g, '&#x2F;');
+/** Grant type identifier for the OAuth 2.0 Device Authorization Grant (RFC 8628). */
+const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 
-// ---------------------------------------------------------------------------
-// PKCE helpers (exported for testing)
-// ---------------------------------------------------------------------------
+/** Fallback poll interval (seconds) when the provider omits `interval`. */
+const DEFAULT_POLL_INTERVAL_SECONDS = 5;
 
-/** @internal */
-export const base64URLEncode = (buffer: Buffer): string =>
-  buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-
-/** @internal */
-export const generatePKCE = () => {
-  const codeVerifier = base64URLEncode(crypto.randomBytes(64));
-  const challengeBytes = crypto.createHash('sha256').update(codeVerifier, 'utf8').digest();
-  const codeChallenge = base64URLEncode(challengeBytes);
-  return { codeVerifier, codeChallenge };
-};
+/**
+ * Per-request timeout (seconds) for the device-authorization request and each
+ * token poll. `fetch` has no default timeout, so without this a hung connection
+ * would stall the poll loop and the RFC 8628 `expires_in` deadline (which is only
+ * checked between requests) would never be enforced.
+ */
+const REQUEST_TIMEOUT_SECONDS = 30;
 
 // ---------------------------------------------------------------------------
 // AuthService
@@ -62,146 +53,219 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
       yield* Effect.log('Logged out');
     });
 
-    const exchangeCodeForTokens = (
-      config: OAuthClientConfig,
-      authCode: string,
-      redirectUri: string,
-      codeVerifier: string
-    ) =>
+    // Step 1 (RFC 8628 §3.1): request a device_code / user_code pair.
+    const requestDeviceAuthorization = (config: OAuthClientConfig) =>
       Effect.gen(function* () {
         const response = yield* Effect.tryPromise({
-          try: () =>
-            fetch(config.tokenUrl, {
+          try: (signal) =>
+            fetch(config.deviceAuthorizeUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                client_id: config.clientId,
-                code: authCode,
-                redirect_uri: redirectUri,
-                code_verifier: codeVerifier,
-              }).toString(),
+              body: new URLSearchParams({ client_id: config.clientId, scope: config.scope }).toString(),
+              signal,
             }),
           catch: (error) =>
-            new TokenExchangeError({
-              message: `Token exchange request failed: ${error instanceof Error ? error.message : String(error)}`,
+            new DeviceAuthorizationError({
+              message: `Device authorization request failed: ${error instanceof Error ? error.message : String(error)}`,
             }),
         });
 
         if (!response.ok) {
           const body = yield* Effect.tryPromise({
             try: () => response.text(),
-            catch: () => new TokenExchangeError({ message: 'Failed to read token exchange error response' }),
+            catch: () =>
+              new DeviceAuthorizationError({ message: 'Failed to read device authorization error response' }),
           });
           return yield* Effect.fail(
-            new TokenExchangeError({
-              message: `Token exchange failed: ${response.status} ${response.statusText} - ${body}`,
-              statusCode: response.status,
+            new DeviceAuthorizationError({
+              message: `Device authorization failed: ${response.status} ${response.statusText} - ${body}`,
             })
           );
         }
 
-        const tokens = yield* Effect.tryPromise({
-          try: () =>
-            response.json() as Promise<{
-              access_token: string;
-              refresh_token?: string;
-              expires_in?: number;
-            }>,
-          catch: () => new TokenExchangeError({ message: 'Failed to parse token exchange response' }),
+        const json = yield* Effect.tryPromise({
+          try: () => response.json(),
+          catch: () => new DeviceAuthorizationError({ message: 'Failed to parse device authorization response' }),
         });
 
-        return tokens;
+        return yield* Schema.decodeUnknown(DeviceAuthorizationResponse)(json).pipe(
+          Effect.mapError(
+            () => new DeviceAuthorizationError({ message: 'Invalid device authorization response schema' })
+          )
+        );
+      }).pipe(
+        Effect.timeoutFail({
+          duration: Duration.seconds(REQUEST_TIMEOUT_SECONDS),
+          onTimeout: () => new DeviceAuthorizationError({ message: 'Device authorization request timed out' }),
+        })
+      );
+
+    // A single poll of the token endpoint (RFC 8628 §3.4). Translates the RFC 8628
+    // §3.5 poll errors into control-flow values; any other failure is fatal.
+    const pollTokenOnce = (config: OAuthClientConfig, deviceCode: string) =>
+      Effect.gen(function* () {
+        const response = yield* Effect.tryPromise({
+          try: (signal) =>
+            fetch(config.tokenUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                grant_type: DEVICE_CODE_GRANT_TYPE,
+                client_id: config.clientId,
+                device_code: deviceCode,
+              }).toString(),
+              signal,
+            }),
+          catch: (error) =>
+            new TokenExchangeError({
+              message: `Token poll request failed: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+        });
+
+        if (response.ok) {
+          const tokens = yield* Effect.tryPromise({
+            try: () =>
+              response.json() as Promise<{ access_token: string; refresh_token?: string; expires_in?: number }>,
+            catch: () => new TokenExchangeError({ message: 'Failed to parse token response' }),
+          });
+          return { kind: 'tokens', tokens } as const;
+        }
+
+        const errorBody = yield* Effect.tryPromise({
+          try: () => response.json() as Promise<{ error?: string }>,
+          catch: () => new TokenExchangeError({ message: 'Failed to parse token poll error response' }),
+        });
+
+        switch (errorBody.error) {
+          case 'authorization_pending':
+            return { kind: 'pending' } as const;
+          case 'slow_down':
+            return { kind: 'slow_down' } as const;
+          case 'access_denied':
+            return { kind: 'denied' } as const;
+          case 'expired_token':
+            return { kind: 'expired' } as const;
+          default:
+            return yield* Effect.fail(
+              new TokenExchangeError({
+                message: `Token poll failed: ${response.status} ${response.statusText} - ${errorBody.error ?? 'unknown_error'}`,
+                statusCode: response.status,
+              })
+            );
+        }
       });
 
-    const startCallbackServer = (config: OAuthClientConfig, codeChallenge: string, state: string) =>
-      Effect.async<{ authCode: string; redirectUri: string }, LoginFlowError>((resume) => {
-        const server = http.createServer();
-        const redirectPath = '/callback';
+    // Step 2 (RFC 8628 §3.4–3.5): poll until approval, denial, or expiry.
+    const pollForToken = (config: OAuthClientConfig, device: DeviceAuthorizationResponse) =>
+      Effect.gen(function* () {
+        const deadline = Date.now() + device.expires_in * 1000;
+        let interval = device.interval ?? DEFAULT_POLL_INTERVAL_SECONDS;
 
-        server.listen(0, '127.0.0.1', () => {
-          const address = server.address();
-          if (!address || typeof address !== 'object') {
-            server.close(() => {
-              resume(Effect.fail(new LoginFlowError({ message: 'Failed to determine callback server address' })));
-            });
-            return;
+        while (true) {
+          yield* Effect.sleep(Duration.seconds(interval));
+
+          if (Date.now() >= deadline) {
+            return yield* Effect.fail(
+              new DeviceCodeExpiredError({
+                message: 'The login code expired before it was approved. Please run `gigadrive login` again.',
+              })
+            );
           }
 
-          const port = address.port;
-          const redirectUri = `http://127.0.0.1:${port}${redirectPath}`;
-
-          const authUrl = new URL(config.authorizeUrl);
-          authUrl.searchParams.append('client_id', config.clientId);
-          authUrl.searchParams.append('redirect_uri', redirectUri);
-          authUrl.searchParams.append('response_type', 'code');
-          authUrl.searchParams.append('scope', config.scope);
-          authUrl.searchParams.append('code_challenge', codeChallenge);
-          authUrl.searchParams.append('code_challenge_method', 'S256');
-          authUrl.searchParams.append('state', state);
-
-          Console.log(`Please open this URL in your browser to log in:\n${authUrl.toString()}\n`).pipe(Effect.runSync);
-          Console.log('Waiting for login callback...').pipe(Effect.runSync);
-          void open(authUrl.toString());
-
-          server.on('request', (req, res) => {
-            const reqUrl = new URL(req.url || '', redirectUri);
-            if (reqUrl.pathname !== '/callback') {
-              res.writeHead(404).end('Not Found');
-              return;
-            }
-
-            const authCode = reqUrl.searchParams.get('code');
-            const receivedState = reqUrl.searchParams.get('state');
-            const oauthError = reqUrl.searchParams.get('error');
-
-            res.writeHead(200, { 'Content-Type': 'text/html', Connection: 'close' });
-
-            if (oauthError) {
-              const safeOauthError = escapeHtml(oauthError);
-              res.end(`<h1>Login Failed!</h1><p>Error: ${safeOauthError}</p><p>You can close this tab.</p>`);
-              server.close();
-              resume(Effect.fail(new LoginFlowError({ message: `OAuth error: ${oauthError}` })));
-              return;
-            }
-
-            if (receivedState !== state) {
-              res.end(
-                '<h1>Login Failed!</h1><p>State mismatch. Possible CSRF attack.</p><p>You can close this tab.</p>'
+          const result = yield* pollTokenOnce(config, device.device_code).pipe(
+            // A hung poll must not stall the loop: on timeout treat it as pending so
+            // the next iteration re-checks the expiry deadline.
+            Effect.timeoutTo({
+              duration: Duration.seconds(REQUEST_TIMEOUT_SECONDS),
+              onSuccess: (value) => value,
+              onTimeout: () => ({ kind: 'pending' }) as const,
+            })
+          );
+          switch (result.kind) {
+            case 'tokens':
+              return result.tokens;
+            case 'pending':
+              continue;
+            case 'slow_down':
+              // RFC 8628 §3.5: back off by 5 seconds on slow_down.
+              interval += 5;
+              continue;
+            case 'denied':
+              return yield* Effect.fail(new AuthorizationDeniedError({ message: 'The login request was denied.' }));
+            case 'expired':
+              return yield* Effect.fail(
+                new DeviceCodeExpiredError({
+                  message: 'The login code expired before it was approved. Please run `gigadrive login` again.',
+                })
               );
-              server.close();
-              resume(Effect.fail(new LoginFlowError({ message: 'State mismatch' })));
-              return;
-            }
+          }
+        }
+      });
 
-            if (authCode) {
-              res.end('<h1>Login Successful!</h1><p>You can close this tab.</p>');
-              server.close();
-              resume(Effect.succeed({ authCode, redirectUri }));
-            } else {
-              res.end('<h1>Login Failed!</h1><p>No authorization code received.</p><p>You can close this tab.</p>');
-              server.close();
-              resume(Effect.fail(new LoginFlowError({ message: 'No authorization code received' })));
-            }
-          });
+    // Runs alongside polling in a TTY: lets the user press "c" to copy the URL
+    // (Claude-Code style) and Ctrl+C to cancel. Never completes on its own — the
+    // poll loop wins the race and interrupts this, restoring the terminal.
+    const watchCopyKey = (url: string) =>
+      Effect.async<never, LoginFlowError>((resume) => {
+        const stdin = process.stdin;
+        if (!stdin.isTTY) {
+          // Not interactive: nothing to listen for; wait to be interrupted.
+          return;
+        }
 
-          server.on('error', (err: Error) => {
-            server.close();
-            resume(Effect.fail(new LoginFlowError({ message: `Local server error: ${err.message}` })));
-          });
+        stdin.setRawMode(true);
+        stdin.resume();
+        stdin.setEncoding('utf8');
+
+        const onData = (key: string) => {
+          if (key === 'c' || key === 'C') {
+            writeClipboard(url);
+            // runSync inside a raw Node callback — a deliberate, localized exception.
+            Console.log('Copied the login URL to your clipboard.').pipe(Effect.runSync);
+          } else if (key === '\u0003') {
+            // Ctrl+C: raw mode suppresses SIGINT, so handle cancellation explicitly.
+            resume(Effect.fail(new LoginFlowError({ message: 'Login canceled.' })));
+          }
+        };
+
+        stdin.on('data', onData);
+
+        return Effect.sync(() => {
+          stdin.off('data', onData);
+          if (stdin.isTTY) stdin.setRawMode(false);
+          stdin.pause();
         });
       });
 
     const login = Effect.gen(function* () {
       yield* logout;
 
-      const { codeVerifier, codeChallenge } = generatePKCE();
-      const state = crypto.randomBytes(16).toString('hex');
-
       const config = yield* oauthConfig.getConfig;
+      const device = yield* requestDeviceAuthorization(config);
 
-      const { authCode, redirectUri } = yield* startCallbackServer(config, codeChallenge, state);
-      const tokens = yield* exchangeCodeForTokens(config, authCode, redirectUri, codeVerifier);
+      const verificationUri = device.verification_uri;
+      const verificationUriComplete = device.verification_uri_complete ?? verificationUri;
+      const interactive = process.stdin.isTTY === true;
+
+      yield* Console.log(
+        `\nTo sign in, visit:\n\n    ${verificationUri}\n\nand enter the code:\n\n    ${device.user_code}\n`
+      );
+
+      if (interactive) {
+        // Best-effort: the URL is printed above regardless. Route through the Effect
+        // runtime so a spawn/DISPLAY failure can't become an unhandled rejection.
+        yield* Effect.tryPromise(() => open(verificationUriComplete)).pipe(Effect.catchAll(() => Effect.void));
+        yield* Console.log('We tried to open your browser automatically. If it did not open, use the URL above.');
+        yield* Console.log('Press "c" to copy the URL to your clipboard, or Ctrl+C to cancel.');
+      }
+
+      yield* Console.log('\nWaiting for you to approve the login…');
+
+      const poll = pollForToken(config, device);
+      // `watchCopyKey` never completes on its own, so use `raceFirst` (settles on the
+      // first effect to finish, success or failure) — plain `race` waits for a success
+      // and would hang here when the poll fails (e.g. denied/expired).
+      const tokens = yield* interactive ? poll.pipe(Effect.raceFirst(watchCopyKey(verificationUriComplete))) : poll;
 
       if (!tokens.refresh_token) {
         return yield* Effect.fail(

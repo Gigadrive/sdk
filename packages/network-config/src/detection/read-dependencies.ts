@@ -71,7 +71,7 @@ export const readDependencies = Effect.fn('readDependencies')(function* (
   for (const key of config.depKeys) {
     const section = manifest[key];
     if (section && typeof section === 'object' && !Array.isArray(section)) {
-      for (const name of Object.keys(section as Record<string, unknown>)) {
+      for (const name of Object.keys(section)) {
         deps.add(name);
       }
     }

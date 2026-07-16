@@ -1,83 +1,11 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect, Layer, Logger, LogLevel, Option } from 'effect';
 import * as os from 'node:os';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OAuthClientConfig, StoredAuthData } from '../domain';
-import { AuthService, base64URLEncode, generatePKCE } from './auth';
+import { AuthService } from './auth';
 import { AuthStorageService } from './auth-storage';
 import { OAuthConfigService } from './oauth-config';
-
-// ---------------------------------------------------------------------------
-// Pure function tests — base64URLEncode
-// ---------------------------------------------------------------------------
-
-describe('base64URLEncode', () => {
-  it('should produce a URL-safe base64 string', () => {
-    const buffer = Buffer.from('hello world');
-    const result = base64URLEncode(buffer);
-
-    expect(result).not.toContain('+');
-    expect(result).not.toContain('/');
-    expect(result).not.toContain('=');
-  });
-
-  it('should encode an empty buffer', () => {
-    const result = base64URLEncode(Buffer.alloc(0));
-    expect(result).toBe('');
-  });
-
-  it('should encode known bytes correctly', () => {
-    // Base64 of [0xFF, 0xFF] is "//8=" -> URL-safe: "__8"
-    const buffer = Buffer.from([0xff, 0xff]);
-    const result = base64URLEncode(buffer);
-    expect(result).toBe('__8');
-  });
-
-  it('should replace + with - and / with _', () => {
-    const buffer = Buffer.from([0x3e, 0x3f]);
-    const standard = buffer.toString('base64');
-    const urlSafe = base64URLEncode(buffer);
-    expect(urlSafe).toBe(standard.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''));
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Pure function tests — generatePKCE
-// ---------------------------------------------------------------------------
-
-describe('generatePKCE', () => {
-  it('should return codeVerifier and codeChallenge', () => {
-    const { codeVerifier, codeChallenge } = generatePKCE();
-    expect(typeof codeVerifier).toBe('string');
-    expect(typeof codeChallenge).toBe('string');
-    expect(codeVerifier.length).toBeGreaterThan(0);
-    expect(codeChallenge.length).toBeGreaterThan(0);
-  });
-
-  it('should produce URL-safe strings', () => {
-    const { codeVerifier, codeChallenge } = generatePKCE();
-    for (const str of [codeVerifier, codeChallenge]) {
-      expect(str).not.toContain('+');
-      expect(str).not.toContain('/');
-      expect(str).not.toContain('=');
-    }
-  });
-
-  it('should produce unique values on each call', () => {
-    const first = generatePKCE();
-    const second = generatePKCE();
-    expect(first.codeVerifier).not.toBe(second.codeVerifier);
-    expect(first.codeChallenge).not.toBe(second.codeChallenge);
-  });
-
-  it('codeChallenge should be a SHA-256 hash of codeVerifier', () => {
-    const { codeVerifier, codeChallenge } = generatePKCE();
-    // SHA-256 = 32 bytes = 43 base64url chars without padding
-    expect(codeChallenge.length).toBe(43);
-    // codeVerifier is from 64 random bytes = 86 base64url chars
-    expect(codeVerifier.length).toBe(86);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // AuthService tests — inferUserName + getAccessToken
@@ -133,6 +61,7 @@ const makeAuthTestLayer = (stored: Option.Option<StoredAuthData>) => {
       issuer: 'https://idp.example.com',
       authorizeUrl: 'https://idp.example.com/authorize',
       tokenUrl: 'https://idp.example.com/token',
+      deviceAuthorizeUrl: 'https://idp.example.com/device_authorization',
       scope: 'openid profile email',
       userinfoUrl: 'https://idp.example.com/userinfo',
     } satisfies OAuthClientConfig),
@@ -283,5 +212,186 @@ describe('AuthService.getAccessToken', () => {
 
     const token = await Effect.runPromise(Effect.provide(AuthService.getAccessToken, testLayer));
     expect(token).toBe('stored-access-token');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// login — Device Authorization Grant (RFC 8628)
+//
+// process.stdin.isTTY is undefined under vitest, so login runs the headless
+// path (no browser open, no keypress listener). We mock global fetch to drive
+// the device-authorization request and the token poll, using interval=0 so the
+// poll loop does not wait between attempts.
+// ---------------------------------------------------------------------------
+
+const jsonResponse = (status: number, body: unknown): Response =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? 'OK' : 'Bad Request',
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
+  }) as unknown as Response;
+
+const deviceAuthorizationBody = {
+  device_code: 'dev-code-abc',
+  user_code: 'WXYZ-1234',
+  verification_uri: 'https://idp.example.com/device',
+  verification_uri_complete: 'https://idp.example.com/device?user_code=WXYZ-1234',
+  expires_in: 300,
+  interval: 0,
+};
+
+const discoveryBody = {
+  issuer: 'https://idp.example.com',
+  authorization_endpoint: 'https://idp.example.com/authorize',
+  token_endpoint: 'https://idp.example.com/token',
+  userinfo_endpoint: 'https://idp.example.com/userinfo',
+  device_authorization_endpoint: 'https://idp.example.com/device_authorization',
+};
+
+/**
+ * Mocks global fetch: OIDC discovery returns the endpoints (the real
+ * OAuthConfigService baked into AuthService.Default resolves through it),
+ * device_authorization returns the code pair, and token returns the queued
+ * responses in order.
+ */
+const stubFetch = (tokenResponses: Response[]) => {
+  let tokenCall = 0;
+  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.includes('/.well-known/openid-configuration')) {
+      return Promise.resolve(jsonResponse(200, discoveryBody));
+    }
+    if (url.endsWith('/device_authorization')) {
+      return Promise.resolve(jsonResponse(200, deviceAuthorizationBody));
+    }
+    if (url.endsWith('/token')) {
+      const response = tokenResponses[Math.min(tokenCall, tokenResponses.length - 1)];
+      tokenCall += 1;
+      return Promise.resolve(response);
+    }
+    return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+};
+
+describe('AuthService.login (device flow)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('polls through authorization_pending and stores tokens on approval', async () => {
+    const fetchMock = stubFetch([
+      jsonResponse(400, { error: 'authorization_pending' }),
+      jsonResponse(200, {
+        access_token: 'device-access-token',
+        refresh_token: 'device-refresh-token',
+        expires_in: 3600,
+      }),
+    ]);
+
+    const testLayer = makeAuthTestLayer(Option.none());
+
+    const token = await Effect.runPromise(
+      Effect.provide(
+        Effect.gen(function* () {
+          const auth = yield* AuthService;
+          yield* auth.login;
+          return yield* auth.getAccessToken;
+        }),
+        testLayer
+      )
+    );
+
+    expect(token).toBe('device-access-token');
+    const deviceCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/device_authorization'));
+    expect(deviceCall).toBeDefined();
+    // 2 token polls: authorization_pending, then success.
+    const tokenCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/token'));
+    expect(tokenCalls).toHaveLength(2);
+  });
+
+  it('fails with AuthorizationDeniedError when the user denies', async () => {
+    stubFetch([jsonResponse(400, { error: 'access_denied' })]);
+
+    const testLayer = makeAuthTestLayer(Option.none());
+
+    const result = await Effect.runPromise(
+      Effect.provide(AuthService.login, testLayer).pipe(
+        Effect.catchTag('AuthorizationDeniedError', (err) =>
+          Effect.succeed({ _tag: 'denied' as const, message: err.message })
+        )
+      )
+    );
+
+    expect(result).toMatchObject({ _tag: 'denied' });
+  });
+
+  it('fails with DeviceCodeExpiredError when the code expires', async () => {
+    stubFetch([jsonResponse(400, { error: 'expired_token' })]);
+
+    const testLayer = makeAuthTestLayer(Option.none());
+
+    const result = await Effect.runPromise(
+      Effect.provide(AuthService.login, testLayer).pipe(
+        Effect.catchTag('DeviceCodeExpiredError', (err) =>
+          Effect.succeed({ _tag: 'expired' as const, message: err.message })
+        )
+      )
+    );
+
+    expect(result).toMatchObject({ _tag: 'expired' });
+  });
+
+  it('fails with TokenExchangeError when no refresh token is returned', async () => {
+    stubFetch([jsonResponse(200, { access_token: 'device-access-token', expires_in: 3600 })]);
+
+    const testLayer = makeAuthTestLayer(Option.none());
+
+    const result = await Effect.runPromise(
+      Effect.provide(AuthService.login, testLayer).pipe(
+        Effect.catchTag('TokenExchangeError', (err) =>
+          Effect.succeed({ _tag: 'no-refresh' as const, message: err.message })
+        )
+      )
+    );
+
+    expect(result).toMatchObject({ _tag: 'no-refresh' });
+  });
+
+  // Regression for the interactive race: `watchCopyKey` never completes on its own,
+  // so plain `Effect.race` (which waits for a *success*) would hang when the poll
+  // fails. `raceFirst` must let the denial settle. Forces the TTY path so the
+  // copy-key watcher participates; the test hanging here would mean the bug is back.
+  it('settles (does not hang) in the interactive TTY path when the request is denied', async () => {
+    stubFetch([jsonResponse(400, { error: 'access_denied' })]);
+
+    const stdin = process.stdin as unknown as Record<string, unknown>;
+    const saved = {
+      isTTY: stdin.isTTY,
+      setRawMode: stdin.setRawMode,
+      resume: stdin.resume,
+      setEncoding: stdin.setEncoding,
+      pause: stdin.pause,
+    };
+    stdin.isTTY = true;
+    stdin.setRawMode = () => process.stdin;
+    stdin.resume = () => process.stdin;
+    stdin.setEncoding = () => process.stdin;
+    stdin.pause = () => process.stdin;
+
+    try {
+      const testLayer = makeAuthTestLayer(Option.none());
+      const result = await Effect.runPromise(
+        Effect.provide(AuthService.login, testLayer).pipe(
+          Effect.catchTag('AuthorizationDeniedError', () => Effect.succeed({ _tag: 'denied' as const }))
+        )
+      );
+      expect(result).toMatchObject({ _tag: 'denied' });
+    } finally {
+      Object.assign(stdin, saved);
+    }
   });
 });

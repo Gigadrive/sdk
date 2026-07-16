@@ -9,6 +9,65 @@
 @tailwind components;
 @tailwind utilities;
 
+/* shadcn scroll-fade — @property + keyframes (utilities via scrollFadePlugin) */
+@property --scroll-fade-t {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-b {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-s {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-e {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-mask {
+  syntax: '*';
+  inherits: false;
+}
+
+@keyframes scroll-fade-reveal-t {
+  from {
+    --scroll-fade-t: 0px;
+  }
+  to {
+    --scroll-fade-t: var(--_scroll-fade-size-t, var(--scroll-fade-size, min(12%, 2.5rem)));
+  }
+}
+@keyframes scroll-fade-reveal-b {
+  from {
+    --scroll-fade-b: var(--_scroll-fade-size-b, var(--scroll-fade-size, min(12%, 2.5rem)));
+  }
+  to {
+    --scroll-fade-b: 0px;
+  }
+}
+@keyframes scroll-fade-reveal-s {
+  from {
+    --scroll-fade-s: 0px;
+  }
+  to {
+    --scroll-fade-s: var(--_scroll-fade-size-s, var(--scroll-fade-size, min(12%, 2.5rem)));
+  }
+}
+@keyframes scroll-fade-reveal-e {
+  from {
+    --scroll-fade-e: var(--_scroll-fade-size-e, var(--scroll-fade-size, min(12%, 2.5rem)));
+  }
+  to {
+    --scroll-fade-e: 0px;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

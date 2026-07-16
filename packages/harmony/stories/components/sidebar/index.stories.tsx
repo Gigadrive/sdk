@@ -2,8 +2,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import {
   Bell,
   Bookmark,
+  Bot,
   CreditCard,
   FileText,
+  GitBranch,
   Globe,
   Heart,
   Home,
@@ -20,8 +22,10 @@ import {
   Smartphone,
   User,
   Users,
+  Variable,
   Zap,
 } from 'lucide-react';
+import * as React from 'react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -39,6 +43,7 @@ import {
   SidebarSkeleton,
   SidebarTrigger,
   useSidebar,
+  type SidebarNavLayer,
 } from '@/components/ui/sidebar';
 
 const meta = {
@@ -194,16 +199,259 @@ export const WithLayers: Story = {
   render: () => <WithLayersDemo />,
 };
 
+// ─── DeclarativeLayers (pathname-driven) ─────────────────────────────────────
+
+function buildDeclarativeRoot(pathname: string): SidebarNavLayer {
+  const settingsLayer: SidebarNavLayer = {
+    id: 'settings',
+    title: 'Settings',
+    icon: Settings,
+    sections: [
+      {
+        id: 'settings-main',
+        title: '',
+        items: [
+          {
+            id: 'general',
+            title: 'General',
+            icon: Settings,
+            href: '/app/settings',
+            isActive: pathname === '/app/settings',
+          },
+          {
+            id: 'domains',
+            title: 'Domains',
+            icon: Globe,
+            href: '/app/settings/domains',
+            isActive: pathname.startsWith('/app/settings/domains'),
+          },
+          {
+            id: 'variables',
+            title: 'Variables',
+            icon: Variable,
+            href: '/app/settings/variables',
+            isActive: pathname.startsWith('/app/settings/variables'),
+          },
+          {
+            id: 'git',
+            title: 'Git',
+            icon: GitBranch,
+            href: '/app/settings/git',
+            isActive: pathname.startsWith('/app/settings/git'),
+          },
+        ],
+      },
+    ],
+  };
+
+  const securityLayer: SidebarNavLayer = {
+    id: 'security',
+    title: 'Security',
+    icon: Shield,
+    sections: [
+      {
+        id: 'security-main',
+        title: '',
+        items: [
+          {
+            id: 'password',
+            title: 'Password',
+            icon: Lock,
+            href: '/app/security/password',
+            isActive: pathname.startsWith('/app/security/password'),
+          },
+          {
+            id: 'api-keys',
+            title: 'API Keys',
+            icon: Key,
+            href: '/app/security/api-keys',
+            isActive: pathname.startsWith('/app/security/api-keys'),
+          },
+        ],
+      },
+    ],
+  };
+
+  return {
+    id: 'application',
+    title: 'Application',
+    sections: [
+      {
+        id: 'main',
+        title: '',
+        items: [
+          {
+            id: 'overview',
+            title: 'Overview',
+            icon: Home,
+            href: '/app',
+            isActive: pathname === '/app',
+          },
+          {
+            id: 'deployments',
+            title: 'Deployments',
+            icon: FileText,
+            href: '/app/deployments',
+            isActive: pathname.startsWith('/app/deployments'),
+            badge: 3,
+          },
+        ],
+      },
+      {
+        id: 'ai',
+        title: 'AI',
+        items: [
+          {
+            id: 'ai-gateway',
+            title: 'AI Gateway',
+            icon: Bot,
+            href: '/app/ai-gateway',
+            isActive: pathname.startsWith('/app/ai-gateway'),
+          },
+        ],
+      },
+      {
+        id: 'config',
+        title: 'Configuration',
+        items: [
+          {
+            id: 'settings',
+            title: 'Settings',
+            icon: Settings,
+            layer: settingsLayer,
+            isActive: pathname.startsWith('/app/settings'),
+            matchPaths: ['/app/settings'],
+          },
+          {
+            id: 'security',
+            title: 'Security',
+            icon: Shield,
+            layer: securityLayer,
+            isActive: pathname.startsWith('/app/security'),
+            matchPaths: ['/app/security'],
+          },
+          {
+            id: 'billing',
+            title: 'Billing',
+            icon: CreditCard,
+            href: '/app/billing',
+            isActive: pathname.startsWith('/app/billing'),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function DeclarativeDemoLink({
+  href,
+  onNavigate,
+  ...props
+}: React.ComponentProps<'a'> & { onNavigate: (href: string) => void }) {
+  return (
+    <a
+      href={href}
+      {...props}
+      onClick={(event) => {
+        event.preventDefault();
+        if (typeof href === 'string') onNavigate(href);
+        props.onClick?.(event);
+      }}
+    />
+  );
+}
+
+function DeclarativeLayersDemo({ initialPath = '/app' }: { initialPath?: string }) {
+  const [pathname, setPathname] = React.useState(initialPath);
+  const rootLayer = React.useMemo(() => buildDeclarativeRoot(pathname), [pathname]);
+  const DemoLink = React.useMemo(
+    () =>
+      function DemoLink(props: React.ComponentProps<'a'>) {
+        return <DeclarativeDemoLink {...props} onNavigate={setPathname} />;
+      },
+    []
+  );
+
+  return (
+    <SidebarProvider>
+      <div className="flex h-screen w-full">
+        <Sidebar>
+          <SidebarHeader>
+            <div className="flex items-center gap-2.5 px-2 py-1">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
+                <Zap className="h-4 w-4 text-background" />
+              </div>
+              <span className="text-sm font-semibold tracking-tight">Acme Inc</span>
+            </div>
+          </SidebarHeader>
+          <SidebarContent rootLayer={rootLayer} pathname={pathname} linkAs={DemoLink} />
+          <SidebarFooter>
+            <div className="flex items-center gap-2.5 px-2 py-1">
+              <Avatar className="h-7 w-7">
+                <AvatarFallback className="text-[0.625rem]">JD</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium leading-none">Jane Doe</span>
+                <span className="text-[0.6875rem] text-muted-foreground">jane@acme.com</span>
+              </div>
+            </div>
+          </SidebarFooter>
+        </Sidebar>
+        <SidebarInset>
+          <div className="p-8">
+            <h1 className="text-2xl font-bold tracking-tight">Declarative Layers</h1>
+            <p className="mt-1.5 text-muted-foreground">
+              Pass a <code className="rounded bg-muted px-1.5 py-0.5 text-sm">rootLayer</code> tree and{' '}
+              <code className="rounded bg-muted px-1.5 py-0.5 text-sm">pathname</code> to drive nested navigation — the
+              same pattern used by the Network console.
+            </p>
+            <p className="mt-4 text-sm text-muted-foreground">
+              Current path: <code className="rounded bg-muted px-1.5 py-0.5">{pathname}</code>
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {[
+                '/app',
+                '/app/deployments',
+                '/app/settings',
+                '/app/settings/variables',
+                '/app/security/api-keys',
+                '/app/billing',
+              ].map((path) => (
+                <Button
+                  key={path}
+                  size="sm"
+                  variant={pathname === path ? 'default' : 'outline'}
+                  onClick={() => setPathname(path)}
+                >
+                  {path}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+export const DeclarativeLayers: Story = {
+  render: () => <DeclarativeLayersDemo />,
+};
+
+export const DeclarativeNestedSettings: Story = {
+  render: () => <DeclarativeLayersDemo initialPath="/app/settings/variables" />,
+};
+
 // ─── CollapsibleIcon ─────────────────────────────────────────────────────────
 
 function CollapsibleIconContent() {
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, state } = useSidebar();
 
   return (
     <div className="flex h-screen w-full">
       <Sidebar collapsible="icon">
         <SidebarHeader>
-          <div className="flex items-center gap-2.5 px-2 py-1">
+          <div className="flex items-center gap-2.5 px-2 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground">
               <Zap className="h-4 w-4 text-background" />
             </div>
@@ -235,7 +483,7 @@ function CollapsibleIconContent() {
       </Sidebar>
       <main className="flex-1 p-8 bg-background">
         <Button onClick={toggleSidebar} variant="outline" size="sm" className="mb-6">
-          Toggle Sidebar
+          {state === 'collapsed' ? 'Expand Sidebar' : 'Collapse Sidebar'}
         </Button>
         <h1 className="text-2xl font-bold tracking-tight">Icon Collapse</h1>
         <p className="mt-1.5 text-muted-foreground">
@@ -248,7 +496,7 @@ function CollapsibleIconContent() {
 
 function CollapsibleIconDemo() {
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <CollapsibleIconContent />
     </SidebarProvider>
   );
@@ -540,11 +788,7 @@ function DualSidebarDemo() {
             Full navigation sidebar on the left, icon-only toolbar sidebar on the right.
           </p>
         </main>
-        <Sidebar
-          side="right"
-          collapsible="none"
-          className="w-[var(--sidebar-width-icon)] border-l border-sidebar-border"
-        >
+        <Sidebar side="right" collapsible="none" iconRail className="border-l border-sidebar-border">
           <SidebarContent>
             <SidebarGroup>
               <SidebarItem icon={Search} title="Search" href="#" tooltip="Search" />
@@ -649,11 +893,7 @@ function AppLayoutDemo() {
           </div>
         </main>
 
-        <Sidebar
-          side="right"
-          collapsible="none"
-          className="w-[var(--sidebar-width-icon)] border-l border-sidebar-border"
-        >
+        <Sidebar side="right" collapsible="none" iconRail className="border-l border-sidebar-border">
           <SidebarContent>
             <SidebarGroup>
               <SidebarItem icon={Search} title="Search" href="#" tooltip="Search" />
@@ -808,7 +1048,7 @@ function InsetLayoutDemo() {
           </div>
         </SidebarInset>
 
-        <Sidebar side="right" collapsible="none" className="w-[var(--sidebar-width-icon)]">
+        <Sidebar side="right" collapsible="none" iconRail>
           <SidebarContent>
             <SidebarGroup>
               <SidebarItem icon={Search} title="Search" href="#" tooltip="Search" />
