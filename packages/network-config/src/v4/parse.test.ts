@@ -4,7 +4,7 @@ import addFormats from 'ajv-formats';
 import { Effect } from 'effect';
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import { parseConfig } from '../parse-config';
 import { AVAILABLE_REGIONS } from '../regions';
 import { NetworkConfigLive } from '../services';
@@ -87,7 +87,7 @@ describe('parse config v4', function () {
     });
   });
 
-  test('accepts invocation durations up to eight hours and rejects larger values', async function () {
+  it('accepts invocation durations up to eight hours and rejects larger values', function () {
     const schemaFile = fs.readFileSync(path.join(__dirname, 'schema.json'), 'utf8');
     const schema = JSON.parse(schemaFile);
     const ajv = new Ajv({ allErrors: true });
