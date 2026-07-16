@@ -35,10 +35,8 @@ export class StickySessionsResource extends BaseResource {
    */
   async createUrl(input: CreateStickySessionUrlInput): Promise<CreateStickySessionUrlResult> {
     return this.httpClient.post('/sticky-sessions/urls', {
-      body: {
-        ...input,
-        method: input.method ?? 'GET',
-      },
+      ...input,
+      method: input.method ?? 'GET',
     });
   }
 }

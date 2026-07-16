@@ -17,7 +17,9 @@ describe('StickySessionsResource', () => {
       expiresAt: '2026-01-01T00:00:00Z',
     });
     expect(post).toHaveBeenCalledWith('/sticky-sessions/urls', {
-      body: { key: 'game-1', endpoint: '/socket', method: 'GET' },
+      key: 'game-1',
+      endpoint: '/socket',
+      method: 'GET',
     });
   });
 
@@ -27,7 +29,10 @@ describe('StickySessionsResource', () => {
     await resource.createUrl({ key: 'tenant', endpoint: '/api?view=1', method: 'POST', expiresInSeconds: 60 });
 
     expect(post).toHaveBeenCalledWith('/sticky-sessions/urls', {
-      body: { key: 'tenant', endpoint: '/api?view=1', method: 'POST', expiresInSeconds: 60 },
+      key: 'tenant',
+      endpoint: '/api?view=1',
+      method: 'POST',
+      expiresInSeconds: 60,
     });
   });
 });
