@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.2.0
+
+### Minor Changes
+
+- Allow function invocations to run for up to eight hours and clarify that `max_duration` applies uniformly to HTTP requests, response streams, and WebSocket connections. ([#324](https://github.com/Gigadrive/sdk/pull/324))
+
 ## 3.1.2
 
 ### Patch Changes
