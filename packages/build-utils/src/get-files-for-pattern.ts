@@ -14,15 +14,16 @@ export const getFilesForPattern = async (
 ): Promise<string[]> => {
   const files: string[] = [];
   const filesInFolder = await readdir(projectFolder, { recursive: true });
-
-  // console.log('filesInFolder', filesInFolder);
+  const exactFiles = new Set(filesInFolder.filter((file): file is string => typeof file === 'string'));
 
   let regex: RegExp | null = null;
 
-  try {
-    regex = new RegExp(pattern);
-  } catch {
-    // ignored
+  if (!exactFiles.has(pattern)) {
+    try {
+      regex = new RegExp(`^(?:${pattern})$`);
+    } catch {
+      // ignored
+    }
   }
 
   const finalExclusions = Array.isArray(excludeFiles) ? excludeFiles : [excludeFiles];
@@ -38,11 +39,15 @@ export const getFilesForPattern = async (
           return true;
         }
 
-        try {
-          return new RegExp(excludeFile).test(file);
-        } catch {
-          return false;
+        if (!exactFiles.has(excludeFile)) {
+          try {
+            return new RegExp(`^(?:${excludeFile})$`).test(file);
+          } catch {
+            return false;
+          }
         }
+
+        return false;
       })
     ) {
       continue;
