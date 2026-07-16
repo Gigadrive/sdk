@@ -27,6 +27,13 @@ describe('getFilesForPattern', () => {
     expect(result).toEqual(['file2.js', 'folder/file3.js']);
   });
 
+  test('does not let regex fallback turn a literal entrypoint into a prefix match', async () => {
+    vi.mocked(readdir).mockReturnValue(['dist/src/server.js', 'dist/src/server.js.map', 'dist/src/server-js'] as any);
+
+    const result = await getFilesForPattern('dist/src/server.js', '/project');
+    expect(result).toEqual(['dist/src/server.js']);
+  });
+
   test('with exclude files (string)', async () => {
     vi.mocked(readdir).mockReturnValue(['file1.txt', 'file2.js', 'folder/file3.js'] as any);
 
@@ -46,6 +53,13 @@ describe('getFilesForPattern', () => {
 
     const result = await getFilesForPattern('**/*.js', '/project', '.*excluded.*');
     expect(result).toEqual(['file2.js', 'folder/file3.js']);
+  });
+
+  test('does not let a literal exclusion hide files that merely share its prefix', async () => {
+    vi.mocked(readdir).mockReturnValue(['server.js', 'server.js.map'] as any);
+
+    const result = await getFilesForPattern('server.js*', '/project', 'server.js');
+    expect(result).toEqual(['server.js.map']);
   });
 
   test('with no matches', async () => {
