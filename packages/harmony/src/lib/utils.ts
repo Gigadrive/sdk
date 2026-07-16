@@ -21,7 +21,7 @@ export function wrapTextNodes(
   children: React.ReactNode | string | number | null | undefined,
   className: string = 'mt-[var(--text-correction)]'
 ): React.ReactNode {
-  return React.Children.map(children, (child) => {
+  const wrapped = React.Children.map(children, (child) => {
     if (typeof child === 'string' || typeof child === 'number') {
       return React.createElement('span', { className }, child);
     }
@@ -42,6 +42,12 @@ export function wrapTextNodes(
 
     return child;
   });
+
+  // React.Children.map always returns an array, but Radix Slot (used by
+  // `asChild` consumers like Button) renders null unless it receives a single
+  // valid element — an array of one is not a valid element. Unwrap lone
+  // children so `asChild` keeps working; rendering is otherwise identical.
+  return Array.isArray(wrapped) && wrapped.length === 1 ? wrapped[0] : wrapped;
 }
 
 /**
