@@ -1,5 +1,11 @@
 # @gigadrive/build-utils
 
+## 1.0.2
+
+### Patch Changes
+
+- Anchor regular-expression fallback when matching function entrypoints and exclusions so literal files do not also select longer filenames such as source maps. ([#322](https://github.com/Gigadrive/sdk/pull/322))
+
 ## 1.0.1
 
 ### Patch Changes
