@@ -16,8 +16,6 @@ export const getFilesForPattern = async (
   const filesInFolder = await readdir(projectFolder, { recursive: true });
   const exactFiles = new Set(filesInFolder.filter((file): file is string => typeof file === 'string'));
 
-  // console.log('filesInFolder', filesInFolder);
-
   let regex: RegExp | null = null;
 
   if (!exactFiles.has(pattern)) {
