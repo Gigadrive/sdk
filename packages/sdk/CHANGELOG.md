@@ -1,5 +1,12 @@
 # @gigadrive/sdk
 
+## 0.5.0
+
+### Minor Changes
+
+- Add the zero-configuration `stickySessions.createUrl` API for routing HTTP, ([#320](https://github.com/Gigadrive/sdk/pull/320))
+  streaming, and WebSocket traffic with the same key to one MicroVM instance.
+
 ## 0.4.0
 
 ### Minor Changes
