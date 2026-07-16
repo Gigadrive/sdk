@@ -87,6 +87,36 @@ describe('parse config v4', function () {
     });
   });
 
+  test('accepts invocation durations up to eight hours and rejects larger values', async function () {
+    const schemaFile = fs.readFileSync(path.join(__dirname, 'schema.json'), 'utf8');
+    const schema = JSON.parse(schemaFile);
+    const ajv = new Ajv({ allErrors: true });
+    addFormats(ajv);
+    const validate = ajv.compile(schema);
+    const config = {
+      version: 4,
+      functions: {
+        'src/server.ts': {
+          max_duration: 28_800,
+        },
+      },
+    };
+
+    expect(validate(config)).toBe(true);
+    expect(
+      validate({
+        ...config,
+        functions: { 'src/server.ts': { max_duration: 28_801 } },
+      })
+    ).toBe(false);
+    expect(
+      validate({
+        ...config,
+        functions: { 'src/server.ts': { max_duration: 0 } },
+      })
+    ).toBe(false);
+  });
+
   test('getFunctionSettings', async () => {
     const exampleFile = path.join(__dirname, 'example.yaml');
     const config = await readFixture(exampleFile);

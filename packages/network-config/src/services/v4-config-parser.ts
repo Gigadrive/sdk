@@ -4,10 +4,11 @@ import { Effect } from 'effect';
 import { minimatch } from 'minimatch';
 import safeRegex from 'safe-regex2';
 import { FunctionConfigError } from '../errors';
-import type {
-  NormalizedConfigEntrypoint,
-  NormalizedConfigRoute,
-  NormalizedConfigRouteHandler,
+import {
+  DEFAULT_FUNCTION_DURATION_SECONDS,
+  type NormalizedConfigEntrypoint,
+  type NormalizedConfigRoute,
+  type NormalizedConfigRouteHandler,
 } from '../normalized-config';
 import { AVAILABLE_REGIONS, type Region } from '../regions';
 import type { ConfigV4, ConfigV4FunctionSettings } from '../v4';
@@ -24,7 +25,7 @@ const DISALLOWED_ASSET_EXTENSIONS = ['.htaccess', '.htpasswd'];
 const DEFAULT_FUNCTION_SETTINGS: Required<Pick<ConfigV4FunctionSettings, 'memory' | 'max_duration'>> &
   Pick<ConfigV4FunctionSettings, 'schedule' | 'symlinks' | 'excludeFiles' | 'includeFiles'> = {
   memory: 128,
-  max_duration: 30,
+  max_duration: DEFAULT_FUNCTION_DURATION_SECONDS,
   schedule: undefined,
   symlinks: undefined,
   excludeFiles: undefined,
@@ -185,7 +186,7 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
         path: file,
         runtime,
         memory: settings.memory ?? 128,
-        maxDuration: settings.max_duration ?? 30,
+        maxDuration: settings.max_duration ?? DEFAULT_FUNCTION_DURATION_SECONDS,
         schedule: func.schedule,
         symlinks: func.symlinks,
         streaming,

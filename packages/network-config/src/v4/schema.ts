@@ -1,3 +1,5 @@
+import { MAX_FUNCTION_DURATION_SECONDS } from '../normalized-config';
+
 export const schema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   title: 'Config V4',
@@ -57,8 +59,8 @@ export const schema = {
           max_duration: {
             type: 'number',
             description:
-              'The max duration in seconds for the function after which it will be terminated. Defaults to 30.',
-            maximum: 900,
+              'The maximum lifetime in seconds of one HTTP request, response stream, or WebSocket connection. Defaults to 30. The reusable execution environment is not terminated with the invocation.',
+            maximum: MAX_FUNCTION_DURATION_SECONDS,
             minimum: 1,
           },
           runtime: {

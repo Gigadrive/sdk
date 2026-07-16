@@ -146,11 +146,23 @@ export interface NormalizedConfigServicePostgres extends NormalizedConfigService
   region?: NeonAWSRegion;
 }
 
+/** Default maximum lifetime of one function invocation, in seconds. */
+export const DEFAULT_FUNCTION_DURATION_SECONDS = 30;
+
+/** Maximum configurable lifetime of one function invocation, in seconds (eight hours). */
+export const MAX_FUNCTION_DURATION_SECONDS = 28_800;
+
 export interface NormalizedConfigEntrypoint {
   displayName?: string;
   path: string;
   runtime: Runtime;
   memory: number;
+  /**
+   * Maximum lifetime of one HTTP request, response stream, or WebSocket connection, in seconds.
+   *
+   * The limit applies to an invocation, not to the reusable compute environment that happens to
+   * serve it. The platform may suspend or reuse that environment after all invocations finish.
+   */
   maxDuration: number;
   schedule?: string;
   symlinks?: Record<string, string>;
