@@ -114,5 +114,8 @@ export type {
   UploadByteSource,
 } from './storage-upload-sessions';
 
+export { StickySessionsResource } from './sticky-sessions';
+export type { CreateStickySessionUrlInput, CreateStickySessionUrlResult } from './sticky-sessions';
+
 export type { NodeReadableLike, UploadData } from '../upload/source';
 export type { RunUploadOptions, UploadUrlStorage } from '../upload/transport';
