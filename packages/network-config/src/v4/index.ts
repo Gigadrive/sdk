@@ -163,7 +163,11 @@ export interface ConfigV4FunctionSettings {
    */
   memory?: number;
   /**
-   * The maximum duration of the function in seconds. May not be higher than 15 minutes.
+   * Maximum lifetime of one HTTP request, response stream, or WebSocket connection, in seconds.
+   * Defaults to 30 seconds and may not be higher than eight hours (28,800 seconds).
+   *
+   * This is an invocation limit. It does not control how long the platform retains or reuses the
+   * underlying execution environment after the invocation finishes.
    */
   max_duration?: number;
   /**

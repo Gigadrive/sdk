@@ -4,7 +4,7 @@ import addFormats from 'ajv-formats';
 import { Effect } from 'effect';
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import { parseConfig } from '../parse-config';
 import { AVAILABLE_REGIONS } from '../regions';
 import { NetworkConfigLive } from '../services';
@@ -85,6 +85,36 @@ describe('parse config v4', function () {
       regions: AVAILABLE_REGIONS,
       commands: ['bun install'],
     });
+  });
+
+  it('accepts invocation durations up to eight hours and rejects larger values', function () {
+    const schemaFile = fs.readFileSync(path.join(__dirname, 'schema.json'), 'utf8');
+    const schema = JSON.parse(schemaFile);
+    const ajv = new Ajv({ allErrors: true });
+    addFormats(ajv);
+    const validate = ajv.compile(schema);
+    const config = {
+      version: 4,
+      functions: {
+        'src/server.ts': {
+          max_duration: 28_800,
+        },
+      },
+    };
+
+    expect(validate(config)).toBe(true);
+    expect(
+      validate({
+        ...config,
+        functions: { 'src/server.ts': { max_duration: 28_801 } },
+      })
+    ).toBe(false);
+    expect(
+      validate({
+        ...config,
+        functions: { 'src/server.ts': { max_duration: 0 } },
+      })
+    ).toBe(false);
   });
 
   test('getFunctionSettings', async () => {
