@@ -69,6 +69,29 @@ variables (constructor values take precedence):
 const client = new GigadriveClient({ bearerToken: 'eyJ...', fetch: myFetch });
 ```
 
+## Sticky sessions
+
+Deployed MicroVM functions can mint a routing URL that keeps the same opaque
+application key on one function instance. Workload credentials are injected by
+the platform, so no SDK configuration is required inside a deployment:
+
+```ts
+import { GigadriveClient } from '@gigadrive/sdk';
+
+const gigadrive = new GigadriveClient();
+const { url, expiresAt } = await gigadrive.stickySessions.createUrl({
+  key: gameId,
+  endpoint: '/socket',
+  expiresInSeconds: 14_400,
+});
+
+const socket = new WebSocket(url);
+```
+
+The URL is routing authority, not user authentication. Applications still own
+authorization and room membership. State remains in one MicroVM's memory, URLs
+expire, and deploys do not migrate that in-memory state to a new version.
+
 ## File uploads
 
 The high-level `upload()` computes the required SHA-256 checksum, infers the

@@ -6,6 +6,7 @@ import { ApiKeysResource } from './resources/api-keys';
 import { ApplicationsResource } from './resources/applications';
 import { DeploymentsResource } from './resources/deployments';
 import { OrganizationsResource } from './resources/organizations';
+import { StickySessionsResource } from './resources/sticky-sessions';
 
 const DEFAULT_BASE_URL = 'https://api.gigadrive.network';
 
@@ -169,6 +170,8 @@ export class GigadriveClient {
   readonly aiGateway: AiGatewayResource;
   /** Application-scoped API key management (create, list, revoke). */
   readonly apiKeys: ApiKeysResource;
+  /** Signed URLs that keep related requests on one MicroVM instance. */
+  readonly stickySessions: StickySessionsResource;
 
   constructor(config: GigadriveClientConfig = {}) {
     const baseUrl = config.baseUrl ?? readEnv('GIGADRIVE_API_BASE_URL') ?? DEFAULT_BASE_URL;
@@ -185,5 +188,6 @@ export class GigadriveClient {
     this.deployments = new DeploymentsResource(httpClient);
     this.aiGateway = new AiGatewayResource(httpClient);
     this.apiKeys = new ApiKeysResource(httpClient);
+    this.stickySessions = new StickySessionsResource(httpClient);
   }
 }
