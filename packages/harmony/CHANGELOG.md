@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 4.2.2
+
+### Patch Changes
+
+- Render `TooltipContent` inside a Radix portal so tooltips no longer inherit text alignment from their trigger's ancestors or get clipped by `overflow` containers. This matches every other floating Harmony component (popover, dropdown, select, dialog). ([#326](https://github.com/Gigadrive/sdk/pull/326))
+
 ## 4.2.1
 
 ### Patch Changes
