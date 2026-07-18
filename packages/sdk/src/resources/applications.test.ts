@@ -12,6 +12,19 @@ const createMockHttpClient = (): HttpClient =>
   }) as unknown as HttpClient;
 
 describe('ApplicationsResource', () => {
+  it('should create an application', async () => {
+    const http = createMockHttpClient();
+    const resource = new ApplicationsResource(http);
+    const input = {
+      organizationId: 'org-1',
+      name: 'Next.js Storefront',
+      rootDirectory: 'apps/web',
+    };
+
+    await resource.create(input);
+    expect(http.post).toHaveBeenCalledWith('/applications', input);
+  });
+
   it('should list applications', async () => {
     const http = createMockHttpClient();
     const resource = new ApplicationsResource(http);

@@ -108,6 +108,14 @@ export class ApplicationNotFoundError extends Schema.TaggedError<ApplicationNotF
   }
 ) {}
 
+/** The actor has no organization available for automatic application creation. */
+export class NoOrganizationsFoundError extends Schema.TaggedError<NoOrganizationsFoundError>()(
+  'NoOrganizationsFoundError',
+  {
+    message: Schema.String,
+  }
+) {}
+
 // ---------------------------------------------------------------------------
 // Env file / local credentials errors
 // ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ import { linkCommand, unlinkCommand } from './commands/link';
 import { loginCommand } from './commands/login';
 import { logoutCommand } from './commands/logout';
 import { platformCommand } from './commands/platform';
+import { deployCommand } from './commands/platform/deploy';
 import { setupCommand } from './commands/setup';
 import { whoamiCommand } from './commands/whoami';
 import { ApiClientService } from './services/api-client';
@@ -45,6 +46,7 @@ const gigadrive = Command.make('gigadrive', {}, () => Effect.void).pipe(
     aiCommand,
     buildCommand,
     debugCommand,
+    deployCommand,
     platformCommand,
     setupCommand,
   ])
