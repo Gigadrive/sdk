@@ -1,5 +1,14 @@
 # gigadrive
 
+## 2.5.2
+
+### Patch Changes
+
+- Type deployment debug logs returned by the Network API. ([#335](https://github.com/Gigadrive/sdk/pull/335))
+
+- Updated dependencies [[`b9e6a4d`](https://github.com/Gigadrive/sdk/commit/b9e6a4d98a4c124dbb01e5c03e96b923af4e9b1b)]:
+  - @gigadrive/sdk@0.6.1
+
 ## 2.5.1
 
 ### Patch Changes
