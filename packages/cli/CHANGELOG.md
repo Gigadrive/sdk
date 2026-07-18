@@ -1,5 +1,16 @@
 # gigadrive
 
+## 2.5.0
+
+### Minor Changes
+
+- Add application creation to the SDK and CLI, and make `gigadrive deploy` automatically create and link an application for an unlinked project. ([#330](https://github.com/Gigadrive/sdk/pull/330))
+
+### Patch Changes
+
+- Updated dependencies [[`3c48fdb`](https://github.com/Gigadrive/sdk/commit/3c48fdbfaee987aa4988671fd8a398419202f780)]:
+  - @gigadrive/sdk@0.6.0
+
 ## 2.4.4
 
 ### Patch Changes
