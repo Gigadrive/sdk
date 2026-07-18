@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.3.0
+
+### Minor Changes
+
+- Add the Gigadrive Next.js build adapter and zero-config standalone/static asset packaging metadata. ([#328](https://github.com/Gigadrive/sdk/pull/328))
+
 ## 3.2.0
 
 ### Minor Changes
