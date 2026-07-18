@@ -33,7 +33,7 @@ packages/cli/
       logout/index.ts           # `gigadrive logout`
       whoami/index.ts           # `gigadrive whoami`
       link/index.ts             # `gigadrive link` / `gigadrive unlink`
-      apps/index.ts             # `gigadrive apps list`
+      apps/index.ts             # `gigadrive apps list|create`
       env/index.ts              # `gigadrive env list|set|rm|pull`
       setup/index.ts            # `gigadrive setup` (link + pull + provision credentials)
       deployments/index.ts      # `gigadrive deployments list|inspect`
@@ -42,7 +42,7 @@ packages/cli/
       debug/index.ts            # `gigadrive debug` (parent)
       debug/config/index.ts     # `gigadrive debug config`
       platform/index.ts         # `gigadrive platform` (parent)
-      platform/deploy/index.ts  # `gigadrive platform deploy`
+      platform/deploy/index.ts  # `gigadrive deploy` / `gigadrive platform deploy`
 ```
 
 Every command that talks to the Gigadrive Network API obtains its client from
@@ -51,7 +51,10 @@ streaming, e.g. `ai chat --stream`), or `request(fn)` to run an SDK call and map
 failures to a tagged `ApiRequestError`. `DeploymentApiService` is a thin wrapper
 over `ApiClientService` that keeps deployment-specific errors. Resource commands
 resolve their target application/organization from `ProjectLinkService`
-(`.gigadrive/project.json`), overridable with `--app` / `--org`.
+(`.gigadrive/project.json`), overridable with `--app` / `--org`. `gigadrive
+deploy` creates and links an application automatically when the current
+directory is unlinked, selecting the sole organization or prompting when the
+actor has multiple organizations.
 
 ## Architecture Overview
 

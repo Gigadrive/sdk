@@ -22,6 +22,46 @@ export interface Application {
   updatedAt: string;
 }
 
+/** Input accepted when creating a Gigadrive Network application. */
+export interface CreateApplicationInput {
+  /** Organization that will own the application. */
+  organizationId: string;
+  /** Display name. Surrounding whitespace is removed by the API. */
+  name: string;
+  /** Optional lowercase slug. Generated from {@link name} when omitted. */
+  slug?: string;
+  /**
+   * Project directory relative to the repository root. The API normalizes
+   * redundant separators and rejects absolute paths and traversal segments.
+   */
+  rootDirectory?: string;
+}
+
+/**
+ * Application creation result used to start the first deployment without an
+ * additional lookup.
+ */
+export interface CreatedApplication {
+  /** Stable application UUID. */
+  id: string;
+  /** Owning organization UUID. */
+  organizationId: string;
+  /** Normalized display name. */
+  name: string;
+  /** Generated or caller-supplied application slug. */
+  slug: string;
+  /** Application icon URL. */
+  imageUrl: string;
+  /** Normalized project directory, or `null` for the repository root. */
+  rootDirectory: string | null;
+  /** Production environment slug to use for the first deployment. */
+  defaultEnvironmentSlug: string;
+  /** ISO 8601 creation timestamp. */
+  createdAt: string;
+  /** ISO 8601 last-updated timestamp. */
+  updatedAt: string;
+}
+
 /** Query filters for listing applications. */
 export interface ListApplicationsQuery extends ListQuery {
   /** Only return applications belonging to this organization. */
@@ -106,6 +146,30 @@ export class ApplicationsResource extends BaseResource {
     return this.httpClient.get('/applications', {
       query: query as Record<string, string | number | undefined> | undefined,
     });
+  }
+
+  /**
+   * Creates an application with production and preview environments.
+   *
+   * Requires the `network:applications:write` scope and access to the owning
+   * organization. Application-, deployment-, and function-scoped tokens cannot
+   * create applications.
+   *
+   * @param input - Ownership, display name, and optional repository layout.
+   * @returns The persisted application plus the default production environment
+   * slug, ready for an immediate deployment request.
+   *
+   * @example
+   * ```ts
+   * const app = await client.applications.create({
+   *   organizationId: 'org-id',
+   *   name: 'Next.js Storefront',
+   * });
+   * console.log(app.id, app.defaultEnvironmentSlug);
+   * ```
+   */
+  async create(input: CreateApplicationInput): Promise<CreatedApplication> {
+    return this.httpClient.post('/applications', input);
   }
 
   /**
