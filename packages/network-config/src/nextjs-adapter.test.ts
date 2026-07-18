@@ -7,19 +7,21 @@ import gigadriveNextAdapter, { type GigadriveNextBuildManifest } from './nextjs-
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
+  delete process.env.GIGADRIVE_DEPLOYMENT_ID;
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
 describe('Gigadrive Next.js adapter', () => {
-  it('enables standalone output for production builds while preserving config', () => {
+  it('enables standalone output and version-skew protection for production builds while preserving config', () => {
     const config = { reactStrictMode: true };
+    process.env.GIGADRIVE_DEPLOYMENT_ID = 'deployment-id';
 
     expect(
       gigadriveNextAdapter.modifyConfig(config, {
         phase: 'phase-production-build',
         nextVersion: '16.2.10',
       })
-    ).toEqual({ reactStrictMode: true, output: 'standalone' });
+    ).toEqual({ reactStrictMode: true, deploymentId: 'deployment-id', output: 'standalone' });
     expect(config).toEqual({ reactStrictMode: true });
   });
 
@@ -38,7 +40,7 @@ describe('Gigadrive Next.js adapter', () => {
         phase: 'phase-production-build',
         nextVersion: '16.2.10',
       })
-    ).toBe(exportConfig);
+    ).toEqual(exportConfig);
   });
 
   it('writes portable post-build metadata for monorepo applications', async () => {

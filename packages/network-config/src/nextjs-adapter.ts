@@ -46,11 +46,17 @@ const gigadriveNextAdapter = {
   name: 'Gigadrive Network',
 
   modifyConfig(config: NextConfig, { phase }: ModifyConfigContext): NextConfig {
-    if (phase !== PRODUCTION_BUILD_PHASE || config.output === 'export') {
+    if (phase !== PRODUCTION_BUILD_PHASE) {
       return config;
     }
 
-    return { ...config, output: 'standalone' };
+    const deploymentId = config.deploymentId ?? process.env.GIGADRIVE_DEPLOYMENT_ID;
+
+    return {
+      ...config,
+      ...(deploymentId ? { deploymentId } : {}),
+      output: config.output === 'export' ? 'export' : 'standalone',
+    };
   },
 
   async onBuildComplete({
