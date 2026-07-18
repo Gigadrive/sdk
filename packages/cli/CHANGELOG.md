@@ -1,5 +1,13 @@
 # gigadrive
 
+## 2.5.1
+
+### Patch Changes
+
+- Stop requesting application-bound AI Gateway governance scopes during CLI login. ([#332](https://github.com/Gigadrive/sdk/pull/332))
+
+- Exclude dependencies, repository metadata, and project-ignored files from deployment archives by default. ([#334](https://github.com/Gigadrive/sdk/pull/334))
+
 ## 2.5.0
 
 ### Minor Changes
