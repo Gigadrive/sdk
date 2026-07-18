@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { HttpClient } from '../http-client';
-import { DeploymentsResource } from './deployments';
+import { DeploymentsResource, type DeploymentLogType } from './deployments';
 
 const createMockHttpClient = (): HttpClient =>
   ({
@@ -10,6 +10,10 @@ const createMockHttpClient = (): HttpClient =>
   }) as unknown as HttpClient;
 
 describe('DeploymentsResource', () => {
+  it('types every deployment log severity returned by the Network API', () => {
+    expectTypeOf<DeploymentLogType>().toEqualTypeOf<'INFO' | 'ERROR' | 'WARN' | 'DEBUG'>();
+  });
+
   it('should list deployments', async () => {
     const http = createMockHttpClient();
     const resource = new DeploymentsResource(http);

@@ -15,7 +15,7 @@ import type { Hostname } from './hostnames';
 export type DeploymentStatus = 'PENDING' | 'QUEUED' | 'STARTING' | 'BUILDING' | 'PROVISIONING' | 'ACTIVE' | 'FAILED';
 
 /** The severity level of a deployment log entry. */
-export type DeploymentLogType = 'INFO' | 'ERROR' | 'WARN';
+export type DeploymentLogType = 'INFO' | 'ERROR' | 'WARN' | 'DEBUG';
 
 /** A deployment of an application to the Gigadrive Network. */
 export interface Deployment {
@@ -37,7 +37,7 @@ export interface DeploymentLog {
   id: string;
   /** The log message text. */
   message: string;
-  /** Severity level: `"INFO"`, `"ERROR"`, or `"WARN"`. */
+  /** Severity level: `"INFO"`, `"ERROR"`, `"WARN"`, or `"DEBUG"`. */
   type: DeploymentLogType;
   /** ISO 8601 timestamp of when this log entry was created. */
   createdAt: string;
