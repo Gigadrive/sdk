@@ -66,7 +66,26 @@ describe('OAuthConfigService.getConfig', () => {
     expect(result.scope).toContain('platform:organizations:read');
     expect(result.scope).toContain('network:applications:write');
     expect(result.scope).toContain('network:env_vars:read');
+    expect(result.scope).toContain('network:ai_gateway:chat');
+    expect(result.scope).toContain('network:ai_gateway:models');
     expect(result.scope).toContain('platform:api_keys:write');
+  });
+
+  it('should not request application-bound AI Gateway governance scopes', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(validDiscoveryDoc),
+    });
+
+    const testLayer = makeTestLayer();
+    const result = await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, testLayer));
+    const requestedScopes = result.scope.split(' ');
+
+    expect(requestedScopes).not.toContain('network:ai_gateway:usage:read');
+    expect(requestedScopes).not.toContain('network:ai_gateway:budgets:read');
+    expect(requestedScopes).not.toContain('network:ai_gateway:budgets:write');
+    expect(requestedScopes).not.toContain('network:ai_gateway:policies:read');
+    expect(requestedScopes).not.toContain('network:ai_gateway:policies:write');
   });
 
   it('should call the correct discovery URL', async () => {

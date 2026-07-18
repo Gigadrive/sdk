@@ -29,9 +29,10 @@ const OpenIdDiscoveryDocument = Schema.Struct({
 
 /**
  * Scopes requested at login. Identity scopes plus the Network API capability
- * scopes the CLI exercises (applications, env vars, deployments, AI gateway) and
- * the platform scopes needed to provision local-dev API credentials. The IDP
- * grants only the subset the user is entitled to.
+ * scopes available to the standalone first-party CLI and the platform scopes
+ * needed to provision local-dev API credentials. AI Gateway governance scopes
+ * are intentionally excluded because the IDP only grants them to OAuth clients
+ * bound to a Network application; requesting one would reject the entire login.
  */
 const CLI_SCOPES = [
   // Identity / OIDC
@@ -52,11 +53,6 @@ const CLI_SCOPES = [
   'network:deployments:trigger',
   'network:ai_gateway:chat',
   'network:ai_gateway:models',
-  'network:ai_gateway:usage:read',
-  'network:ai_gateway:budgets:read',
-  'network:ai_gateway:budgets:write',
-  'network:ai_gateway:policies:read',
-  'network:ai_gateway:policies:write',
   // Provisioning local-dev API credentials
   'platform:api_keys:read',
   'platform:api_keys:write',
