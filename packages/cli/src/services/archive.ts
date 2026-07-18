@@ -11,7 +11,16 @@ import { ArchiveCreateError } from '../errors';
 // Ignore file handling
 // ---------------------------------------------------------------------------
 
-const IGNORE_FILE_NAMES = ['.gigadriveignore', '.vercelignore', '.dockerignore', '.nowignore'];
+const IGNORE_FILE_NAMES = ['.gitignore', '.dockerignore', '.nowignore', '.vercelignore', '.gigadriveignore'];
+
+const MANAGED_IGNORE_PATTERNS = [
+  '.git/',
+  '**/.git/',
+  'node_modules/',
+  '**/node_modules/',
+  '**/.DS_Store',
+  '**/Thumbs.db',
+];
 
 const readIgnoreFile = (fs: FileSystem.FileSystem, ignorePath: string): Effect.Effect<string[]> =>
   fs.readFileString(ignorePath, 'utf8').pipe(
@@ -65,23 +74,29 @@ const collectIgnorePatterns = (
 const initializeIgnoreRules = (
   fs: FileSystem.FileSystem,
   pathService: Path.Path,
-  baseDir: string
+  baseDir: string,
+  useIgnoreFiles: boolean,
+  useManagedIgnore: boolean
 ): Effect.Effect<Ignore> =>
   Effect.gen(function* () {
     const ignoreRules = ignore();
-    ignoreRules.add(['.git/', '**/.DS_Store', '**/Thumbs.db']);
-
-    for (const ignoreFileName of IGNORE_FILE_NAMES) {
-      const ignoreFilePath = pathService.join(baseDir, ignoreFileName);
-      const patterns = yield* readIgnoreFile(fs, ignoreFilePath);
-      if (patterns.length > 0) {
-        ignoreRules.add(
-          patterns.map((pattern: string) => (pattern.startsWith('!') ? `!${pattern.slice(1)}` : pattern))
-        );
-      }
+    if (useManagedIgnore) {
+      ignoreRules.add(MANAGED_IGNORE_PATTERNS);
     }
 
-    yield* collectIgnorePatterns(fs, pathService, baseDir, baseDir, ignoreRules);
+    if (useIgnoreFiles) {
+      for (const ignoreFileName of IGNORE_FILE_NAMES) {
+        const ignoreFilePath = pathService.join(baseDir, ignoreFileName);
+        const patterns = yield* readIgnoreFile(fs, ignoreFilePath);
+        if (patterns.length > 0) {
+          ignoreRules.add(
+            patterns.map((pattern: string) => (pattern.startsWith('!') ? `!${pattern.slice(1)}` : pattern))
+          );
+        }
+      }
+
+      yield* collectIgnorePatterns(fs, pathService, baseDir, baseDir, ignoreRules);
+    }
     return ignoreRules;
   });
 
@@ -150,8 +165,13 @@ export class ArchiveService extends Effect.Service<ArchiveService>()('ArchiveSer
       yield* Effect.annotateCurrentSpan('outputFile', outputFile);
       yield* Effect.log('Creating zip archive', { inputDir, outputFile });
 
-      const ignoreRules =
-        options.useIgnoreFiles !== false ? yield* initializeIgnoreRules(fs, pathService, inputDir) : ignore();
+      const ignoreRules = yield* initializeIgnoreRules(
+        fs,
+        pathService,
+        inputDir,
+        options.useIgnoreFiles !== false,
+        options.useManagedIgnore !== false
+      );
 
       const filesToInclude = options.whitelist
         ? yield* Effect.tryPromise({
