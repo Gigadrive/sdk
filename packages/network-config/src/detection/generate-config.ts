@@ -81,10 +81,11 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
     errors: [],
   };
 
-  if (defaults.assetsDir) {
+  if (defaults.assetsDir || defaults.assetPaths) {
     config.assets = {
-      paths: [],
-      prefixToStrip: defaults.assetsDir + '/',
+      paths: defaults.assetPaths ? [...defaults.assetPaths] : [],
+      prefixToStrip: defaults.assetsPrefixToStrip ?? (defaults.assetsDir ? defaults.assetsDir + '/' : ''),
+      overrides: defaults.assetOverrides ? { ...defaults.assetOverrides } : undefined,
       dynamicRoutes: true,
       populateCache: defaults.populateAssetCache ?? false,
     };
