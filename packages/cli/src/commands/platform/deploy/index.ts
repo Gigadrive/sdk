@@ -148,8 +148,6 @@ export const deployCommand = Command.make(
       const archive = yield* archiveService.createZipArchive(config.userArchive?.rootOverwrite || cwd, archivePath, {
         whitelist: config.userArchive?.fileWhitelist,
         excludeFiles: config.excludeFiles,
-        useIgnoreFiles: false,
-        useManagedIgnore: false,
       });
       yield* Console.log(`Archive created (${formatFileSize(archive.size)})`);
 
