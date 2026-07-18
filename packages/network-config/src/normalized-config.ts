@@ -169,6 +169,8 @@ export interface NormalizedConfigEntrypoint {
   environmentVariables?: Record<string, string>;
   streaming?: boolean;
   package?: {
+    /** Disable dependency tracing when the framework output is already self-contained. */
+    trace?: boolean;
     rootOverwrite?: string;
     filePathMap?: FilePathMap;
     includeFiles?: string[];

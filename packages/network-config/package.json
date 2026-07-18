@@ -13,6 +13,11 @@
       "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
       "import": "./dist/index.mjs"
+    },
+    "./nextjs-adapter": {
+      "types": "./dist/nextjs-adapter.d.ts",
+      "require": "./dist/nextjs-adapter.cjs",
+      "import": "./dist/nextjs-adapter.mjs"
     }
   },
   "main": "dist/index.js",
@@ -23,7 +28,7 @@
     "**/*.json"
   ],
   "scripts": {
-    "build": "tsup && mkdir -p dist/v4 && cp -r ./src/v4/schema.json ./dist/v4/schema.json",
+    "build": "tsup && mkdir -p dist/v4 && cp -r ./src/v4/schema.json ./dist/v4/schema.json && cp ./src/nextjs-adapter.cjs ./dist/nextjs-adapter.cjs",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit"
   },

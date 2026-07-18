@@ -1,4 +1,4 @@
-import type { FileSystem } from '@effect/platform';
+import type { FileSystem, Path } from '@effect/platform';
 import { Effect, Schema } from 'effect';
 import type { NormalizedConfig } from '../normalized-config';
 import type { Runtime } from '../runtime';
@@ -61,7 +61,7 @@ export interface FrameworkDefinition {
   refineDefaultConfig?: (
     defaults: FrameworkDefaultConfig,
     projectFolder: string
-  ) => Effect.Effect<FrameworkDefaultConfig, never, FileSystem.FileSystem>;
+  ) => Effect.Effect<FrameworkDefaultConfig, never, FileSystem.FileSystem | Path.Path>;
 }
 
 export interface FrameworkDefaultConfig {
@@ -75,12 +75,18 @@ export interface FrameworkDefaultConfig {
   commands: string[];
   entrypoint?: string;
   assetsDir?: string;
+  assetsPrefixToStrip?: string;
+  /** Explicit project-relative files to publish as static assets. */
+  assetPaths?: string[];
+  /** Public path overrides keyed by project-relative asset path. */
+  assetOverrides?: Record<string, { path?: string; contentType?: string }>;
   populateAssetCache?: boolean;
   routes: Array<{ source: string; destination: string }>;
   environmentVariables: Record<string, string>;
   symlinks?: Record<string, string>;
   excludeFiles?: string[];
   package?: {
+    trace?: boolean;
     rootOverwrite?: string;
     filePathMap?: Record<string, string>;
     includeFiles?: string[];
