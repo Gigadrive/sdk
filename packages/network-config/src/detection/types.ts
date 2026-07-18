@@ -86,6 +86,7 @@ export interface FrameworkDefaultConfig {
   symlinks?: Record<string, string>;
   excludeFiles?: string[];
   package?: {
+    trace?: boolean;
     rootOverwrite?: string;
     filePathMap?: Record<string, string>;
     includeFiles?: string[];

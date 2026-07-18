@@ -132,8 +132,6 @@ const createStandaloneConfig = Effect.fn('nextjs.createStandaloneConfig')(functi
     );
   }
 
-  const standaloneProjectPath = toPortablePath(pathService.relative(projectFolder, standaloneRoot));
-
   return {
     ...defaults,
     entrypoint,
@@ -143,9 +141,9 @@ const createStandaloneConfig = Effect.fn('nextjs.createStandaloneConfig')(functi
     assetPaths,
     assetOverrides,
     package: {
+      trace: false,
       rootOverwrite: standaloneRoot,
       filePathMap,
-      includeFiles: [`${standaloneProjectPath}/**`],
     },
   };
 });

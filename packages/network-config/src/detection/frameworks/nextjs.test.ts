@@ -74,8 +74,8 @@ describe('Next.js framework detection', () => {
       expect.objectContaining({
         path: 'server.js',
         package: {
+          trace: false,
           rootOverwrite: '/project/.next/standalone',
-          includeFiles: ['.next/standalone/**'],
           filePathMap: {
             '/project/.next/static/chunks/app.js': '.next/static/chunks/app.js',
             '/project/.next/static/css/app.css': '.next/static/css/app.css',
@@ -112,6 +112,7 @@ describe('Next.js framework detection', () => {
     expect(result.config.entrypoints[0]).toMatchObject({
       path: 'apps/web/server.js',
       package: {
+        trace: false,
         rootOverwrite: '/project/.next/standalone',
         filePathMap: {
           '/project/.next/static/chunks/app.js': 'apps/web/.next/static/chunks/app.js',
