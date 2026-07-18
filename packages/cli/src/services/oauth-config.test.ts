@@ -63,6 +63,8 @@ describe('OAuthConfigService.getConfig', () => {
     // Identity scopes plus the Network API + platform capability scopes the CLI requests.
     expect(result.scope).toContain('offline_access');
     expect(result.scope).toContain('openid');
+    expect(result.scope).toContain('platform:organizations:read');
+    expect(result.scope).toContain('network:applications:write');
     expect(result.scope).toContain('network:env_vars:read');
     expect(result.scope).toContain('platform:api_keys:write');
   });

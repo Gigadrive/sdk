@@ -39,8 +39,11 @@ const CLI_SCOPES = [
   'openid',
   'profile',
   'email',
+  // Platform discovery used for zero-config application onboarding
+  'platform:organizations:read',
   // Network API capabilities
   'network:applications:read',
+  'network:applications:write',
   'network:env_vars:read',
   'network:env_vars:write',
   'network:env_vars:delete',
