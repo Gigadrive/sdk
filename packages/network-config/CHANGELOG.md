@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.3.1
+
+### Patch Changes
+
+- Use Vercel Build Output v3 as the authoritative Nuxt function layout instead of retaining the incompatible Nitro node-server default entrypoint. ([#339](https://github.com/Gigadrive/sdk/pull/339))
+
 ## 3.3.0
 
 ### Minor Changes
