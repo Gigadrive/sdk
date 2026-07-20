@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.3.2
+
+### Patch Changes
+
+- Preserve Vercel Build Output function directories when mapping files into deployment archives. ([#341](https://github.com/Gigadrive/sdk/pull/341))
+
 ## 3.3.1
 
 ### Patch Changes
