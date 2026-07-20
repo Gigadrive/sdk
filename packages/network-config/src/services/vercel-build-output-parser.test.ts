@@ -145,7 +145,40 @@ describe('VercelBuildOutputParser', () => {
     );
 
     expect(result.entrypoints?.[0].streaming).toBe(true);
+    expect(result.entrypoints?.[0].package?.filePathMap).toEqual({
+      '/project/index.js': '.vercel/output/functions/api.func/index.js',
+    });
     expect(result.routes?.[0].handler).toBe('SERVERLESS_FUNCTION_STREAMING');
+  });
+
+  it('should preserve the function directory when deriving the default archive map', async () => {
+    mockGetFilesForPattern.mockResolvedValueOnce(['.vercel/output/functions/__fallback.func/.vc-config.json']);
+
+    const result = await runParser(
+      {
+        '/project/.vercel/output/config.json': JSON.stringify({ version: 3 }),
+        '/project/.vercel/output/functions/__fallback.func/.vc-config.json': JSON.stringify({
+          handler: 'index.mjs',
+          runtime: 'nodejs20.x',
+        }),
+        '/project/.vercel/output/functions/__fallback.func/index.mjs': 'export default {}',
+        '/project/.vercel/output/functions/__fallback.func/chunks/runtime.mjs': 'export default {}',
+      },
+      emptyConfig,
+      '/project'
+    );
+
+    expect(result.entrypoints?.[0]).toMatchObject({
+      path: '.vercel/output/functions/__fallback.func/index.mjs',
+      package: {
+        filePathMap: {
+          '/project/.vercel/output/functions/__fallback.func/index.mjs':
+            '.vercel/output/functions/__fallback.func/index.mjs',
+          '/project/.vercel/output/functions/__fallback.func/chunks/runtime.mjs':
+            '.vercel/output/functions/__fallback.func/chunks/runtime.mjs',
+        },
+      },
+    });
   });
 
   it('should allow Vercel response streaming metadata to disable streaming', async () => {

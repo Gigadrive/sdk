@@ -118,13 +118,16 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
           functionConfig.experimentalResponseStreaming ??
           runtime.startsWith('node-');
 
-        let filePathMap: Record<string, string> = {};
+        const filePathMap: Record<string, string> = {};
         for (const [key, value] of Object.entries(configFilePathMap)) {
-          filePathMap[pathService.join(projectFolder, key)] = value;
+          filePathMap[pathService.join(projectFolder, key)] = pathService.join(functionDirectory, value);
         }
 
         if (Object.keys(filePathMap).length === 0) {
-          filePathMap = yield* getDefaultPathMap(pathService.join(projectFolder, functionDirectory));
+          const defaultPathMap = yield* getDefaultPathMap(pathService.join(projectFolder, functionDirectory));
+          for (const [key, value] of Object.entries(defaultPathMap)) {
+            filePathMap[key] = pathService.join(functionDirectory, value);
+          }
         }
 
         if (!result.entrypoints) {
