@@ -211,6 +211,83 @@ describe('Gigadrive Next.js adapter', () => {
     expect(await readFile(wrapperPath, 'utf8')).toContain('await nextHandler(req, res');
   });
 
+  it('invokes Node.js middleware with the Web Request adapter contract', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-middleware-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'app');
+    const distDir = path.join(projectDir, '.next');
+    const middlewarePath = path.join(distDir, 'server', 'middleware.js');
+    await mkdir(path.dirname(middlewarePath), { recursive: true });
+    await writeFile(
+      middlewarePath,
+      `module.exports.handler = async (request, context) => {
+        context.waitUntil(Promise.resolve());
+        return Response.json({
+          method: request.method,
+          pathname: new URL(request.url).pathname,
+          invocationTarget: context.requestMeta.invocationTarget,
+        }, { headers: { 'x-middleware-next': '1' } });
+      };`
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'middleware-build',
+      routing: {
+        beforeMiddleware: [],
+        beforeFiles: [],
+        afterFiles: [],
+        dynamicRoutes: [],
+        onMatch: [],
+        fallback: [],
+        shouldNormalizeNextData: false,
+        rsc: {},
+      },
+      outputs: {
+        pages: [],
+        pagesApi: [],
+        appPages: [],
+        appRoutes: [],
+        middleware: {
+          id: '/_middleware',
+          type: 'MIDDLEWARE',
+          filePath: middlewarePath,
+          pathname: '/_middleware',
+          sourcePage: 'middleware',
+          runtime: 'nodejs',
+          assets: {},
+          config: {},
+        },
+        prerenders: [],
+        staticFiles: [],
+      },
+    });
+
+    const manifest = parseGigadriveNextBuildManifest(
+      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
+    ) as GigadriveNextBuildManifestV2;
+    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
+    const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
+      fetch(request: Request): Promise<Response>;
+    };
+    const response = await wrapper.fetch(
+      new Request('https://example.com/api/echo', {
+        headers: { 'x-gigadrive-next-invocation-target': '/api/echo' },
+      })
+    );
+
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    await expect(response.json()).resolves.toEqual({
+      method: 'GET',
+      pathname: '/api/echo',
+      invocationTarget: '/api/echo',
+    });
+  });
+
   it('rejects outputs outside the repository root', async () => {
     const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-adapter-safe-'));
     const outsideRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-adapter-outside-'));
