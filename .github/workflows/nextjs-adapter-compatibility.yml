@@ -48,7 +48,10 @@ jobs:
         run: pnpm install && pnpm build && pnpm install
       - name: Build adapter and CLI
         working-directory: adapter
-        run: pnpm install --frozen-lockfile && pnpm --filter @gigadrive/network-config build && pnpm --filter gigadrive build
+        # The deploy script executes the workspace CLI, whose runtime imports
+        # @gigadrive/sdk. Build the CLI and its complete dependency closure so
+        # the cached test checkout never contains dangling workspace imports.
+        run: pnpm install --frozen-lockfile && pnpm --filter gigadrive... build
       - name: Install Chromium
         working-directory: nextjs
         run: pnpm playwright install --with-deps chromium
