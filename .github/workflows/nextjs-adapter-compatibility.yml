@@ -21,6 +21,9 @@ concurrency:
   group: nextjs-adapter-${{ inputs.nextjsRef || (github.event_name == 'schedule' && 'canary') || 'v16.2.10' }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
