@@ -8,8 +8,10 @@ const BASE_URL = 'https://api.example.com';
 
 type AuthOverrides = { getAccessToken?: AuthService['getAccessToken'] };
 
-const makeTestLayer = (auth: AuthOverrides = {}) => {
-  const configLayer = Layer.setConfigProvider(ConfigProvider.fromMap(new Map([['GIGADRIVE_API_BASE_URL', BASE_URL]])));
+const makeTestLayer = (auth: AuthOverrides = {}, credentials: Record<string, string> = {}) => {
+  const configLayer = Layer.setConfigProvider(
+    ConfigProvider.fromMap(new Map([['GIGADRIVE_API_BASE_URL', BASE_URL], ...Object.entries(credentials)]))
+  );
 
   const mockAuthService = Layer.succeed(AuthService, {
     login: Effect.succeed(true as const),
@@ -64,6 +66,50 @@ describe('ApiClientService', () => {
     expect(call.url).toBe(`${BASE_URL}/applications`);
     expect(call.method).toBe('GET');
     expect(call.headers.authorization).toBe('Bearer test-auth-token');
+  });
+
+  it('prefers a non-interactive bearer token over the stored CLI login', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 }));
+
+    await Effect.runPromise(
+      Effect.provide(
+        listApps,
+        makeTestLayer(
+          { getAccessToken: Effect.fail(new NotAuthenticatedError({ message: 'no stored login' })) },
+          { GIGADRIVE_BEARER_TOKEN: 'ci-bearer-token' }
+        )
+      )
+    );
+
+    expect(lastFetchCall().headers.authorization).toBe('Bearer ci-bearer-token');
+  });
+
+  it('exchanges non-interactive client credentials before calling the API', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((input: string | URL | Request) => {
+      const url = String(input);
+      return Promise.resolve(
+        url.endsWith('/oauth2/token')
+          ? new Response(JSON.stringify({ access_token: 'ci-access-token', expires_in: 3600 }), { status: 200 })
+          : new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })
+      );
+    });
+
+    await Effect.runPromise(
+      Effect.provide(
+        listApps,
+        makeTestLayer(
+          { getAccessToken: Effect.fail(new NotAuthenticatedError({ message: 'no stored login' })) },
+          { GIGADRIVE_CLIENT_ID: 'ci-client', GIGADRIVE_CLIENT_SECRET: 'ci-secret' }
+        )
+      )
+    );
+
+    const [tokenUrl, tokenInit] = vi.mocked(globalThis.fetch).mock.calls[0]!;
+    expect(String(tokenUrl)).toBe(`${BASE_URL}/oauth2/token`);
+    expect(tokenInit?.headers).toMatchObject({ Authorization: `Basic ${btoa('ci-client:ci-secret')}` });
+    expect(lastFetchCall().headers.authorization).toBe('Bearer ci-access-token');
   });
 
   it('maps a non-OK response to ApiRequestError with the status code', async () => {

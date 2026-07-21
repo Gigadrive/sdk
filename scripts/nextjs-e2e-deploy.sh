@@ -9,7 +9,7 @@ pnpm build >&2
 
 build_id="$(tr -d '\n' < .next/BUILD_ID)"
 deploy_log="$(mktemp)"
-if ! pnpm dlx gigadrive@2.5.3 platform deploy --app "${GIGADRIVE_NEXT_TEST_APPLICATION_ID}" >"${deploy_log}" 2>&1; then
+if ! node "${ADAPTER_DIR}/packages/cli/dist/index.mjs" platform deploy --app "${GIGADRIVE_NEXT_TEST_APPLICATION_ID}" >"${deploy_log}" 2>&1; then
   cat "${deploy_log}" >&2
   exit 1
 fi
