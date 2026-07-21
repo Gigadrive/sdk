@@ -1,5 +1,13 @@
 # @gigadrive/network-config
 
+## 3.4.8
+
+### Patch Changes
+
+- Emit an image filename extension that Bunny Optimizer recognizes for extensionless and dynamic Next.js image sources. ([#366](https://github.com/Gigadrive/sdk/pull/366))
+
+- Persist the incremental-cache envelope required by Next.js so ISR entries can be read after regeneration. ([#368](https://github.com/Gigadrive/sdk/pull/368))
+
 ## 3.4.7
 
 ### Patch Changes
