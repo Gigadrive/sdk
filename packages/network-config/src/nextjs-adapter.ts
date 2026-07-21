@@ -235,14 +235,45 @@ const writeEntrypointWrappers = async (
       const isMiddleware = middlewareOutputId !== undefined && entrypoint.outputIds.includes(middlewareOutputId);
       const webHandlerPrelude =
         entrypoint.runtime === 'edge' && entrypoint.edgeRuntime
-          ? `import ${JSON.stringify(importSpecifier)};\n\nconst resolveHandler = async () => {\n  const registry = globalThis._ENTRIES;\n  if (!registry) throw new Error('Next.js edge entry registry is unavailable');\n  const entry = await registry[${JSON.stringify(entrypoint.edgeRuntime.entryKey)}];\n  const handler = entry?.[${JSON.stringify(entrypoint.edgeRuntime.handlerExport)}];\n  if (typeof handler !== 'function') throw new Error('Next.js edge handler is unavailable');\n  return handler;\n};`
+          ? (() => {
+              const edgeMarker = '/server/edge/';
+              const markerIndex = entrypoint.edgeRuntime.modulePath.indexOf(edgeMarker);
+              const distDirectory =
+                markerIndex >= 0
+                  ? entrypoint.edgeRuntime.modulePath.slice(0, markerIndex)
+                  : path.dirname(entrypoint.edgeRuntime.modulePath);
+              const edgeRuntimeAssets = [
+                ...new Set(
+                  Object.values(entrypoint.assets).filter(
+                    (assetPath) => assetPath.startsWith(`${distDirectory}/`) && assetPath.endsWith('.js')
+                  )
+                ),
+              ].sort((left, right) => {
+                if (left === entrypoint.edgeRuntime?.modulePath) return 1;
+                if (right === entrypoint.edgeRuntime?.modulePath) return -1;
+                return left.localeCompare(right);
+              });
+              for (const assetPath of edgeRuntimeAssets) entrypoint.assets[assetPath] = assetPath;
+              const imports = edgeRuntimeAssets
+                .map((assetPath) => {
+                  const relativeAssetPath = path
+                    .relative(wrapperDirectory, path.join(repoRoot, assetPath))
+                    .replaceAll(path.sep, '/');
+                  const assetSpecifier = relativeAssetPath.startsWith('.')
+                    ? relativeAssetPath
+                    : `./${relativeAssetPath}`;
+                  return `  await import(${JSON.stringify(assetSpecifier)});`;
+                })
+                .join('\n');
+              return `import { AsyncLocalStorage } from "node:async_hooks";\n\nconst resolveHandler = async () => {\n  globalThis.self ??= globalThis;\n  globalThis.AsyncLocalStorage ??= AsyncLocalStorage;\n${imports}\n  const registry = globalThis._ENTRIES;\n  if (!registry) throw new Error('Next.js edge entry registry is unavailable');\n  const entry = await registry[${JSON.stringify(entrypoint.edgeRuntime.entryKey)}];\n  const handler = entry?.[${JSON.stringify(entrypoint.edgeRuntime.handlerExport)}];\n  if (typeof handler !== 'function') throw new Error('Next.js edge handler is unavailable');\n  return handler;\n};`;
+            })()
           : `import * as nextEntrypoint from ${JSON.stringify(importSpecifier)};\n\nconst resolveHandler = async () => {\n  const handler = nextEntrypoint.handler ?? nextEntrypoint.default?.handler ?? nextEntrypoint.default;\n  if (typeof handler !== 'function') throw new Error('Next.js middleware handler is unavailable');\n  return handler;\n};`;
       const source =
         (entrypoint.runtime === 'edge' && entrypoint.edgeRuntime) || isMiddleware
           ? `${webHandlerPrelude}\n\nexport async function fetch(request) {\n  const pending = [];\n  const handler = await resolveHandler();\n  const url = new URL(request.url);\n  const response = await handler(request, {\n    signal: request.signal,\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: url.hostname, invocationTarget: request.headers.get('x-gigadrive-next-invocation-target') ?? url.pathname, routeMatches: Object.fromEntries(new URLSearchParams(request.headers.get('x-now-route-matches') ?? '')), relativeProjectDir: ${JSON.stringify(
               toPortableRelativePath(repoRoot, projectDir, true)
             )} },\n  });\n  if (!response.body) { await Promise.allSettled(pending); return response; }\n  const reader = response.body.getReader();\n  const body = new ReadableStream({\n    async pull(controller) {\n      const result = await reader.read();\n      if (result.done) { await Promise.allSettled(pending); controller.close(); return; }\n      controller.enqueue(result.value);\n    },\n    cancel(reason) { return reader.cancel(reason); },\n  });\n  return new Response(body, response);\n}\n`
-          : `import * as nextEntrypoint from ${JSON.stringify(importSpecifier)};\n\nexport default async function handler(req, res) {\n  const pending = [];\n  const nextHandler = nextEntrypoint.handler ?? nextEntrypoint.default?.handler ?? nextEntrypoint.default;\n  if (typeof nextHandler !== 'function') throw new Error('Next.js Node handler is unavailable');\n  await nextHandler(req, res, {\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: req.headers.host, invocationTarget: req.headers['x-gigadrive-next-invocation-target'] ?? req.url, routeMatches: Object.fromEntries(new URLSearchParams(req.headers['x-now-route-matches'] ?? '')), relativeProjectDir: ${JSON.stringify(
+          : `import "next/dist/build/adapter/setup-node-env.external.js";\nimport * as nextEntrypoint from ${JSON.stringify(importSpecifier)};\n\nexport default async function handler(req, res) {\n  const pending = [];\n  const nextHandler = nextEntrypoint.handler ?? nextEntrypoint.default?.handler ?? nextEntrypoint.default;\n  if (typeof nextHandler !== 'function') throw new Error('Next.js Node handler is unavailable');\n  await nextHandler(req, res, {\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: req.headers.host, invocationTarget: req.headers['x-gigadrive-next-invocation-target'] ?? req.url, routeMatches: Object.fromEntries(new URLSearchParams(req.headers['x-now-route-matches'] ?? '')), relativeProjectDir: ${JSON.stringify(
               toPortableRelativePath(repoRoot, projectDir, true)
             )} },\n  });\n  await Promise.allSettled(pending);\n}\n`;
       await writeFile(wrapperPath, source, 'utf8');
