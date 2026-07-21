@@ -208,7 +208,9 @@ describe('Gigadrive Next.js adapter', () => {
       config: { maxDuration: 45, preferredRegion: ['fra1'] },
     });
     const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    expect(await readFile(wrapperPath, 'utf8')).toContain('await nextHandler(req, res');
+    const wrapper = await readFile(wrapperPath, 'utf8');
+    expect(wrapper).toContain('next/dist/build/adapter/setup-node-env.external.js');
+    expect(wrapper).toContain('await nextHandler(req, res');
   });
 
   it('invokes Node.js middleware with the Web Request adapter contract', async () => {
@@ -286,6 +288,94 @@ describe('Gigadrive Next.js adapter', () => {
       pathname: '/api/echo',
       invocationTarget: '/api/echo',
     });
+  });
+
+  it('loads canonical Turbopack Edge assets before invoking the registered handler', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-edge-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'app');
+    const distDir = path.join(projectDir, '.next');
+    const requiredServerFilesPath = path.join(distDir, 'required-server-files.js');
+    const edgeChunksDirectory = path.join(distDir, 'server', 'edge', 'chunks');
+    const dependencyChunkPath = path.join(edgeChunksDirectory, 'dependency.js');
+    const runtimeModulePath = path.join(edgeChunksDirectory, 'runtime.js');
+    await mkdir(edgeChunksDirectory, { recursive: true });
+    await writeFile(requiredServerFilesPath, 'self.__SERVER_FILES_MANIFEST = { loaded: true };');
+    await writeFile(dependencyChunkPath, 'globalThis.__edgeDependencyLoaded = true;');
+    await writeFile(
+      runtimeModulePath,
+      `if (!self.__SERVER_FILES_MANIFEST?.loaded || !globalThis.__edgeDependencyLoaded) {
+        throw new Error('Edge dependencies were not evaluated first');
+      }
+      globalThis._ENTRIES = {
+        edge_test: Promise.resolve({
+          handler: async (request) => Response.json({ pathname: new URL(request.url).pathname }),
+        }),
+      };`
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'edge-build',
+      routing: {
+        beforeMiddleware: [],
+        beforeFiles: [],
+        afterFiles: [],
+        dynamicRoutes: [],
+        onMatch: [],
+        fallback: [],
+        shouldNormalizeNextData: false,
+        rsc: {},
+      },
+      outputs: {
+        pages: [],
+        pagesApi: [],
+        appPages: [],
+        appRoutes: [
+          {
+            id: 'app/api/edge/route',
+            type: 'APP_ROUTE',
+            filePath: runtimeModulePath,
+            pathname: '/api/edge',
+            sourcePage: 'app/api/edge/route.ts',
+            runtime: 'edge',
+            assets: {
+              'required-server-files.js': requiredServerFilesPath,
+              'server/edge/chunks/dependency.js': dependencyChunkPath,
+              'server/edge/chunks/runtime.js': runtimeModulePath,
+            },
+            wasmAssets: {},
+            edgeRuntime: {
+              modulePath: runtimeModulePath,
+              entryKey: 'edge_test',
+              handlerExport: 'handler',
+            },
+            config: {},
+          },
+        ],
+        prerenders: [],
+        staticFiles: [],
+      },
+    });
+
+    const manifest = parseGigadriveNextBuildManifest(
+      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
+    ) as GigadriveNextBuildManifestV2;
+    expect(manifest.entrypoints[0].assets).toMatchObject({
+      'app/.next/required-server-files.js': 'app/.next/required-server-files.js',
+      'app/.next/server/edge/chunks/dependency.js': 'app/.next/server/edge/chunks/dependency.js',
+    });
+    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
+    const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
+      fetch(request: Request): Promise<Response>;
+    };
+    const response = await wrapper.fetch(new Request('https://example.com/api/edge'));
+
+    await expect(response.json()).resolves.toEqual({ pathname: '/api/edge' });
   });
 
   it('rejects outputs outside the repository root', async () => {
