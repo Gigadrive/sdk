@@ -194,6 +194,12 @@ const createAdapterV2Config = Effect.fn('nextjs.createAdapterV2Config')(function
 
   const assetPaths: string[] = [];
   const assetOverrides: Record<string, { path: string }> = {};
+  const publicFiles = yield* getDefaultPathMap(pathService.join(projectFolder, 'public'));
+  for (const [absolutePath, relativePath] of Object.entries(publicFiles)) {
+    const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
+    assetPaths.push(projectRelativePath);
+    assetOverrides[projectRelativePath] = { path: toPortablePath(relativePath) };
+  }
   for (const output of manifest.outputs.staticFiles) {
     const absolutePath = pathService.join(repoRoot, output.filePath);
     const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
