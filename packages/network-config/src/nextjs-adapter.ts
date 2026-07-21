@@ -242,23 +242,17 @@ const writeEntrypointWrappers = async (
                 markerIndex >= 0
                   ? entrypoint.edgeRuntime.modulePath.slice(0, markerIndex)
                   : path.dirname(entrypoint.edgeRuntime.modulePath);
-              const edgeRuntimeAssets = [
-                ...new Set(
-                  Object.values(entrypoint.assets).filter(
-                    (assetPath) => assetPath.startsWith(`${distDirectory}/`) && assetPath.endsWith('.js')
-                  )
-                ),
-              ].sort((left, right) => {
-                if (left === entrypoint.edgeRuntime?.modulePath) return 1;
-                if (right === entrypoint.edgeRuntime?.modulePath) return -1;
-                return left.localeCompare(right);
-              });
-              for (const assetPath of edgeRuntimeAssets) entrypoint.assets[assetPath] = assetPath;
+              const edgeRuntimeAssets = Object.entries(entrypoint.assets)
+                .filter(([, sourcePath]) => sourcePath.startsWith(`${distDirectory}/`) && sourcePath.endsWith('.js'))
+                .sort(([, leftSource], [, rightSource]) => {
+                  if (leftSource === entrypoint.edgeRuntime?.modulePath) return 1;
+                  if (rightSource === entrypoint.edgeRuntime?.modulePath) return -1;
+                  return leftSource.localeCompare(rightSource);
+                });
+              const portableWrapperDirectory = toPortableRelativePath(repoRoot, wrapperDirectory);
               const imports = edgeRuntimeAssets
-                .map((assetPath) => {
-                  const relativeAssetPath = path
-                    .relative(wrapperDirectory, path.join(repoRoot, assetPath))
-                    .replaceAll(path.sep, '/');
+                .map(([targetPath]) => {
+                  const relativeAssetPath = path.posix.relative(portableWrapperDirectory, targetPath);
                   const assetSpecifier = relativeAssetPath.startsWith('.')
                     ? relativeAssetPath
                     : `./${relativeAssetPath}`;

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -366,10 +366,19 @@ describe('Gigadrive Next.js adapter', () => {
       await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
     ) as GigadriveNextBuildManifestV2;
     expect(manifest.entrypoints[0].assets).toMatchObject({
-      'app/.next/required-server-files.js': 'app/.next/required-server-files.js',
-      'app/.next/server/edge/chunks/dependency.js': 'app/.next/server/edge/chunks/dependency.js',
+      'required-server-files.js': 'app/.next/required-server-files.js',
+      'server/edge/chunks/dependency.js': 'app/.next/server/edge/chunks/dependency.js',
     });
-    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
+
+    const archiveRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-adapter-archive-'));
+    temporaryDirectories.push(archiveRoot);
+    const entrypoint = manifest.entrypoints[0];
+    for (const [targetPath, sourcePath] of Object.entries(entrypoint.assets)) {
+      const archivePath = path.join(archiveRoot, targetPath);
+      await mkdir(path.dirname(archivePath), { recursive: true });
+      await copyFile(path.join(repoRoot, sourcePath), archivePath);
+    }
+    const wrapperPath = path.join(archiveRoot, entrypoint.filePath);
     const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
       fetch(request: Request): Promise<Response>;
     };

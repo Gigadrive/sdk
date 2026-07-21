@@ -241,9 +241,16 @@ describe('Next.js framework detection', () => {
       '/project/.next/server/app.js': 'export const handler = () => {}',
       '/project/.next/server/shared.js': 'export const shared = true',
       '/project/.next/static/app.js': 'static',
+      '/project/public/gigadrive-mark.svg': '<svg />',
     });
 
     expect(result.config.entrypoints).toHaveLength(2);
+    expect(result.config.assets).toMatchObject({
+      paths: expect.arrayContaining(['public/gigadrive-mark.svg', '.next/static/app.js']),
+      overrides: expect.objectContaining({
+        'public/gigadrive-mark.svg': { path: 'gigadrive-mark.svg' },
+      }),
+    });
     expect(result.config.entrypoints).toEqual([
       expect.objectContaining({
         path: '.gigadrive/nextjs/entrypoints/next-0.mjs',
@@ -289,8 +296,11 @@ describe('Next.js framework detection', () => {
       widths: [640, 1080],
     });
     expect(result.config.assets).toMatchObject({
-      paths: ['.next/static/app.js'],
-      overrides: { '.next/static/app.js': { path: '_next/static/app.js' } },
+      paths: ['public/gigadrive-mark.svg', '.next/static/app.js'],
+      overrides: {
+        'public/gigadrive-mark.svg': { path: 'gigadrive-mark.svg' },
+        '.next/static/app.js': { path: '_next/static/app.js' },
+      },
     });
   });
 
