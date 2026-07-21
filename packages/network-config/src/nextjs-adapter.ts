@@ -1,5 +1,5 @@
 import type { NextAdapter } from 'next';
-import { access, mkdir, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NormalizedImagePolicy } from './image-policy';
@@ -57,24 +57,39 @@ const toPortableRelativePath = (from: string, to: string, allowCurrentDirectory 
   return normalized;
 };
 
-const requireReadableFile = async (repoRoot: string, filePath: string): Promise<string> => {
+async function resolveReadablePath(repoRoot: string, filePath: string) {
   const absolutePath = path.resolve(path.isAbsolute(filePath) ? filePath : path.join(repoRoot, filePath));
   const portablePath = toPortableRelativePath(repoRoot, absolutePath);
   await access(absolutePath);
+  const resolvedPath = await realpath(absolutePath);
+  toPortableRelativePath(repoRoot, resolvedPath);
   const fileStat = await stat(absolutePath);
+  return { portablePath, fileStat };
+}
+
+async function requireReadableFile(repoRoot: string, filePath: string): Promise<string> {
+  const { portablePath, fileStat } = await resolveReadablePath(repoRoot, filePath);
   if (!fileStat.isFile()) throw new Error(`Next.js adapter output is not a readable file: ${filePath}`);
   return portablePath;
-};
+}
 
-const serializeFileMap = async (repoRoot: string, files: Record<string, string>): Promise<Record<string, string>> => {
+async function requireReadableAsset(repoRoot: string, filePath: string): Promise<string> {
+  const { portablePath, fileStat } = await resolveReadablePath(repoRoot, filePath);
+  if (!fileStat.isFile() && !fileStat.isDirectory()) {
+    throw new Error(`Next.js adapter asset is not a readable file or directory: ${filePath}`);
+  }
+  return portablePath;
+}
+
+async function serializeFileMap(repoRoot: string, files: Record<string, string>): Promise<Record<string, string>> {
   const entries = await Promise.all(
     Object.entries(files).map(async ([targetPath, sourcePath]) => [
       toPortableRelativePath(repoRoot, targetPath),
-      await requireReadableFile(repoRoot, sourcePath),
+      await requireReadableAsset(repoRoot, sourcePath),
     ])
   );
   return Object.fromEntries(entries);
-};
+}
 
 const serializeRouteOutput = async (repoRoot: string, output: NextRouteOutput): Promise<GigadriveNextRouteOutput> => {
   const matchers = (

@@ -117,18 +117,26 @@ describe('Gigadrive Next.js adapter', () => {
     const distDir = path.join(projectDir, '.next-custom');
     const handlerPath = path.join(distDir, 'server', 'app.js');
     const sharedPath = path.join(distDir, 'server', 'chunks', 'shared.js');
+    const tracedPackagePath = path.join(repoRoot, 'node_modules', '@swc', 'helpers');
+    const tracedPackageModulePath = path.join(tracedPackagePath, 'cjs', 'index.js');
     const staticPath = path.join(distDir, 'static', 'app.js');
     await mkdir(path.dirname(sharedPath), { recursive: true });
+    await mkdir(path.dirname(tracedPackageModulePath), { recursive: true });
     await mkdir(path.dirname(staticPath), { recursive: true });
     await writeFile(handlerPath, 'export async function handler() {}');
     await writeFile(sharedPath, 'export const shared = true');
+    await writeFile(path.join(tracedPackagePath, 'package.json'), '{"name":"@swc/helpers"}');
+    await writeFile(tracedPackageModulePath, 'module.exports = {}');
     await writeFile(staticPath, 'console.log("static")');
 
     const commonOutput = {
       filePath: handlerPath,
       sourcePage: 'app/page.tsx',
       runtime: 'nodejs',
-      assets: { 'apps/web/.next-custom/server/chunks/shared.js': sharedPath },
+      assets: {
+        'apps/web/.next-custom/server/chunks/shared.js': sharedPath,
+        'node_modules/@swc/helpers': tracedPackagePath,
+      },
       config: { maxDuration: 45, preferredRegion: ['fra1'] },
     };
     await onBuildComplete({
@@ -178,6 +186,9 @@ describe('Gigadrive Next.js adapter', () => {
       id: 'next-0',
       runtime: 'nodejs',
       outputIds: ['page-html', 'page-rsc'],
+      assets: {
+        'node_modules/@swc/helpers': 'node_modules/@swc/helpers',
+      },
       config: { maxDuration: 45, preferredRegion: ['fra1'] },
     });
     const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
