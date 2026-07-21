@@ -1,31 +1,39 @@
-name: Next.js adapter compatibility
+name: Next.js adapter compatibility (live, manual)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - packages/network-config/**
-      - packages/sdk/**
-      - scripts/nextjs-e2e-*.sh
-      - .github/workflows/nextjs-adapter-compatibility.yml
   workflow_dispatch:
     inputs:
       nextjsRef:
         description: Next.js tag, branch, or SHA
         default: v16.2.10
         type: string
-  schedule:
-    - cron: '0 2 * * *'
+      confirmLiveDeployments:
+        description: Type DEPLOY_MANY_FIXTURES to allow real Network deployments
+        required: true
+        type: string
 
 concurrency:
-  group: nextjs-adapter-${{ inputs.nextjsRef || (github.event_name == 'schedule' && 'canary') || 'v16.2.10' }}
+  group: nextjs-adapter-live
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require explicit live-deployment acknowledgement
+        env:
+          CONFIRM_LIVE_DEPLOYMENTS: ${{ inputs.confirmLiveDeployments }}
+        run: |
+          if [ "$CONFIRM_LIVE_DEPLOYMENTS" != "DEPLOY_MANY_FIXTURES" ]; then
+            echo "This workflow creates many real Network deployments. Enter DEPLOY_MANY_FIXTURES to continue." >&2
+            exit 1
+          fi
+
   build:
+    needs: authorize
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -35,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: vercel/next.js
-          ref: ${{ inputs.nextjsRef || (github.event_name == 'schedule' && 'canary') || 'v16.2.10' }}
+          ref: ${{ inputs.nextjsRef }}
           path: nextjs
           fetch-depth: 25
       - uses: actions/setup-node@v4
@@ -69,6 +77,7 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         group:
           - 1/16
@@ -113,7 +122,8 @@ jobs:
           NEXT_TEST_DEPLOY_SCRIPT_PATH: ${{ github.workspace }}/adapter/scripts/nextjs-e2e-deploy.sh
           NEXT_TEST_DEPLOY_LOGS_SCRIPT_PATH: ${{ github.workspace }}/adapter/scripts/nextjs-e2e-logs.sh
           GIGADRIVE_NEXT_TEST_APPLICATION_ID: ${{ secrets.GIGADRIVE_NEXT_TEST_APPLICATION_ID }}
+          GIGADRIVE_NEXT_TEST_ALLOW_LIVE_DEPLOYMENTS: DEPLOY_MANY_FIXTURES
           GIGADRIVE_BEARER_TOKEN: ${{ secrets.GIGADRIVE_NEXT_TEST_BEARER_TOKEN }}
           GIGADRIVE_CLIENT_ID: ${{ secrets.GIGADRIVE_NEXT_TEST_CLIENT_ID }}
           GIGADRIVE_CLIENT_SECRET: ${{ secrets.GIGADRIVE_NEXT_TEST_CLIENT_SECRET }}
-        run: node run-tests.js --timings -g ${{ matrix.group }} -c 2 --type e2e
+        run: node run-tests.js --timings -g ${{ matrix.group }} -c 1 --type e2e
