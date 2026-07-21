@@ -191,6 +191,10 @@ export interface NormalizedConfigEntrypoint {
   package?: {
     /** Disable dependency tracing when the framework output is already self-contained. */
     trace?: boolean;
+    /** Include the package root in addition to explicitly mapped files. Defaults to true. */
+    includeProjectFiles?: boolean;
+    /** Preserve mapped symbolic links instead of recursively copying their targets. */
+    preserveSymlinks?: boolean;
     rootOverwrite?: string;
     filePathMap?: FilePathMap;
     includeFiles?: string[];

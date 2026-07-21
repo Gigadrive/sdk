@@ -66,7 +66,10 @@ const adapterManifest = () =>
           pathname: '/',
           sourcePage: 'pages/index.tsx',
           runtime: 'nodejs',
-          assets: { '.next/server/shared.js': '.next/server/shared.js' },
+          assets: {
+            '.next/server/page.js': '.next/server/page.js',
+            '.next/server/shared.js': '.next/server/shared.js',
+          },
           config: { maxDuration: 20 },
         },
       ],
@@ -78,7 +81,10 @@ const adapterManifest = () =>
           pathname: '/app',
           sourcePage: 'app/page.tsx',
           runtime: 'nodejs',
-          assets: { '.next/server/shared.js': '.next/server/shared.js' },
+          assets: {
+            '.next/server/app.js': '.next/server/app.js',
+            '.next/server/shared.js': '.next/server/shared.js',
+          },
           config: { maxDuration: 40 },
         },
       ],
@@ -243,12 +249,26 @@ describe('Next.js framework detection', () => {
         path: '.gigadrive/nextjs/entrypoints/next-0.mjs',
         maxDuration: 20,
         environmentVariables: expect.objectContaining({ GIGADRIVE_NEXT_ENTRYPOINT_ID: 'next-0' }),
-        package: expect.objectContaining({ sharedArtifactIds: ['next-shared'] }),
+        package: expect.objectContaining({
+          includeProjectFiles: false,
+          filePathMap: expect.objectContaining({
+            '/project/.next/server/page.js': '.next/server/page.js',
+          }),
+          preserveSymlinks: true,
+          sharedArtifactIds: ['next-shared'],
+        }),
       }),
       expect.objectContaining({
         path: '.gigadrive/nextjs/entrypoints/next-1.mjs',
         maxDuration: 40,
-        package: expect.objectContaining({ sharedArtifactIds: ['next-shared'] }),
+        package: expect.objectContaining({
+          includeProjectFiles: false,
+          filePathMap: expect.objectContaining({
+            '/project/.next/server/app.js': '.next/server/app.js',
+          }),
+          preserveSymlinks: true,
+          sharedArtifactIds: ['next-shared'],
+        }),
       }),
     ]);
     expect(result.config.routes).toEqual([]);

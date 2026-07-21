@@ -138,6 +138,16 @@ const createAdapterV2Config = Effect.fn('nextjs.createAdapterV2Config')(function
   const sharedArtifacts: NormalizedSharedArtifact[] =
     Object.keys(sharedFilePathMap).length > 0 ? [{ id: 'next-shared', filePathMap: sharedFilePathMap }] : [];
 
+  const executablePathByOutputId = new Map(
+    [
+      ...manifest.outputs.pages,
+      ...manifest.outputs.pagesApi,
+      ...manifest.outputs.appPages,
+      ...manifest.outputs.appRoutes,
+      ...(manifest.outputs.middleware ? [manifest.outputs.middleware] : []),
+    ].map((output) => [output.id, output.edgeRuntime?.modulePath ?? output.filePath] as const)
+  );
+
   const entrypoints: NormalizedConfigEntrypoint[] = manifest.entrypoints.map((entrypoint) => {
     const filePathMap: Record<string, string> = {};
     for (const [targetPath, sourcePath] of Object.entries({
@@ -147,6 +157,14 @@ const createAdapterV2Config = Effect.fn('nextjs.createAdapterV2Config')(function
       const identity = `${targetPath}\0${sourcePath}`;
       if ((artifactUseCount.get(identity) ?? 0) >= 2) continue;
       filePathMap[pathService.join(repoRoot, sourcePath)] = targetPath;
+    }
+    for (const executablePath of new Set(
+      entrypoint.outputIds.flatMap((outputId) => {
+        const executablePath = executablePathByOutputId.get(outputId);
+        return executablePath ? [executablePath] : [];
+      })
+    )) {
+      filePathMap[pathService.join(repoRoot, executablePath)] = executablePath;
     }
     filePathMap[pathService.join(repoRoot, entrypoint.filePath)] = entrypoint.filePath;
 
@@ -165,6 +183,8 @@ const createAdapterV2Config = Effect.fn('nextjs.createAdapterV2Config')(function
       },
       package: {
         trace: false,
+        includeProjectFiles: false,
+        preserveSymlinks: true,
         rootOverwrite: repoRoot,
         filePathMap,
         ...(sharedArtifacts.length > 0 ? { sharedArtifactIds: sharedArtifacts.map((artifact) => artifact.id) } : {}),
