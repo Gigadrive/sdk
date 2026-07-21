@@ -91,6 +91,28 @@ async function serializeFileMap(repoRoot: string, files: Record<string, string>)
   return Object.fromEntries(entries);
 }
 
+const serializeRuntimeConfigAssets = async (
+  projectDir: string,
+  repoRoot: string,
+  config: BuildCompleteContext['config']
+): Promise<Record<string, string>> => {
+  const configuredPaths = new Set([
+    config.cacheHandler,
+    ...Object.values(config.cacheHandlers ?? {}),
+    config.images.loaderFile,
+  ]);
+  const assets: Record<string, string> = {};
+  for (const configuredPath of configuredPaths) {
+    if (!configuredPath) continue;
+    const absolutePath = path.resolve(
+      path.isAbsolute(configuredPath) ? configuredPath : path.join(projectDir, configuredPath)
+    );
+    const portablePath = await requireReadableFile(repoRoot, absolutePath);
+    assets[portablePath] = portablePath;
+  }
+  return assets;
+};
+
 const serializeRouteOutput = async (repoRoot: string, output: NextRouteOutput): Promise<GigadriveNextRouteOutput> => {
   const matchers = (
     output.config as typeof output.config & {
@@ -369,6 +391,8 @@ const gigadriveNextAdapter: NextAdapter = {
       ...(portableOutputs.middleware ? [portableOutputs.middleware] : []),
     ];
     const entrypointPlan = buildEntrypointPlan(executableOutputs);
+    const runtimeConfigAssets = await serializeRuntimeConfigAssets(projectDir, repoRoot, config);
+    for (const entrypoint of entrypointPlan.entrypoints) Object.assign(entrypoint.assets, runtimeConfigAssets);
     await writeEntrypointWrappers(projectDir, repoRoot, entrypointPlan.entrypoints);
     const images = normalizeImages(config);
     const manifest: GigadriveNextBuildManifestV2 = {
