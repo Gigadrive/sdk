@@ -1,5 +1,11 @@
 # gigadrive
 
+## 2.5.6
+
+### Patch Changes
+
+- Allow CLI API commands to use non-interactive SDK bearer, client-credential, or refresh-token environment credentials. ([#347](https://github.com/Gigadrive/sdk/pull/347))
+
 ## 2.5.5
 
 ### Patch Changes
