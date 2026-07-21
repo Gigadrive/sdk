@@ -120,14 +120,22 @@ describe('Gigadrive Next.js adapter', () => {
     const tracedPackagePath = path.join(repoRoot, 'node_modules', '@swc', 'helpers');
     const tracedPackageModulePath = path.join(tracedPackagePath, 'cjs', 'index.js');
     const staticPath = path.join(distDir, 'static', 'app.js');
+    const platformRuntimeDirectory = path.join(projectDir, '.gigadrive', 'platform');
+    const cacheHandlerPath = path.join(platformRuntimeDirectory, 'nextjs-cache-handler.js');
+    const cacheComponentsHandlerPath = path.join(platformRuntimeDirectory, 'nextjs-cache-components-handler.js');
+    const imageLoaderPath = path.join(platformRuntimeDirectory, 'nextjs-image-loader.js');
     await mkdir(path.dirname(sharedPath), { recursive: true });
     await mkdir(path.dirname(tracedPackageModulePath), { recursive: true });
     await mkdir(path.dirname(staticPath), { recursive: true });
+    await mkdir(platformRuntimeDirectory, { recursive: true });
     await writeFile(handlerPath, 'export async function handler() {}');
     await writeFile(sharedPath, 'export const shared = true');
     await writeFile(path.join(tracedPackagePath, 'package.json'), '{"name":"@swc/helpers"}');
     await writeFile(tracedPackageModulePath, 'module.exports = {}');
     await writeFile(staticPath, 'console.log("static")');
+    await writeFile(cacheHandlerPath, 'export default class CacheHandler {}');
+    await writeFile(cacheComponentsHandlerPath, 'export default class CacheComponentsHandler {}');
+    await writeFile(imageLoaderPath, 'export default function loader() {}');
 
     const commonOutput = {
       filePath: handlerPath,
@@ -143,7 +151,11 @@ describe('Gigadrive Next.js adapter', () => {
       projectDir,
       repoRoot,
       distDir,
-      config: nextConfig(),
+      config: nextConfig({
+        cacheHandler: cacheHandlerPath,
+        cacheHandlers: { default: cacheComponentsHandlerPath, remote: cacheComponentsHandlerPath },
+        images: { ...nextConfig().images, loader: 'custom', loaderFile: imageLoaderPath },
+      }),
       nextVersion: '16.2.10',
       buildId: 'build-id',
       routing: {
@@ -188,6 +200,10 @@ describe('Gigadrive Next.js adapter', () => {
       outputIds: ['page-html', 'page-rsc'],
       assets: {
         'node_modules/@swc/helpers': 'node_modules/@swc/helpers',
+        'apps/web/.gigadrive/platform/nextjs-cache-handler.js': 'apps/web/.gigadrive/platform/nextjs-cache-handler.js',
+        'apps/web/.gigadrive/platform/nextjs-cache-components-handler.js':
+          'apps/web/.gigadrive/platform/nextjs-cache-components-handler.js',
+        'apps/web/.gigadrive/platform/nextjs-image-loader.js': 'apps/web/.gigadrive/platform/nextjs-image-loader.js',
       },
       config: { maxDuration: 45, preferredRegion: ['fra1'] },
     });
