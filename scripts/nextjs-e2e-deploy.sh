@@ -6,6 +6,21 @@ set -euo pipefail
 
 export NEXT_ADAPTER_PATH="${ADAPTER_DIR}/packages/network-config/dist/nextjs-adapter.cjs"
 pnpm install --no-frozen-lockfile >&2
+
+# Next creates every deployment fixture outside the adapter checkout. Mirror the
+# published package topology by placing build-time runtime modules inside the
+# fixture so Turbopack can trace them without crossing its filesystem root.
+adapter_runtime_dir="${PWD}/.gigadrive/adapter-runtime"
+mkdir -p "${adapter_runtime_dir}"
+for runtime_module in nextjs-cache-handler nextjs-cache-components-handler nextjs-image-loader; do
+  install -m 0644 \
+    "${ADAPTER_DIR}/packages/network-config/dist/${runtime_module}.js" \
+    "${adapter_runtime_dir}/${runtime_module}.js"
+done
+export GIGADRIVE_NEXT_CACHE_HANDLER_PATH="${adapter_runtime_dir}/nextjs-cache-handler.js"
+export GIGADRIVE_NEXT_CACHE_COMPONENTS_HANDLER_PATH="${adapter_runtime_dir}/nextjs-cache-components-handler.js"
+export GIGADRIVE_NEXT_IMAGE_LOADER_PATH="${adapter_runtime_dir}/nextjs-image-loader.js"
+
 pnpm build >&2
 
 build_id="$(tr -d '\n' < .next/BUILD_ID)"
