@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.7
+
+### Patch Changes
+
+- Import Next.js Edge executables from their canonical packaged module paths. ([#363](https://github.com/Gigadrive/sdk/pull/363))
+
 ## 3.4.6
 
 ### Patch Changes
