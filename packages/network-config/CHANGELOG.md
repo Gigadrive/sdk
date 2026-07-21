@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.5
+
+### Patch Changes
+
+- Initialize Next's Node environment for App Router pages and evaluate canonical Turbopack Edge manifests and chunks before invoking Edge entrypoints. ([#359](https://github.com/Gigadrive/sdk/pull/359))
+
 ## 3.4.4
 
 ### Patch Changes
