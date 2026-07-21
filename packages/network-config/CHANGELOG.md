@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.2
+
+### Patch Changes
+
+- Emit compact mapped-file overlays for Next.js adapter-v2 functions while preserving pnpm dependency symlinks. ([#351](https://github.com/Gigadrive/sdk/pull/351))
+
 ## 3.4.1
 
 ### Patch Changes
