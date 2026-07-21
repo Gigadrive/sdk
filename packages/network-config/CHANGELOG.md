@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.1
+
+### Patch Changes
+
+- Accept traced directory assets emitted by the Next.js 16 build adapter while retaining repository-boundary validation. ([#349](https://github.com/Gigadrive/sdk/pull/349))
+
 ## 3.4.0
 
 ### Minor Changes
