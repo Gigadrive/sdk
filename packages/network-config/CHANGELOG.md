@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.4
+
+### Patch Changes
+
+- Invoke Next.js Node middleware through its Web Request and Response contract so middleware can complete without hanging the deployment gateway. ([#357](https://github.com/Gigadrive/sdk/pull/357))
+
 ## 3.4.3
 
 ### Patch Changes
