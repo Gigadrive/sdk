@@ -5,6 +5,7 @@ set -euo pipefail
 : "${GIGADRIVE_NEXT_TEST_APPLICATION_ID:?GIGADRIVE_NEXT_TEST_APPLICATION_ID is required}"
 
 export NEXT_ADAPTER_PATH="${ADAPTER_DIR}/packages/network-config/dist/nextjs-adapter.cjs"
+pnpm install --no-frozen-lockfile >&2
 pnpm build >&2
 
 build_id="$(tr -d '\n' < .next/BUILD_ID)"
