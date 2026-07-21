@@ -4,14 +4,26 @@ interface IncrementalCacheContext {
   tags?: string[];
 }
 
+interface IncrementalCacheEntry {
+  lastModified: number;
+  value: unknown | null;
+}
+
+const isIncrementalCacheEntry = (value: unknown): value is IncrementalCacheEntry =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as Partial<IncrementalCacheEntry>).lastModified === 'number' &&
+  'value' in value;
+
 /** Shared Network cache handler for ISR, server responses, fetches, and image metadata. */
 export default class GigadriveNextCacheHandler {
-  async get(key: string): Promise<unknown | null> {
-    return (await readRuntimeCache('incremental', key)) ?? null;
+  async get(key: string): Promise<IncrementalCacheEntry | null> {
+    const entry = await readRuntimeCache('incremental', key);
+    return isIncrementalCacheEntry(entry) ? entry : null;
   }
 
   async set(key: string, data: unknown, context: IncrementalCacheContext): Promise<void> {
-    await writeRuntimeCache('incremental', key, data, context.tags ?? []);
+    await writeRuntimeCache('incremental', key, { lastModified: Date.now(), value: data }, context.tags ?? []);
   }
 
   async revalidateTag(tags: string | string[]): Promise<void> {
