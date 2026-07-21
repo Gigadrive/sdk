@@ -57,7 +57,7 @@ const toPortableRelativePath = (from: string, to: string, allowCurrentDirectory 
   return normalized;
 };
 
-const resolveReadablePath = async (repoRoot: string, filePath: string) => {
+async function resolveReadablePath(repoRoot: string, filePath: string) {
   const absolutePath = path.resolve(path.isAbsolute(filePath) ? filePath : path.join(repoRoot, filePath));
   const portablePath = toPortableRelativePath(repoRoot, absolutePath);
   await access(absolutePath);
@@ -65,23 +65,23 @@ const resolveReadablePath = async (repoRoot: string, filePath: string) => {
   toPortableRelativePath(repoRoot, resolvedPath);
   const fileStat = await stat(absolutePath);
   return { portablePath, fileStat };
-};
+}
 
-const requireReadableFile = async (repoRoot: string, filePath: string): Promise<string> => {
+async function requireReadableFile(repoRoot: string, filePath: string): Promise<string> {
   const { portablePath, fileStat } = await resolveReadablePath(repoRoot, filePath);
   if (!fileStat.isFile()) throw new Error(`Next.js adapter output is not a readable file: ${filePath}`);
   return portablePath;
-};
+}
 
-const requireReadableAsset = async (repoRoot: string, filePath: string): Promise<string> => {
+async function requireReadableAsset(repoRoot: string, filePath: string): Promise<string> {
   const { portablePath, fileStat } = await resolveReadablePath(repoRoot, filePath);
   if (!fileStat.isFile() && !fileStat.isDirectory()) {
     throw new Error(`Next.js adapter asset is not a readable file or directory: ${filePath}`);
   }
   return portablePath;
-};
+}
 
-const serializeFileMap = async (repoRoot: string, files: Record<string, string>): Promise<Record<string, string>> => {
+async function serializeFileMap(repoRoot: string, files: Record<string, string>): Promise<Record<string, string>> {
   const entries = await Promise.all(
     Object.entries(files).map(async ([targetPath, sourcePath]) => [
       toPortableRelativePath(repoRoot, targetPath),
@@ -89,7 +89,7 @@ const serializeFileMap = async (repoRoot: string, files: Record<string, string>)
     ])
   );
   return Object.fromEntries(entries);
-};
+}
 
 const serializeRouteOutput = async (repoRoot: string, output: NextRouteOutput): Promise<GigadriveNextRouteOutput> => {
   const matchers = (
