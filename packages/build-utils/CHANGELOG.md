@@ -1,5 +1,11 @@
 # @gigadrive/build-utils
 
+## 1.0.3
+
+### Patch Changes
+
+- Add the Next.js 16 deployment-adapter v2 manifest, split function plans, shared artifacts, runtime cache handlers, framework-neutral managed image policies, image URL helpers, image cache inspection and purge SDK methods, and Next-compatible child-process environment typing. ([#345](https://github.com/Gigadrive/sdk/pull/345))
+
 ## 1.0.2
 
 ### Patch Changes
