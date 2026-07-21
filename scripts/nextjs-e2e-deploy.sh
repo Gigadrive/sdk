@@ -4,6 +4,11 @@ set -euo pipefail
 : "${ADAPTER_DIR:?ADAPTER_DIR is required}"
 : "${GIGADRIVE_NEXT_TEST_APPLICATION_ID:?GIGADRIVE_NEXT_TEST_APPLICATION_ID is required}"
 
+if [ "${GIGADRIVE_NEXT_TEST_ALLOW_LIVE_DEPLOYMENTS:-}" != "DEPLOY_MANY_FIXTURES" ]; then
+  echo "Refusing to create live Network deployments without explicit acknowledgement" >&2
+  exit 1
+fi
+
 export NEXT_ADAPTER_PATH="${ADAPTER_DIR}/packages/network-config/dist/nextjs-adapter.cjs"
 pnpm install --no-frozen-lockfile >&2
 
