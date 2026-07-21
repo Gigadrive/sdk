@@ -378,7 +378,13 @@ describe('Gigadrive Next.js adapter', () => {
       await mkdir(path.dirname(archivePath), { recursive: true });
       await copyFile(path.join(repoRoot, sourcePath), archivePath);
     }
+    const canonicalRuntimePath = path.join(archiveRoot, entrypoint.edgeRuntime!.modulePath);
+    await mkdir(path.dirname(canonicalRuntimePath), { recursive: true });
+    await copyFile(runtimeModulePath, canonicalRuntimePath);
     const wrapperPath = path.join(archiveRoot, entrypoint.filePath);
+    await expect(readFile(wrapperPath, 'utf8')).resolves.toContain(
+      'await import("../../../.next/server/edge/chunks/runtime.js")'
+    );
     const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
       fetch(request: Request): Promise<Response>;
     };
