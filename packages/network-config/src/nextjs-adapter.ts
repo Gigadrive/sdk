@@ -251,8 +251,15 @@ const writeEntrypointWrappers = async (
                 });
               const portableWrapperDirectory = toPortableRelativePath(repoRoot, wrapperDirectory);
               const imports = edgeRuntimeAssets
-                .map(([targetPath]) => {
-                  const relativeAssetPath = path.posix.relative(portableWrapperDirectory, targetPath);
+                .map(([targetPath, sourcePath]) => {
+                  // Next includes the executable Edge module in `assets` under a
+                  // deployment-relative target such as `server/edge/chunks/*`,
+                  // while `modulePath` retains its canonical `.next/server/*`
+                  // location. Function packaging installs the executable at the
+                  // canonical path, so the wrapper must import it there as well.
+                  const runtimeTargetPath =
+                    sourcePath === entrypoint.edgeRuntime?.modulePath ? entrypoint.edgeRuntime.modulePath : targetPath;
+                  const relativeAssetPath = path.posix.relative(portableWrapperDirectory, runtimeTargetPath);
                   const assetSpecifier = relativeAssetPath.startsWith('.')
                     ? relativeAssetPath
                     : `./${relativeAssetPath}`;
