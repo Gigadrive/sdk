@@ -5,6 +5,7 @@ import { AiGatewayResource } from './resources/ai-gateway';
 import { ApiKeysResource } from './resources/api-keys';
 import { ApplicationsResource } from './resources/applications';
 import { DeploymentsResource } from './resources/deployments';
+import { ImageOptimizationResource } from './resources/image-optimization';
 import { OrganizationsResource } from './resources/organizations';
 import { StickySessionsResource } from './resources/sticky-sessions';
 
@@ -172,6 +173,8 @@ export class GigadriveClient {
   readonly apiKeys: ApiKeysResource;
   /** Signed URLs that keep related requests on one MicroVM instance. */
   readonly stickySessions: StickySessionsResource;
+  /** Managed image optimization inspection and cache purge operations. */
+  readonly imageOptimization: ImageOptimizationResource;
 
   constructor(config: GigadriveClientConfig = {}) {
     const baseUrl = config.baseUrl ?? readEnv('GIGADRIVE_API_BASE_URL') ?? DEFAULT_BASE_URL;
@@ -189,5 +192,6 @@ export class GigadriveClient {
     this.aiGateway = new AiGatewayResource(httpClient);
     this.apiKeys = new ApiKeysResource(httpClient);
     this.stickySessions = new StickySessionsResource(httpClient);
+    this.imageOptimization = new ImageOptimizationResource(httpClient);
   }
 }

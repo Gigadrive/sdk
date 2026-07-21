@@ -9,6 +9,7 @@ import {
   type NormalizedConfigEntrypoint,
   type NormalizedConfigRoute,
   type NormalizedConfigRouteHandler,
+  type NormalizedImagePolicy,
 } from '../normalized-config';
 import { AVAILABLE_REGIONS, type Region } from '../regions';
 import type { ConfigV4, ConfigV4FunctionSettings } from '../v4';
@@ -39,6 +40,25 @@ const toArray = (value: string | string[] | undefined): string[] | undefined => 
 
 const runtimeStreamsByDefault = (runtime: ConfigV4FunctionSettings['runtime'] | undefined): boolean =>
   runtime == null || runtime.startsWith('node-') || runtime.startsWith('bun-');
+
+const normalizeImagePolicy = (images: ConfigV4['images']): NormalizedImagePolicy | undefined => {
+  if (!images) return undefined;
+  return {
+    localPatterns: images.localPatterns ?? [{ pathname: '/**' }],
+    remotePatterns: images.remotePatterns ?? [],
+    widths: images.widths ?? [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    heights: images.heights ?? [],
+    qualities: images.qualities ?? [75],
+    formats: images.formats ?? ['image/avif', 'image/webp'],
+    minimumCacheTTL: images.minimumCacheTTL ?? 14_400,
+    dangerouslyAllowSVG: images.dangerouslyAllowSVG ?? false,
+    contentSecurityPolicy: images.contentSecurityPolicy ?? "default-src 'self'; script-src 'none'; sandbox;",
+    contentDispositionType: images.contentDispositionType ?? 'attachment',
+    maximumRedirects: images.maximumRedirects ?? 3,
+    maximumResponseBody: images.maximumResponseBody ?? 50 * 1024 * 1024,
+    variants: images.variants ?? {},
+  };
+};
 
 const normalizeRouteDestination = (destination: string): string => {
   const [withoutHash] = destination.split('#', 1);
@@ -297,6 +317,7 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         },
         environmentVariables: config.env ?? {},
         commands: config.build_commands ?? [],
+        images: normalizeImagePolicy(config.images),
         entrypoints,
         errors: [],
         warnings: [],

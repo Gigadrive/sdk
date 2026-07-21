@@ -1,51 +1,13 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
 import { getDefaultPathMap } from '../../build-output-v3/get-default-path-map';
+import {
+  parseGigadriveNextBuildManifest,
+  type GigadriveNextBuildManifestV1,
+  type GigadriveNextBuildManifestV2,
+} from '../../nextjs-manifest';
+import type { NormalizedConfigEntrypoint, NormalizedSharedArtifact } from '../../normalized-config';
 import type { FrameworkDefaultConfig, FrameworkDefinition } from '../types';
-
-interface NextBuildManifest {
-  version: 1;
-  output: 'standalone' | 'export';
-  distDir: string;
-  repoRootToProject: string;
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
-
-const normalizeRelativePath = (value: string, allowCurrentDirectory = false): string | undefined => {
-  const normalized = value.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '');
-  if (
-    (!allowCurrentDirectory && (!normalized || normalized === '.')) ||
-    normalized.startsWith('/') ||
-    /^[A-Za-z]:/.test(normalized) ||
-    normalized.includes(':') ||
-    normalized.split('/').some((segment) => segment === '..')
-  ) {
-    return undefined;
-  }
-  return normalized || '.';
-};
-
-const parseBuildManifest = (content: string): NextBuildManifest | undefined => {
-  try {
-    const value: unknown = JSON.parse(content);
-    if (
-      !isRecord(value) ||
-      value.version !== 1 ||
-      (value.output !== 'standalone' && value.output !== 'export') ||
-      typeof value.distDir !== 'string' ||
-      typeof value.repoRootToProject !== 'string'
-    ) {
-      return undefined;
-    }
-
-    const distDir = normalizeRelativePath(value.distDir);
-    const repoRootToProject = normalizeRelativePath(value.repoRootToProject, true);
-    return distDir && repoRootToProject ? { version: 1, output: value.output, distDir, repoRootToProject } : undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 const toPortablePath = (value: string): string => value.replaceAll('\\', '/');
 
@@ -88,7 +50,7 @@ const createStaticExportConfig = Effect.fn('nextjs.createStaticExportConfig')(fu
 const createStandaloneConfig = Effect.fn('nextjs.createStandaloneConfig')(function* (
   defaults: FrameworkDefaultConfig,
   projectFolder: string,
-  manifest: NextBuildManifest
+  manifest: GigadriveNextBuildManifestV1
 ) {
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
@@ -148,6 +110,129 @@ const createStandaloneConfig = Effect.fn('nextjs.createStandaloneConfig')(functi
   };
 });
 
+const createAdapterV2Config = Effect.fn('nextjs.createAdapterV2Config')(function* (
+  defaults: FrameworkDefaultConfig,
+  projectFolder: string,
+  manifest: GigadriveNextBuildManifestV2
+) {
+  const pathService = yield* Path.Path;
+  let repoRoot = projectFolder;
+  if (manifest.repoRootToProject !== '.') {
+    repoRoot = manifest.repoRootToProject.split('/').reduce((root) => pathService.dirname(root), repoRoot);
+  }
+
+  const artifactUseCount = new Map<string, number>();
+  for (const entrypoint of manifest.entrypoints) {
+    for (const [targetPath, sourcePath] of Object.entries(entrypoint.assets)) {
+      const identity = `${targetPath}\0${sourcePath}`;
+      artifactUseCount.set(identity, (artifactUseCount.get(identity) ?? 0) + 1);
+    }
+  }
+
+  const sharedFilePathMap: Record<string, string> = {};
+  for (const [identity, useCount] of artifactUseCount) {
+    if (useCount < 2) continue;
+    const [targetPath, sourcePath] = identity.split('\0');
+    sharedFilePathMap[pathService.join(repoRoot, sourcePath)] = targetPath;
+  }
+  const sharedArtifacts: NormalizedSharedArtifact[] =
+    Object.keys(sharedFilePathMap).length > 0 ? [{ id: 'next-shared', filePathMap: sharedFilePathMap }] : [];
+
+  const entrypoints: NormalizedConfigEntrypoint[] = manifest.entrypoints.map((entrypoint) => {
+    const filePathMap: Record<string, string> = {};
+    for (const [targetPath, sourcePath] of Object.entries({
+      ...entrypoint.assets,
+      ...entrypoint.wasmAssets,
+    })) {
+      const identity = `${targetPath}\0${sourcePath}`;
+      if ((artifactUseCount.get(identity) ?? 0) >= 2) continue;
+      filePathMap[pathService.join(repoRoot, sourcePath)] = targetPath;
+    }
+    filePathMap[pathService.join(repoRoot, entrypoint.filePath)] = entrypoint.filePath;
+
+    return {
+      displayName: entrypoint.id,
+      path: entrypoint.filePath,
+      runtime: 'node-22',
+      memory: defaults.memory,
+      maxDuration: entrypoint.config.maxDuration ?? defaults.maxDuration,
+      streaming: true,
+      environmentVariables: {
+        GIGADRIVE_NEXT_ENTRYPOINT_ID: entrypoint.id,
+        GIGADRIVE_NEXT_RUNTIME: entrypoint.runtime,
+        NEXT_BUILD_ID: manifest.buildId,
+        ...entrypoint.config.env,
+      },
+      package: {
+        trace: false,
+        rootOverwrite: repoRoot,
+        filePathMap,
+        ...(sharedArtifacts.length > 0 ? { sharedArtifactIds: sharedArtifacts.map((artifact) => artifact.id) } : {}),
+      },
+    };
+  });
+
+  const assetPaths: string[] = [];
+  const assetOverrides: Record<string, { path: string }> = {};
+  for (const output of manifest.outputs.staticFiles) {
+    const absolutePath = pathService.join(repoRoot, output.filePath);
+    const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
+    if (projectRelativePath.startsWith('../')) continue;
+    assetPaths.push(projectRelativePath);
+    assetOverrides[projectRelativePath] = { path: output.pathname.replace(/^\//, '') };
+  }
+
+  const prerenders = manifest.outputs.prerenders.map((output) => {
+    if (!output.fallback?.filePath) return output;
+    const absolutePath = pathService.join(repoRoot, output.fallback.filePath);
+    const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
+    if (projectRelativePath.startsWith('../')) return output;
+    const internalAssetPath = `_gigadrive/prerender/${encodeURIComponent(output.id)}.html`;
+    assetPaths.push(projectRelativePath);
+    assetOverrides[projectRelativePath] = { path: internalAssetPath };
+    return {
+      ...output,
+      fallback: { ...output.fallback, filePath: `/${internalAssetPath}` },
+    };
+  });
+
+  const framework = {
+    mode: manifest.mode,
+    distDir: manifest.distDir,
+    repoRootToProject: manifest.repoRootToProject,
+    nextVersion: manifest.nextVersion,
+    buildId: manifest.buildId,
+    config: manifest.config,
+    routing: manifest.routing,
+    outputs: manifest.outputs,
+    entrypoints: manifest.entrypoints,
+    outputEntrypoints: manifest.outputEntrypoints,
+  };
+  return {
+    ...defaults,
+    entrypoint: undefined,
+    routes: [],
+    assetPaths,
+    assetOverrides,
+    assetsDir: manifest.distDir,
+    assetsPrefixToStrip: '',
+    package: undefined,
+    normalizedConfig: {
+      entrypoints,
+      routes: [],
+      framework: {
+        ...framework,
+        outputs: { ...framework.outputs, prerenders },
+        type: 'nextjs' as const,
+        schemaVersion: 2 as const,
+      },
+      images: manifest.config.images,
+      sharedArtifacts,
+      userArchive: { rootOverwrite: repoRoot },
+    },
+  };
+});
+
 export const nextjs: FrameworkDefinition = {
   slug: 'nextjs',
   name: 'Next.js',
@@ -172,9 +257,14 @@ export const nextjs: FrameworkDefinition = {
       const manifestContent = yield* fs
         .readFileString(`${projectFolder}/.gigadrive/nextjs.json`)
         .pipe(Effect.catchAll(() => Effect.succeed(undefined)));
-      const manifest = manifestContent ? parseBuildManifest(manifestContent) : undefined;
+      const manifest = manifestContent ? parseGigadriveNextBuildManifest(manifestContent) : undefined;
       if (!manifest) return defaults;
 
+      if (manifest.version === 2) {
+        return manifest.mode === 'export'
+          ? yield* createStaticExportConfig(defaults, projectFolder)
+          : yield* createAdapterV2Config(defaults, projectFolder, manifest);
+      }
       return manifest.output === 'export'
         ? yield* createStaticExportConfig(defaults, projectFolder)
         : yield* createStandaloneConfig(defaults, projectFolder, manifest);

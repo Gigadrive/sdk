@@ -1,0 +1,111 @@
+name: Next.js adapter compatibility
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/network-config/**
+      - packages/sdk/**
+      - scripts/nextjs-e2e-*.sh
+      - .github/workflows/nextjs-adapter-compatibility.yml
+  workflow_dispatch:
+    inputs:
+      nextjsRef:
+        description: Next.js tag, branch, or SHA
+        default: v16.2.10
+        type: string
+  schedule:
+    - cron: '0 2 * * *'
+
+concurrency:
+  group: nextjs-adapter-${{ inputs.nextjsRef || (github.event_name == 'schedule' && 'canary') || 'v16.2.10' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: adapter
+      - uses: actions/checkout@v4
+        with:
+          repository: vercel/next.js
+          ref: ${{ inputs.nextjsRef || (github.event_name == 'schedule' && 'canary') || 'v16.2.10' }}
+          path: nextjs
+          fetch-depth: 25
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.34.4 --activate
+      - name: Build Next.js
+        working-directory: nextjs
+        run: pnpm install && pnpm build && pnpm install
+      - name: Build adapter and CLI
+        working-directory: adapter
+        run: pnpm install --frozen-lockfile && pnpm --filter @gigadrive/network-config build && pnpm --filter gigadrive build
+      - name: Install Chromium
+        working-directory: nextjs
+        run: pnpm playwright install --with-deps chromium
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            nextjs
+            adapter
+            ~/.cache/ms-playwright
+          key: next-adapter-${{ github.sha }}-${{ github.run_id }}
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - 1/16
+          - 2/16
+          - 3/16
+          - 4/16
+          - 5/16
+          - 6/16
+          - 7/16
+          - 8/16
+          - 9/16
+          - 10/16
+          - 11/16
+          - 12/16
+          - 13/16
+          - 14/16
+          - 15/16
+          - 16/16
+    steps:
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            nextjs
+            adapter
+            ~/.cache/ms-playwright
+          key: next-adapter-${{ github.sha }}-${{ github.run_id }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.34.4 --activate
+      - name: Run official deployment tests
+        working-directory: nextjs
+        env:
+          NEXT_TEST_MODE: deploy
+          NEXT_E2E_TEST_TIMEOUT: 360000
+          NEXT_EXTERNAL_TESTS_FILTERS: test/deploy-tests-manifest.json
+          ADAPTER_DIR: ${{ github.workspace }}/adapter
+          IS_TURBOPACK_TEST: 1
+          NEXT_TEST_JOB: 1
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_TEST_DEPLOY_SCRIPT_PATH: ${{ github.workspace }}/adapter/scripts/nextjs-e2e-deploy.sh
+          NEXT_TEST_DEPLOY_LOGS_SCRIPT_PATH: ${{ github.workspace }}/adapter/scripts/nextjs-e2e-logs.sh
+          GIGADRIVE_NEXT_TEST_APPLICATION_ID: ${{ secrets.GIGADRIVE_NEXT_TEST_APPLICATION_ID }}
+          GIGADRIVE_BEARER_TOKEN: ${{ secrets.GIGADRIVE_NEXT_TEST_BEARER_TOKEN }}
+        run: node run-tests.js --timings -g ${{ matrix.group }} -c 2 --type e2e

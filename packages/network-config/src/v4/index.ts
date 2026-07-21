@@ -3,6 +3,7 @@ import type {
   NormalizedConfigRouteMatchRequirements,
   NormalizedConfigRouteMethod,
   NormalizedConfigServiceType,
+  NormalizedImagePolicy,
   UpstashAWSRegion,
 } from '../normalized-config';
 import { Config } from '../parse-config';
@@ -25,6 +26,9 @@ export interface ConfigV4 extends Config {
    * If true, the assets will be cached at the edge during deployment. This may increase the deployment time, depending on the size of the assets. Defaults to false.
    */
   populateAssetCache?: boolean | null;
+
+  /** Managed image optimization policy for this deployment. */
+  images?: Partial<NormalizedImagePolicy> | null;
 
   /**
    * The regions to which the project will be deployed. Use "global" to deploy to all regions. More regions will incur higher costs.

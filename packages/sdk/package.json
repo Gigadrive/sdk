@@ -27,6 +27,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@gigadrive/network-config": "workspace:*",
     "tus-js-client": "^4.3.1"
   },
   "devDependencies": {

@@ -91,12 +91,20 @@ export type RemotePattern = {
   hostname: string;
   port?: string;
   pathname?: string;
+  search?: string;
+};
+
+export type LocalPattern = {
+  pathname?: string;
+  search?: string;
 };
 
 export type ImagesConfig = {
   sizes: number[];
   domains: string[];
   remotePatterns?: RemotePattern[];
+  localPatterns?: LocalPattern[];
+  qualities?: number[];
   minimumCacheTTL?: number; // seconds
   formats?: ImageFormat[];
   dangerouslyAllowSVG?: boolean;
