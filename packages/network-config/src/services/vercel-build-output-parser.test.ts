@@ -128,6 +128,49 @@ describe('VercelBuildOutputParser', () => {
     });
   });
 
+  it('should translate Vercel image configuration into the provider-neutral policy', async () => {
+    const result = await runParser(
+      {
+        '/project/.vercel/output/config.json': JSON.stringify({
+          version: 3,
+          images: {
+            sizes: [640, 1080],
+            domains: ['legacy.example.com'],
+            localPatterns: [{ pathname: '/media/**', search: '' }],
+            remotePatterns: [{ protocol: 'https', hostname: 'images.example.com', pathname: '/**' }],
+            qualities: [60, 80],
+            formats: ['image/avif', 'image/webp'],
+            minimumCacheTTL: 300,
+            dangerouslyAllowSVG: true,
+            contentSecurityPolicy: "default-src 'none'; sandbox;",
+            contentDispositionType: 'inline',
+          },
+        }),
+      },
+      emptyConfig,
+      '/project'
+    );
+
+    expect(result.images).toEqual({
+      localPatterns: [{ pathname: '/media/**', search: '' }],
+      remotePatterns: [
+        { protocol: 'https', hostname: 'images.example.com', pathname: '/**' },
+        { hostname: 'legacy.example.com' },
+      ],
+      widths: [640, 1080],
+      heights: [],
+      qualities: [60, 80],
+      formats: ['image/avif', 'image/webp'],
+      minimumCacheTTL: 300,
+      dangerouslyAllowSVG: true,
+      contentSecurityPolicy: "default-src 'none'; sandbox;",
+      contentDispositionType: 'inline',
+      maximumRedirects: 3,
+      maximumResponseBody: 52428800,
+      variants: {},
+    });
+  });
+
   it('should default Node Vercel Build Output functions to response streaming', async () => {
     mockGetFilesForPattern.mockResolvedValueOnce(['.vercel/output/functions/api.func/.vc-config.json']);
 

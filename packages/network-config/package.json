@@ -18,6 +18,21 @@
       "types": "./dist/nextjs-adapter.d.ts",
       "require": "./dist/nextjs-adapter.cjs",
       "import": "./dist/nextjs-adapter.mjs"
+    },
+    "./nextjs-cache-handler": {
+      "types": "./dist/nextjs-cache-handler.d.ts",
+      "require": "./dist/nextjs-cache-handler.js",
+      "import": "./dist/nextjs-cache-handler.mjs"
+    },
+    "./nextjs-cache-components-handler": {
+      "types": "./dist/nextjs-cache-components-handler.d.ts",
+      "require": "./dist/nextjs-cache-components-handler.js",
+      "import": "./dist/nextjs-cache-components-handler.mjs"
+    },
+    "./nextjs-image-loader": {
+      "types": "./dist/nextjs-image-loader.d.ts",
+      "require": "./dist/nextjs-image-loader.js",
+      "import": "./dist/nextjs-image-loader.mjs"
     }
   },
   "main": "dist/index.js",
@@ -46,7 +61,8 @@
     "@effect/platform-node": "^0.107.0",
     "@types/node": "^24.13.3",
     "effect": "^3.19.17",
-    "esbuild": "^0.28.0"
+    "esbuild": "^0.28.0",
+    "next": "16.2.10"
   },
   "peerDependencies": {
     "@effect/platform": "^0.94.5 || ^0.96.0",

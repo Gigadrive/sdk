@@ -19,6 +19,108 @@ const buildManifest = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   });
 
+const adapterManifest = () =>
+  JSON.stringify({
+    version: 2,
+    mode: 'adapter-v2',
+    distDir: '.next',
+    repoRootToProject: '.',
+    nextVersion: '16.2.10',
+    buildId: 'build-id',
+    config: {
+      basePath: '',
+      trailingSlash: false,
+      cacheComponents: true,
+      images: {
+        localPatterns: [{ pathname: '/images/**' }],
+        remotePatterns: [{ protocol: 'https', hostname: 'images.example.com', pathname: '/**' }],
+        widths: [640, 1080],
+        heights: [],
+        qualities: [75],
+        formats: ['image/webp'],
+        minimumCacheTTL: 60,
+        dangerouslyAllowSVG: false,
+        contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+        contentDispositionType: 'attachment',
+        maximumRedirects: 3,
+        maximumResponseBody: 52428800,
+        variants: {},
+      },
+    },
+    routing: {
+      beforeMiddleware: [],
+      beforeFiles: [],
+      afterFiles: [],
+      dynamicRoutes: [{ sourceRegex: '^/blog/([^/]+)$' }],
+      onMatch: [],
+      fallback: [],
+      shouldNormalizeNextData: true,
+      rsc: {},
+    },
+    outputs: {
+      pages: [
+        {
+          id: 'page',
+          type: 'PAGES',
+          filePath: '.next/server/page.js',
+          pathname: '/',
+          sourcePage: 'pages/index.tsx',
+          runtime: 'nodejs',
+          assets: { '.next/server/shared.js': '.next/server/shared.js' },
+          config: { maxDuration: 20 },
+        },
+      ],
+      appPages: [
+        {
+          id: 'app',
+          type: 'APP_PAGE',
+          filePath: '.next/server/app.js',
+          pathname: '/app',
+          sourcePage: 'app/page.tsx',
+          runtime: 'nodejs',
+          assets: { '.next/server/shared.js': '.next/server/shared.js' },
+          config: { maxDuration: 40 },
+        },
+      ],
+      pagesApi: [],
+      appRoutes: [],
+      prerenders: [],
+      staticFiles: [
+        {
+          id: 'static',
+          type: 'STATIC_FILE',
+          filePath: '.next/static/app.js',
+          pathname: '/_next/static/app.js',
+        },
+      ],
+    },
+    entrypoints: [
+      {
+        id: 'next-0',
+        runtime: 'nodejs',
+        filePath: '.gigadrive/nextjs/entrypoints/next-0.mjs',
+        outputIds: ['page'],
+        assets: {
+          '.gigadrive/nextjs/entrypoints/next-0.mjs': '.gigadrive/nextjs/entrypoints/next-0.mjs',
+          '.next/server/shared.js': '.next/server/shared.js',
+        },
+        config: { maxDuration: 20 },
+      },
+      {
+        id: 'next-1',
+        runtime: 'nodejs',
+        filePath: '.gigadrive/nextjs/entrypoints/next-1.mjs',
+        outputIds: ['app'],
+        assets: {
+          '.gigadrive/nextjs/entrypoints/next-1.mjs': '.gigadrive/nextjs/entrypoints/next-1.mjs',
+          '.next/server/shared.js': '.next/server/shared.js',
+        },
+        config: { maxDuration: 40 },
+      },
+    ],
+    outputEntrypoints: { page: 'next-0', app: 'next-1' },
+  });
+
 describe('Next.js framework detection', () => {
   expectNodePackageManagerVariants('Next.js', dependencies, 'next build');
   expectNodePackageManagerPriority(dependencies);
@@ -121,6 +223,55 @@ describe('Next.js framework detection', () => {
       },
     });
     expect(result.config.routes[0]?.destination).toBe('apps/web/server.js');
+  });
+
+  it('should create split Next 16 functions, shared artifacts, framework routing, and managed images', async () => {
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.gigadrive/nextjs.json': adapterManifest(),
+      '/project/.gigadrive/nextjs/entrypoints/next-0.mjs': 'export default async function handler() {}',
+      '/project/.gigadrive/nextjs/entrypoints/next-1.mjs': 'export default async function handler() {}',
+      '/project/.next/server/page.js': 'export const handler = () => {}',
+      '/project/.next/server/app.js': 'export const handler = () => {}',
+      '/project/.next/server/shared.js': 'export const shared = true',
+      '/project/.next/static/app.js': 'static',
+    });
+
+    expect(result.config.entrypoints).toHaveLength(2);
+    expect(result.config.entrypoints).toEqual([
+      expect.objectContaining({
+        path: '.gigadrive/nextjs/entrypoints/next-0.mjs',
+        maxDuration: 20,
+        environmentVariables: expect.objectContaining({ GIGADRIVE_NEXT_ENTRYPOINT_ID: 'next-0' }),
+        package: expect.objectContaining({ sharedArtifactIds: ['next-shared'] }),
+      }),
+      expect.objectContaining({
+        path: '.gigadrive/nextjs/entrypoints/next-1.mjs',
+        maxDuration: 40,
+        package: expect.objectContaining({ sharedArtifactIds: ['next-shared'] }),
+      }),
+    ]);
+    expect(result.config.routes).toEqual([]);
+    expect(result.config.sharedArtifacts).toEqual([
+      {
+        id: 'next-shared',
+        filePathMap: { '/project/.next/server/shared.js': '.next/server/shared.js' },
+      },
+    ]);
+    expect(result.config.framework).toMatchObject({
+      type: 'nextjs',
+      schemaVersion: 2,
+      buildId: 'build-id',
+      routing: { shouldNormalizeNextData: true },
+    });
+    expect(result.config.images).toMatchObject({
+      remotePatterns: [{ protocol: 'https', hostname: 'images.example.com', pathname: '/**' }],
+      widths: [640, 1080],
+    });
+    expect(result.config.assets).toMatchObject({
+      paths: ['.next/static/app.js'],
+      overrides: { '.next/static/app.js': { path: '_next/static/app.js' } },
+    });
   });
 
   it('should ignore malformed or unsafe adapter metadata', async () => {

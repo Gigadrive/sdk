@@ -46,29 +46,33 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
     commands,
   });
 
-  const entrypoints = defaults.entrypoint
-    ? [
-        {
-          path: defaults.entrypoint,
-          runtime: defaults.runtime,
-          memory: defaults.memory,
-          maxDuration: defaults.maxDuration,
-          streaming: defaults.streaming,
-          symlinks: defaults.symlinks,
-          package: defaults.package,
-        },
-      ]
-    : [];
+  const entrypoints =
+    defaults.normalizedConfig?.entrypoints ??
+    (defaults.entrypoint
+      ? [
+          {
+            path: defaults.entrypoint,
+            runtime: defaults.runtime,
+            memory: defaults.memory,
+            maxDuration: defaults.maxDuration,
+            streaming: defaults.streaming,
+            symlinks: defaults.symlinks,
+            package: defaults.package,
+          },
+        ]
+      : []);
 
-  const routes = defaults.entrypoint
-    ? defaults.routes.map((route) => ({
-        path: route.source,
-        destination: route.destination,
-        handler: defaults.streaming ? ('SERVERLESS_FUNCTION_STREAMING' as const) : ('SERVERLESS_FUNCTION' as const),
-        methods: ['ANY' as const],
-        headers: {},
-      }))
-    : [];
+  const routes =
+    defaults.normalizedConfig?.routes ??
+    (defaults.entrypoint
+      ? defaults.routes.map((route) => ({
+          path: route.source,
+          destination: route.destination,
+          handler: defaults.streaming ? ('SERVERLESS_FUNCTION_STREAMING' as const) : ('SERVERLESS_FUNCTION' as const),
+          methods: ['ANY' as const],
+          headers: {},
+        }))
+      : []);
 
   const config: NormalizedConfig = {
     regions: [...AVAILABLE_REGIONS],
@@ -79,6 +83,7 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
     excludeFiles: defaults.excludeFiles && defaults.excludeFiles.length > 0 ? [...defaults.excludeFiles] : undefined,
     warnings: [`Auto-detected framework: ${framework.name}. Create a gigadrive.yaml to customize.`],
     errors: [],
+    ...defaults.normalizedConfig,
   };
 
   if (defaults.assetsDir || defaults.assetPaths) {

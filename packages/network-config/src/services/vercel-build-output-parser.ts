@@ -45,8 +45,9 @@ export class VercelBuildOutputParser extends Effect.Service<VercelBuildOutputPar
 
       const functionData = yield* loadFunctions(config, parseResult, projectFolder);
       const assetOverrides = loadAssetOverrides(config, parseResult);
+      const imagePolicy = loadImagePolicy(config);
 
-      const merged = deepMerge(parseResult, functionData, assetOverrides);
+      const merged = deepMerge(parseResult, functionData, assetOverrides, imagePolicy);
       merged.regions = [...new Set(merged.regions)] as Region[];
       return merged;
     });
@@ -200,6 +201,28 @@ const loadAssetOverrides = (config: Config, parseResult: NormalizedConfig): Part
         ...(parseResult.assets?.overrides ?? {}),
         ...config.overrides,
       },
+    },
+  };
+};
+
+const loadImagePolicy = (config: Config): Partial<NormalizedConfig> => {
+  if (!config.images) return {};
+  const images = config.images;
+  return {
+    images: {
+      localPatterns: images.localPatterns ?? [{ pathname: '/**' }],
+      remotePatterns: [...(images.remotePatterns ?? []), ...images.domains.map((hostname) => ({ hostname }))],
+      widths: images.sizes,
+      heights: [],
+      qualities: images.qualities ?? [75],
+      formats: images.formats ?? ['image/webp'],
+      minimumCacheTTL: images.minimumCacheTTL ?? 60,
+      dangerouslyAllowSVG: images.dangerouslyAllowSVG ?? false,
+      contentSecurityPolicy: images.contentSecurityPolicy ?? "default-src 'self'; script-src 'none'; sandbox;",
+      contentDispositionType: images.contentDispositionType === 'inline' ? 'inline' : 'attachment',
+      maximumRedirects: 3,
+      maximumResponseBody: 50 * 1024 * 1024,
+      variants: {},
     },
   };
 };

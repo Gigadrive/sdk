@@ -1,5 +1,16 @@
+import type { NormalizedImagePolicy } from './image-policy';
+import type { GigadriveNextBuildManifestV2 } from './nextjs-manifest';
 import { type Region } from './regions';
 import { type Runtime } from './runtime';
+
+export type {
+  NormalizedImageFit,
+  NormalizedImageFormat,
+  NormalizedImageLocalPattern,
+  NormalizedImagePolicy,
+  NormalizedImageRemotePattern,
+  NormalizedImageVariant,
+} from './image-policy';
 
 /**
  * A map of file paths to their corresponding paths in the deployment.
@@ -51,6 +62,15 @@ export interface NormalizedConfig {
      */
     populateCache?: boolean;
   };
+
+  /** Framework-specific runtime metadata understood by the Network gateway. */
+  framework?: NormalizedFramework;
+
+  /** Provider-neutral managed image optimization policy. */
+  images?: NormalizedImagePolicy;
+
+  /** Content-addressable files mounted into more than one function package. */
+  sharedArtifacts?: NormalizedSharedArtifact[];
 
   /**
    * Additional environment variables to set during runtime and build.
@@ -175,7 +195,21 @@ export interface NormalizedConfigEntrypoint {
     filePathMap?: FilePathMap;
     includeFiles?: string[];
     excludeFiles?: string[];
+    /** Shared deployment artifacts that must be mounted before this overlay. */
+    sharedArtifactIds?: string[];
   };
+}
+
+export type NormalizedFramework = NormalizedNextjsFramework;
+
+export type NormalizedNextjsFramework = Omit<GigadriveNextBuildManifestV2, 'version'> & {
+  type: 'nextjs';
+  schemaVersion: 2;
+};
+
+export interface NormalizedSharedArtifact {
+  id: string;
+  filePathMap: FilePathMap;
 }
 
 export interface NormalizedConfigRoute {

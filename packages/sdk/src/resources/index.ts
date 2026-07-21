@@ -117,5 +117,8 @@ export type {
 export { StickySessionsResource } from './sticky-sessions';
 export type { CreateStickySessionUrlInput, CreateStickySessionUrlResult } from './sticky-sessions';
 
+export { ImageOptimizationResource, createManagedImageUrl } from './image-optimization';
+export type { ImageCacheInspection, ImageCachePurgeResult, ManagedImageUrlOptions } from './image-optimization';
+
 export type { NodeReadableLike, UploadData } from '../upload/source';
 export type { RunUploadOptions, UploadUrlStorage } from '../upload/transport';

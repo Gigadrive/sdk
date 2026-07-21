@@ -92,6 +92,8 @@ export interface FrameworkDefaultConfig {
     includeFiles?: string[];
     excludeFiles?: string[];
   };
+  /** Advanced framework output that replaces the one-entrypoint defaults. */
+  normalizedConfig?: Partial<NormalizedConfig>;
 }
 
 export interface DetectionResult {

@@ -60,7 +60,10 @@ export async function exec({
     const childProcess = spawn(spawnCommand, spawnArgs, {
       cwd,
       shell: true,
-      env,
+      // Next.js augments ProcessEnv with a required NODE_ENV while this generic
+      // helper intentionally accepts isolated command environments. The child
+      // process API still accepts that map at runtime.
+      env: env as NodeJS.ProcessEnv | undefined,
     });
 
     childProcess.stdout.on('data', (data) => {
