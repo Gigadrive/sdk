@@ -179,6 +179,7 @@ const buildEntrypointPlan = (
 
   for (const output of outputs) {
     const identity = JSON.stringify([
+      output.type === 'MIDDLEWARE' ? 'middleware-web' : 'route',
       output.runtime,
       output.filePath,
       output.edgeRuntime?.modulePath,
@@ -219,7 +220,8 @@ const buildEntrypointPlan = (
 const writeEntrypointWrappers = async (
   projectDir: string,
   repoRoot: string,
-  entrypoints: GigadriveNextEntrypoint[]
+  entrypoints: GigadriveNextEntrypoint[],
+  middlewareOutputId?: string
 ): Promise<void> => {
   const wrapperDirectory = path.join(projectDir, '.gigadrive', 'nextjs', 'entrypoints');
   await mkdir(wrapperDirectory, { recursive: true });
@@ -230,9 +232,14 @@ const writeEntrypointWrappers = async (
       const executablePath = path.join(repoRoot, entrypoint.edgeRuntime?.modulePath ?? entrypoint.filePath);
       const relativeImport = path.relative(wrapperDirectory, executablePath).replaceAll(path.sep, '/');
       const importSpecifier = relativeImport.startsWith('.') ? relativeImport : `./${relativeImport}`;
-      const source =
+      const isMiddleware = middlewareOutputId !== undefined && entrypoint.outputIds.includes(middlewareOutputId);
+      const webHandlerPrelude =
         entrypoint.runtime === 'edge' && entrypoint.edgeRuntime
-          ? `import ${JSON.stringify(importSpecifier)};\n\nexport async function fetch(request) {\n  const pending = [];\n  const registry = globalThis._ENTRIES;\n  if (!registry) throw new Error('Next.js edge entry registry is unavailable');\n  const entry = await registry[${JSON.stringify(entrypoint.edgeRuntime.entryKey)}];\n  const handler = entry?.[${JSON.stringify(entrypoint.edgeRuntime.handlerExport)}];\n  if (typeof handler !== 'function') throw new Error('Next.js edge handler is unavailable');\n  const url = new URL(request.url);\n  const response = await handler(request, {\n    signal: request.signal,\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: url.hostname, invocationTarget: request.headers.get('x-gigadrive-next-invocation-target') ?? url.pathname, routeMatches: Object.fromEntries(new URLSearchParams(request.headers.get('x-now-route-matches') ?? '')), relativeProjectDir: ${JSON.stringify(
+          ? `import ${JSON.stringify(importSpecifier)};\n\nconst resolveHandler = async () => {\n  const registry = globalThis._ENTRIES;\n  if (!registry) throw new Error('Next.js edge entry registry is unavailable');\n  const entry = await registry[${JSON.stringify(entrypoint.edgeRuntime.entryKey)}];\n  const handler = entry?.[${JSON.stringify(entrypoint.edgeRuntime.handlerExport)}];\n  if (typeof handler !== 'function') throw new Error('Next.js edge handler is unavailable');\n  return handler;\n};`
+          : `import * as nextEntrypoint from ${JSON.stringify(importSpecifier)};\n\nconst resolveHandler = async () => {\n  const handler = nextEntrypoint.handler ?? nextEntrypoint.default?.handler ?? nextEntrypoint.default;\n  if (typeof handler !== 'function') throw new Error('Next.js middleware handler is unavailable');\n  return handler;\n};`;
+      const source =
+        (entrypoint.runtime === 'edge' && entrypoint.edgeRuntime) || isMiddleware
+          ? `${webHandlerPrelude}\n\nexport async function fetch(request) {\n  const pending = [];\n  const handler = await resolveHandler();\n  const url = new URL(request.url);\n  const response = await handler(request, {\n    signal: request.signal,\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: url.hostname, invocationTarget: request.headers.get('x-gigadrive-next-invocation-target') ?? url.pathname, routeMatches: Object.fromEntries(new URLSearchParams(request.headers.get('x-now-route-matches') ?? '')), relativeProjectDir: ${JSON.stringify(
               toPortableRelativePath(repoRoot, projectDir, true)
             )} },\n  });\n  if (!response.body) { await Promise.allSettled(pending); return response; }\n  const reader = response.body.getReader();\n  const body = new ReadableStream({\n    async pull(controller) {\n      const result = await reader.read();\n      if (result.done) { await Promise.allSettled(pending); controller.close(); return; }\n      controller.enqueue(result.value);\n    },\n    cancel(reason) { return reader.cancel(reason); },\n  });\n  return new Response(body, response);\n}\n`
           : `import * as nextEntrypoint from ${JSON.stringify(importSpecifier)};\n\nexport default async function handler(req, res) {\n  const pending = [];\n  const nextHandler = nextEntrypoint.handler ?? nextEntrypoint.default?.handler ?? nextEntrypoint.default;\n  if (typeof nextHandler !== 'function') throw new Error('Next.js Node handler is unavailable');\n  await nextHandler(req, res, {\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: req.headers.host, invocationTarget: req.headers['x-gigadrive-next-invocation-target'] ?? req.url, routeMatches: Object.fromEntries(new URLSearchParams(req.headers['x-now-route-matches'] ?? '')), relativeProjectDir: ${JSON.stringify(
@@ -393,7 +400,7 @@ const gigadriveNextAdapter: NextAdapter = {
     const entrypointPlan = buildEntrypointPlan(executableOutputs);
     const runtimeConfigAssets = await serializeRuntimeConfigAssets(projectDir, repoRoot, config);
     for (const entrypoint of entrypointPlan.entrypoints) Object.assign(entrypoint.assets, runtimeConfigAssets);
-    await writeEntrypointWrappers(projectDir, repoRoot, entrypointPlan.entrypoints);
+    await writeEntrypointWrappers(projectDir, repoRoot, entrypointPlan.entrypoints, portableOutputs.middleware?.id);
     const images = normalizeImages(config);
     const manifest: GigadriveNextBuildManifestV2 = {
       version: 2,
