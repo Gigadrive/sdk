@@ -7,7 +7,9 @@ interface NextImageLoaderOptions {
 const filenameHint = (source: string): string => {
   const pathname = source.startsWith('http://') || source.startsWith('https://') ? new URL(source).pathname : source;
   const candidate = pathname.split('/').filter(Boolean).at(-1)?.split('?')[0] ?? 'image';
-  return /\.[A-Za-z0-9]{2,5}$/.test(candidate) ? candidate : `${candidate || 'image'}.image`;
+  return /\.(?:avif|bmp|gif|hei[cf]|jpe?g|pbm|png|svg|tga|tiff?|webp)$/i.test(candidate)
+    ? candidate
+    : `${candidate || 'image'}.png`;
 };
 
 /** Builds the stable app-host URL consumed by Gigadrive's managed image optimizer. */
