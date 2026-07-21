@@ -7,6 +7,15 @@ set -euo pipefail
 export NEXT_ADAPTER_PATH="${ADAPTER_DIR}/packages/network-config/dist/nextjs-adapter.cjs"
 pnpm install --no-frozen-lockfile >&2
 
+# Next's isolated deploy fixtures use `typescript: latest`. Keep the stable
+# compatibility run on a TypeScript release supported by Next 16; otherwise a
+# newly published TypeScript major can make Next's own build worker fail before
+# the adapter receives onBuildComplete.
+typescript_major="$(node -e 'try { process.stdout.write(require("typescript/package.json").version.split(".")[0]) } catch { process.stdout.write("0") }')"
+if [ "${typescript_major}" -eq 0 ] || [ "${typescript_major}" -ge 7 ]; then
+  pnpm add --save-dev typescript@5.9.3 >&2
+fi
+
 # Next creates every deployment fixture outside the adapter checkout. Mirror the
 # published package topology by placing build-time runtime modules inside the
 # fixture so Turbopack can trace them without crossing its filesystem root.
