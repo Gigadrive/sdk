@@ -30,6 +30,7 @@ const CACHE_HANDLER_PATH = () => runtimeModulePath('GIGADRIVE_NEXT_CACHE_HANDLER
 const CACHE_COMPONENTS_HANDLER_PATH = () =>
   runtimeModulePath('GIGADRIVE_NEXT_CACHE_COMPONENTS_HANDLER_PATH', 'nextjs-cache-components-handler.js');
 const IMAGE_LOADER_PATH = () => runtimeModulePath('GIGADRIVE_NEXT_IMAGE_LOADER_PATH', 'nextjs-image-loader.js');
+const PPR_RUNTIME_PATH = () => runtimeModulePath('GIGADRIVE_NEXT_PPR_RUNTIME_PATH', 'nextjs-ppr-runtime.js');
 
 const toJsonValue = (value: unknown): JsonValue => {
   const serialized = JSON.stringify(value);
@@ -100,6 +101,7 @@ const serializeRuntimeConfigAssets = async (
     config.cacheHandler,
     ...Object.values(config.cacheHandlers ?? {}),
     config.images.loaderFile,
+    PPR_RUNTIME_PATH(),
   ]);
   const assets: Record<string, string> = {};
   for (const configuredPath of configuredPaths) {
@@ -221,10 +223,16 @@ const writeEntrypointWrappers = async (
   projectDir: string,
   repoRoot: string,
   entrypoints: GigadriveNextEntrypoint[],
+  pprRuntimePath: string,
   middlewareOutputId?: string
 ): Promise<void> => {
   const wrapperDirectory = path.join(projectDir, '.gigadrive', 'nextjs', 'entrypoints');
   await mkdir(wrapperDirectory, { recursive: true });
+  const portableWrapperDirectory = toPortableRelativePath(repoRoot, wrapperDirectory);
+  const relativePprRuntimePath = path.posix.relative(portableWrapperDirectory, pprRuntimePath);
+  const pprRuntimeSpecifier = relativePprRuntimePath.startsWith('.')
+    ? relativePprRuntimePath
+    : `./${relativePprRuntimePath}`;
 
   await Promise.all(
     entrypoints.map(async (entrypoint) => {
@@ -249,7 +257,6 @@ const writeEntrypointWrappers = async (
                   if (rightSource === entrypoint.edgeRuntime?.modulePath) return -1;
                   return leftSource.localeCompare(rightSource);
                 });
-              const portableWrapperDirectory = toPortableRelativePath(repoRoot, wrapperDirectory);
               const imports = edgeRuntimeAssets
                 .map(([targetPath, sourcePath]) => {
                   // Next includes the executable Edge module in `assets` under a
@@ -271,12 +278,12 @@ const writeEntrypointWrappers = async (
           : `import * as nextEntrypoint from ${JSON.stringify(importSpecifier)};\n\nconst resolveHandler = async () => {\n  const handler = nextEntrypoint.handler ?? nextEntrypoint.default?.handler ?? nextEntrypoint.default;\n  if (typeof handler !== 'function') throw new Error('Next.js middleware handler is unavailable');\n  return handler;\n};`;
       const source =
         (entrypoint.runtime === 'edge' && entrypoint.edgeRuntime) || isMiddleware
-          ? `${webHandlerPrelude}\n\nexport async function fetch(request) {\n  const pending = [];\n  const handler = await resolveHandler();\n  const url = new URL(request.url);\n  const response = await handler(request, {\n    signal: request.signal,\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: url.hostname, invocationTarget: request.headers.get('x-gigadrive-next-invocation-target') ?? url.pathname, routeMatches: Object.fromEntries(new URLSearchParams(request.headers.get('x-now-route-matches') ?? '')), relativeProjectDir: ${JSON.stringify(
+          ? `import { persistPprCacheEntry } from ${JSON.stringify(pprRuntimeSpecifier)};\n${webHandlerPrelude}\n\nexport async function fetch(request) {\n  const pending = [];\n  const handler = await resolveHandler();\n  const url = new URL(request.url);\n  const response = await handler(request, {\n    signal: request.signal,\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: url.hostname, invocationTarget: request.headers.get('x-gigadrive-next-invocation-target') ?? url.pathname, routeMatches: Object.fromEntries(new URLSearchParams(request.headers.get('x-now-route-matches') ?? '')), relativeProjectDir: ${JSON.stringify(
               toPortableRelativePath(repoRoot, projectDir, true)
-            )} },\n  });\n  if (!response.body) { await Promise.allSettled(pending); return response; }\n  const reader = response.body.getReader();\n  const body = new ReadableStream({\n    async pull(controller) {\n      const result = await reader.read();\n      if (result.done) { await Promise.allSettled(pending); controller.close(); return; }\n      controller.enqueue(result.value);\n    },\n    cancel(reason) { return reader.cancel(reason); },\n  });\n  return new Response(body, response);\n}\n`
-          : `import "next/dist/build/adapter/setup-node-env.external.js";\nimport * as nextEntrypoint from ${JSON.stringify(importSpecifier)};\n\nexport default async function handler(req, res) {\n  const pending = [];\n  const nextHandler = nextEntrypoint.handler ?? nextEntrypoint.default?.handler ?? nextEntrypoint.default;\n  if (typeof nextHandler !== 'function') throw new Error('Next.js Node handler is unavailable');\n  await nextHandler(req, res, {\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: req.headers.host, invocationTarget: req.headers['x-gigadrive-next-invocation-target'] ?? req.url, routeMatches: Object.fromEntries(new URLSearchParams(req.headers['x-now-route-matches'] ?? '')), relativeProjectDir: ${JSON.stringify(
+            )}, onCacheEntryV2(cacheEntry, meta) { pending.push(persistPprCacheEntry(meta.url ?? request.headers.get('x-matched-path') ?? url.pathname, cacheEntry)); return false; } },\n  });\n  if (!response.body) { await Promise.allSettled(pending); return response; }\n  const reader = response.body.getReader();\n  const body = new ReadableStream({\n    async pull(controller) {\n      const result = await reader.read();\n      if (result.done) { await Promise.allSettled(pending); controller.close(); return; }\n      controller.enqueue(result.value);\n    },\n    async cancel(reason) { try { await reader.cancel(reason); } finally { await Promise.allSettled(pending); } },\n  });\n  return new Response(body, response);\n}\n`
+          : `import "next/dist/build/adapter/setup-node-env.external.js";\nimport * as nextEntrypoint from ${JSON.stringify(importSpecifier)};\nimport { persistPprCacheEntry } from ${JSON.stringify(pprRuntimeSpecifier)};\n\nexport default async function handler(req, res) {\n  const pending = [];\n  const nextHandler = nextEntrypoint.handler ?? nextEntrypoint.default?.handler ?? nextEntrypoint.default;\n  if (typeof nextHandler !== 'function') throw new Error('Next.js Node handler is unavailable');\n  await nextHandler(req, res, {\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: req.headers.host, invocationTarget: req.headers['x-gigadrive-next-invocation-target'] ?? req.url, routeMatches: Object.fromEntries(new URLSearchParams(req.headers['x-now-route-matches'] ?? '')), relativeProjectDir: ${JSON.stringify(
               toPortableRelativePath(repoRoot, projectDir, true)
-            )} },\n  });\n  await Promise.allSettled(pending);\n}\n`;
+            )}, onCacheEntryV2(cacheEntry, meta) { const matchedPath = req.headers['x-matched-path']; pending.push(persistPprCacheEntry(meta.url ?? (Array.isArray(matchedPath) ? matchedPath[0] : matchedPath) ?? req.url ?? '/', cacheEntry)); return false; } },\n  });\n  await Promise.allSettled(pending);\n}\n`;
       await writeFile(wrapperPath, source, 'utf8');
       const portableWrapperPath = toPortableRelativePath(repoRoot, wrapperPath);
       entrypoint.assets[portableWrapperPath] = portableWrapperPath;
@@ -432,7 +439,14 @@ const gigadriveNextAdapter: NextAdapter = {
     const entrypointPlan = buildEntrypointPlan(executableOutputs);
     const runtimeConfigAssets = await serializeRuntimeConfigAssets(projectDir, repoRoot, config);
     for (const entrypoint of entrypointPlan.entrypoints) Object.assign(entrypoint.assets, runtimeConfigAssets);
-    await writeEntrypointWrappers(projectDir, repoRoot, entrypointPlan.entrypoints, portableOutputs.middleware?.id);
+    const pprRuntimePath = await requireReadableFile(repoRoot, PPR_RUNTIME_PATH());
+    await writeEntrypointWrappers(
+      projectDir,
+      repoRoot,
+      entrypointPlan.entrypoints,
+      pprRuntimePath,
+      portableOutputs.middleware?.id
+    );
     const images = normalizeImages(config);
     const manifest: GigadriveNextBuildManifestV2 = {
       version: 2,
