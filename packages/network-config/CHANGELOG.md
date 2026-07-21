@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.3
+
+### Patch Changes
+
+- Include configured Next.js cache handlers, Cache Component handlers, and image loaders in every split function overlay. ([#355](https://github.com/Gigadrive/sdk/pull/355))
+
 ## 3.4.2
 
 ### Patch Changes
