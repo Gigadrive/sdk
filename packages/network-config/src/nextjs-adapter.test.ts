@@ -41,12 +41,12 @@ const nextConfig = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const modifyConfig = (config: Record<string, unknown>, phase: string, nextVersion: string) => {
+const modifyConfig = (config: Record<string, unknown>, phase: string, nextVersion?: string) => {
   if (!gigadriveNextAdapter.modifyConfig) throw new Error('Expected modifyConfig');
   return (
     gigadriveNextAdapter.modifyConfig as unknown as (
       config: Record<string, unknown>,
-      context: { phase: string; nextVersion: string }
+      context: { phase: string; nextVersion?: string }
     ) => Record<string, unknown>
   )(config, { phase, nextVersion });
 };
@@ -114,6 +114,44 @@ describe('Gigadrive Next.js adapter', () => {
     expect(modifyConfig(nextConfig(), 'phase-production-build', '15.5.20')).toMatchObject({ output: 'standalone' });
     expect(modifyConfig(nextConfig({ output: 'export' }), 'phase-production-build', '14.2.0')).toMatchObject({
       output: 'export',
+    });
+  });
+
+  it('uses the standalone fallback when Next does not expose a modifyConfig version', () => {
+    process.env.GIGADRIVE_DEPLOYMENT_ID = 'deployment-id';
+
+    expect(modifyConfig(nextConfig(), 'phase-production-build')).toMatchObject({
+      deploymentId: 'deployment-id',
+      output: 'standalone',
+    });
+  });
+
+  it('writes a portable legacy manifest for the Next 16.1 adapter contract', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-16-1-adapter-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'apps', 'web');
+    const distDir = path.join(projectDir, '.next');
+    await mkdir(projectDir, { recursive: true });
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      config: nextConfig({ output: 'standalone' }),
+      nextVersion: '16.1.6',
+      buildId: 'next-16-1-build',
+    });
+
+    const manifest = parseGigadriveNextBuildManifest(
+      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
+    );
+    expect(manifest).toEqual({
+      version: 1,
+      output: 'standalone',
+      distDir: '.next',
+      repoRootToProject: 'apps/web',
+      nextVersion: '16.1.6',
+      buildId: 'next-16-1-build',
     });
   });
 

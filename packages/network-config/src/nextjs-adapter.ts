@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NormalizedImagePolicy } from './image-policy';
 import type {
+  GigadriveNextBuildManifestV1,
   GigadriveNextBuildManifestV2,
   GigadriveNextEntrypoint,
   GigadriveNextRouteOutput,
@@ -37,9 +38,12 @@ const toJsonValue = (value: unknown): JsonValue => {
   return serialized === undefined ? null : (JSON.parse(serialized) as JsonValue);
 };
 
-const isNext16OrNewer = (nextVersion: string): boolean => {
-  const major = Number.parseInt(nextVersion.split('.')[0] ?? '', 10);
-  return Number.isFinite(major) && major >= 16;
+const supportsAdapterV2 = (nextVersion: string | undefined): boolean => {
+  if (!nextVersion) return false;
+  const [majorPart, minorPart] = nextVersion.split('.');
+  const major = Number.parseInt(majorPart ?? '', 10);
+  const minor = Number.parseInt(minorPart ?? '', 10);
+  return Number.isFinite(major) && Number.isFinite(minor) && (major > 16 || (major === 16 && minor >= 2));
 };
 
 const toPortableRelativePath = (from: string, to: string, allowCurrentDirectory = false): string => {
@@ -325,8 +329,9 @@ const normalizeImages = (config: BuildCompleteContext['config']): NormalizedImag
 /**
  * Next.js deployment adapter used automatically by Gigadrive Network build workers.
  *
- * Next 16 emits a portable, versioned runtime plan. Older Next versions retain the
- * standalone-server behavior so existing deployments remain compatible.
+ * Next 16.2 and newer emit a portable, versioned runtime plan. Older releases retain
+ * the standalone-server behavior because their experimental adapter context does not
+ * expose the routing and runtime metadata required by the v2 contract.
  */
 const gigadriveNextAdapter: NextAdapter = {
   name: 'Gigadrive Network',
@@ -335,7 +340,7 @@ const gigadriveNextAdapter: NextAdapter = {
     if (phase !== PRODUCTION_BUILD_PHASE) return config;
 
     const deploymentId = config.deploymentId ?? process.env.GIGADRIVE_DEPLOYMENT_ID;
-    if (!isNext16OrNewer(nextVersion)) {
+    if (!supportsAdapterV2(nextVersion)) {
       return {
         ...config,
         ...(deploymentId ? { deploymentId } : {}),
@@ -379,6 +384,19 @@ const gigadriveNextAdapter: NextAdapter = {
 
   async onBuildComplete({ projectDir, repoRoot, distDir, config, nextVersion, buildId, routing, outputs }) {
     const metadataDirectory = path.join(projectDir, '.gigadrive');
+    if (!supportsAdapterV2(nextVersion)) {
+      const manifest: GigadriveNextBuildManifestV1 = {
+        version: 1,
+        output: config.output === 'export' ? 'export' : 'standalone',
+        distDir: toPortableRelativePath(projectDir, distDir),
+        repoRootToProject: toPortableRelativePath(repoRoot, projectDir, true),
+        nextVersion,
+        buildId,
+      };
+      await mkdir(metadataDirectory, { recursive: true });
+      await writeFile(path.join(metadataDirectory, 'nextjs.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+      return;
+    }
     const portableOutputs = {
       pages: await Promise.all(outputs.pages.map((output) => serializeRouteOutput(repoRoot, output))),
       ...(outputs.middleware ? { middleware: await serializeRouteOutput(repoRoot, outputs.middleware) } : {}),
