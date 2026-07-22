@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.9
+
+### Patch Changes
+
+- Persist Next.js PPR shell and postponed-state updates through the managed runtime cache. ([#370](https://github.com/Gigadrive/sdk/pull/370))
+
 ## 3.4.8
 
 ### Patch Changes
