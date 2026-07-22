@@ -57,7 +57,10 @@ const onBuildComplete = async (context: Record<string, unknown>): Promise<void> 
   if (typeof projectDir !== 'string') throw new Error('Expected projectDir');
   const pprRuntimePath = path.join(projectDir, '.gigadrive', 'platform', 'nextjs-ppr-runtime.js');
   await mkdir(path.dirname(pprRuntimePath), { recursive: true });
-  await writeFile(pprRuntimePath, 'export const persistPprCacheEntry = async () => {};');
+  await writeFile(
+    pprRuntimePath,
+    'export const persistPprCacheEntry = async () => {}; export const revalidateNextPath = async () => {};'
+  );
   process.env.GIGADRIVE_NEXT_PPR_RUNTIME_PATH = pprRuntimePath;
   await (gigadriveNextAdapter.onBuildComplete as unknown as (context: Record<string, unknown>) => Promise<void>)(
     context
@@ -340,6 +343,79 @@ describe('Gigadrive Next.js adapter', () => {
       pathname: '/api/echo',
       invocationTarget: '/api/echo',
     });
+  });
+
+  it('awaits asynchronous Turbopack Node entrypoint exports before resolving the handler', async () => {
+    const repoRoot = await mkdtemp(path.join(process.cwd(), '.tmp-network-next-turbopack-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'app');
+    const distDir = path.join(projectDir, '.next');
+    const handlerPath = path.join(distDir, 'server', 'app', 'api', 'async', 'route.cjs');
+    await mkdir(path.dirname(handlerPath), { recursive: true });
+    await writeFile(
+      handlerPath,
+      `module.exports = Promise.resolve({
+        handler: async (request, response, context) => {
+          response.statusCode = 200;
+          response.body = request.url;
+          context.waitUntil(Promise.resolve().then(() => { response.waitUntilSettled = true; }));
+        },
+      });`
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'turbopack-build',
+      routing: {
+        beforeMiddleware: [],
+        beforeFiles: [],
+        afterFiles: [],
+        dynamicRoutes: [],
+        onMatch: [],
+        fallback: [],
+        shouldNormalizeNextData: false,
+        rsc: {},
+      },
+      outputs: {
+        pages: [],
+        pagesApi: [],
+        appPages: [],
+        appRoutes: [
+          {
+            id: 'app/api/async/route',
+            type: 'APP_ROUTE',
+            filePath: handlerPath,
+            pathname: '/api/async',
+            sourcePage: 'app/api/async/route.ts',
+            runtime: 'nodejs',
+            assets: {},
+            config: {},
+          },
+        ],
+        prerenders: [],
+        staticFiles: [],
+      },
+    });
+
+    const manifest = parseGigadriveNextBuildManifest(
+      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
+    ) as GigadriveNextBuildManifestV2;
+    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
+    const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
+      default(
+        request: { headers: Record<string, string>; url: string },
+        response: { statusCode?: number; body?: string; waitUntilSettled?: boolean }
+      ): Promise<void>;
+    };
+    const response: { statusCode?: number; body?: string; waitUntilSettled?: boolean } = {};
+
+    await wrapper.default({ headers: { host: 'example.com' }, url: '/api/async' }, response);
+
+    expect(response).toEqual({ statusCode: 200, body: '/api/async', waitUntilSettled: true });
   });
 
   it('loads canonical Turbopack Edge assets before invoking the registered handler', async () => {
