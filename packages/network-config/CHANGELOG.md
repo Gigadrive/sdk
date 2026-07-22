@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.10
+
+### Patch Changes
+
+- Support synchronous Pages Router path revalidation in split Next.js 16 functions. ([#379](https://github.com/Gigadrive/sdk/pull/379))
+
 ## 3.4.9
 
 ### Patch Changes
