@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           deploy_log="$RUNNER_TEMP/nextjs-canary-deploy.log"
-          pnpm dlx gigadrive@2.5.15 platform deploy \
+          pnpm dlx gigadrive@2.5.16 platform deploy \
             --app "$GIGADRIVE_NEXT_TEST_APPLICATION_ID" 2>&1 | tee "$deploy_log"
 
           deployment_id="$(sed -n 's/^Deployment ID: //p' "$deploy_log" | tail -1)"
