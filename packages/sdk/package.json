@@ -1,6 +1,6 @@
 {
   "name": "@gigadrive/sdk",
-  "version": "0.7.12",
+  "version": "0.7.13",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gigadrive/sdk.git",
