@@ -1,4 +1,4 @@
-import { writeRuntimeCache } from './nextjs-runtime-cache-client';
+import { revalidateRuntimeCacheTags, writeRuntimeCache } from './nextjs-runtime-cache-client';
 
 interface ResponseCacheEntry {
   cacheControl?: unknown;
@@ -17,6 +17,13 @@ interface PersistedPprCacheEntry {
   headers: Record<string, string | string[]>;
   status?: number;
   cacheControl?: unknown;
+}
+
+interface NextInternalRevalidateInput {
+  urlPath: string;
+  headers: Record<string, string>;
+  opts: { unstable_onlyGenerated?: boolean };
+  hostname: string | undefined;
 }
 
 const normalizeHeaders = (value: unknown): Record<string, string | string[]> => {
@@ -81,4 +88,44 @@ export const persistPprCacheEntry = async (cacheKey: string, cacheEntry: Respons
   };
 
   await writeRuntimeCache('incremental', `ppr:${normalizeCacheKey(cacheKey)}`, value, tags);
+};
+
+/**
+ * Runs Next's synchronous Pages Router on-demand revalidation protocol.
+ *
+ * The CDN path is evicted before a cache-busting request reaches the split page
+ * function. Next then regenerates the shared incremental-cache entry before this
+ * promise resolves, preserving the blocking semantics of `response.revalidate()`.
+ *
+ * @param input - The internal revalidation request emitted by Next's Pages API runtime.
+ * @returns A promise that settles after Next has regenerated the requested path.
+ */
+export const revalidateNextPath = async (input: NextInternalRevalidateInput): Promise<void> => {
+  if (!input.urlPath.startsWith('/')) throw new Error('Next.js revalidation requires an absolute application path');
+  if (!input.hostname) throw new Error('Next.js revalidation requires the application hostname');
+
+  const pathname = new URL(input.urlPath, 'https://gigadrive.invalid').pathname;
+  await revalidateRuntimeCacheTags('incremental', [`path:${pathname}`]);
+
+  const origin = process.env.GIGADRIVE_APPLICATION_ORIGIN ?? `https://${input.hostname}`;
+  const originUrl = new URL(origin);
+  if (originUrl.protocol !== 'https:' && originUrl.protocol !== 'http:') {
+    throw new Error('Next.js revalidation requires an HTTP application origin');
+  }
+  const url = new URL(input.urlPath, originUrl);
+  if (url.origin !== originUrl.origin)
+    throw new Error('Next.js revalidation path must remain on the application origin');
+  url.searchParams.set('__gigadrive_revalidate', `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
+
+  const headers = new Headers(input.headers);
+  headers.set('cache-control', 'no-cache');
+  const response = await fetch(url, { method: 'HEAD', headers, redirect: 'manual' });
+  const cacheStatus = response.headers.get('x-vercel-cache') ?? response.headers.get('x-nextjs-cache');
+  if (
+    cacheStatus?.toUpperCase() !== 'REVALIDATED' &&
+    response.status !== 200 &&
+    !(response.status === 404 && input.opts.unstable_onlyGenerated)
+  ) {
+    throw new Error(`Next.js revalidation failed with status ${response.status}`);
+  }
 };
