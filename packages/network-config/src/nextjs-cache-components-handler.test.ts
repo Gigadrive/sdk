@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const runtimeCache = vi.hoisted(() => ({
   getTagState: vi.fn(),
@@ -39,7 +39,33 @@ const readStream = async (stream: ReadableStream<Uint8Array>): Promise<Uint8Arra
 describe('Gigadrive Next Cache Components handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: 0 });
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('uses an in-process stream cache while Next is building', async () => {
+    vi.stubEnv('GIGADRIVE_NEXT_BUILD', '1');
+    const entry = {
+      ...serializedEntry({ tags: ['build:component'] }),
+      value: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([4, 5, 6]));
+          controller.close();
+        },
+      }),
+    };
+
+    await cacheHandler.set('build-component-key', Promise.resolve(entry));
+    const restored = await cacheHandler.get('build-component-key', []);
+
+    await expect(readStream(restored!.value)).resolves.toEqual(new Uint8Array([4, 5, 6]));
+    expect(runtimeCache.write).not.toHaveBeenCalled();
+    expect(runtimeCache.read).not.toHaveBeenCalled();
+
+    await cacheHandler.updateTags(['build:component']);
+    await expect(cacheHandler.get('build-component-key', [])).resolves.toBeUndefined();
+    expect(runtimeCache.revalidate).not.toHaveBeenCalled();
   });
 
   it('restores persisted streams and validates explicit and soft tags together', async () => {

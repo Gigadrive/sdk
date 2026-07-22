@@ -33,6 +33,7 @@ const isSerializedCacheComponentEntry = (value: unknown): value is SerializedCac
 };
 
 const pendingWrites = new Map<string, Promise<void>>();
+const buildEntries = new Map<string, SerializedCacheComponentEntry>();
 
 const streamToBytes = async (stream: ReadableStream<Uint8Array>): Promise<Uint8Array> => {
   const chunks: Uint8Array[] = [];
@@ -57,9 +58,15 @@ const streamToBytes = async (stream: ReadableStream<Uint8Array>): Promise<Uint8A
 const cacheHandler = {
   async get(cacheKey: string, softTags: string[]): Promise<CacheComponentEntry | undefined> {
     await pendingWrites.get(cacheKey);
-    const value = await readRuntimeCache('component', cacheKey);
+    const value =
+      process.env.GIGADRIVE_NEXT_BUILD === '1'
+        ? buildEntries.get(cacheKey)
+        : await readRuntimeCache('component', cacheKey);
     if (!isSerializedCacheComponentEntry(value)) return undefined;
-    const tagState = await getRuntimeCacheTagState('component', [...new Set([...value.tags, ...softTags])]);
+    const tagState =
+      process.env.GIGADRIVE_NEXT_BUILD === '1'
+        ? { stale: 0, expired: 0 }
+        : await getRuntimeCacheTagState('component', [...new Set([...value.tags, ...softTags])]);
     if (tagState.expired > value.timestamp) return undefined;
     return {
       ...value,
@@ -77,7 +84,12 @@ const cacheHandler = {
     const write = (async () => {
       const entry = await pendingEntry;
       const value = await streamToBytes(entry.value);
-      await writeRuntimeCache('component', cacheKey, { ...entry, value }, entry.tags);
+      const serializedEntry = { ...entry, value };
+      if (process.env.GIGADRIVE_NEXT_BUILD === '1') {
+        buildEntries.set(cacheKey, serializedEntry);
+      } else {
+        await writeRuntimeCache('component', cacheKey, serializedEntry, entry.tags);
+      }
     })();
     pendingWrites.set(cacheKey, write);
     try {
@@ -93,7 +105,13 @@ const cacheHandler = {
     return Promise.resolve(Infinity);
   },
 
-  updateTags(tags: string[], durations?: { expire?: number }): Promise<void> {
+  async updateTags(tags: string[], durations?: { expire?: number }): Promise<void> {
+    if (process.env.GIGADRIVE_NEXT_BUILD === '1') {
+      for (const [key, entry] of buildEntries) {
+        if (entry.tags.some((tag) => tags.includes(tag))) buildEntries.delete(key);
+      }
+      return;
+    }
     return revalidateRuntimeCacheTags('component', tags, durations);
   },
 };

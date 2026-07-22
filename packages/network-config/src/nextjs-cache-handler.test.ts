@@ -19,9 +19,31 @@ import GigadriveNextCacheHandler from './nextjs-cache-handler';
 describe('GigadriveNextCacheHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: 0 });
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('uses an isolated in-process cache while Next is building', async () => {
+    vi.stubEnv('GIGADRIVE_NEXT_BUILD', '1');
+    const handler = new GigadriveNextCacheHandler();
+
+    await handler.set('/prerender', { kind: 'APP_PAGE', html: '<html />' }, { tags: ['page:/prerender'] });
+
+    await expect(handler.get('/prerender')).resolves.toMatchObject({
+      value: { kind: 'APP_PAGE', html: '<html />' },
+      tags: ['page:/prerender'],
+    });
+    expect(runtimeCache.write).not.toHaveBeenCalled();
+    expect(runtimeCache.read).not.toHaveBeenCalled();
+
+    await handler.revalidateTag('page:/prerender');
+    await expect(handler.get('/prerender')).resolves.toBeNull();
+    expect(runtimeCache.revalidate).not.toHaveBeenCalled();
+  });
 
   it('stores the cache handler envelope required by Next', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_784_670_700_000);
