@@ -40,10 +40,6 @@ jobs:
       - name: Enable pnpm
         run: corepack enable && corepack prepare pnpm@10.34.4 --activate
 
-      - name: Materialize the local image fixture
-        working-directory: fixtures/nextjs-platform-canary
-        run: base64 --decode public/canary.png.base64 > public/canary.png
-
       - name: Deploy one Next.js canary
         id: deploy
         working-directory: fixtures/nextjs-platform-canary
