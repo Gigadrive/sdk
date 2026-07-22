@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.13
+
+### Patch Changes
+
+- Await asynchronous Turbopack Node entrypoint exports before resolving Next.js 16.2 route and middleware handlers. ([#386](https://github.com/Gigadrive/sdk/pull/386))
+
 ## 3.4.12
 
 ### Patch Changes
