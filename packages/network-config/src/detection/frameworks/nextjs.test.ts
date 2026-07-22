@@ -245,6 +245,7 @@ describe('Next.js framework detection', () => {
     });
 
     expect(result.config.entrypoints).toHaveLength(2);
+    expect(result.config.regions).toEqual(['us-east-1']);
     expect(result.config.assets).toMatchObject({
       paths: expect.arrayContaining(['public/gigadrive-mark.svg', '.next/static/app.js']),
       overrides: expect.objectContaining({

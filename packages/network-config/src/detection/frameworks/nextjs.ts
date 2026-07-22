@@ -244,6 +244,7 @@ const createAdapterV2Config = Effect.fn('nextjs.createAdapterV2Config')(function
     assetsPrefixToStrip: '',
     package: undefined,
     normalizedConfig: {
+      regions: ['us-east-1' as const],
       entrypoints,
       routes: [],
       framework: {
