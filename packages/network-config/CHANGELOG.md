@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.12
+
+### Patch Changes
+
+- Keep Next.js 16.2 prerender and Cache Component writes local to the build process, and default zero-config split deployments to one region. ([#384](https://github.com/Gigadrive/sdk/pull/384))
+
 ## 3.4.11
 
 ### Patch Changes
