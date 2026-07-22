@@ -1,0 +1,92 @@
+name: Next.js platform canary (single deployment)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmLiveDeployment:
+        description: Type DEPLOY_ONE_CANARY to create exactly one Network deployment
+        required: true
+        type: string
+
+concurrency:
+  group: nextjs-platform-canary
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Require explicit live-deployment acknowledgement
+        env:
+          CONFIRM_LIVE_DEPLOYMENT: ${{ inputs.confirmLiveDeployment }}
+        run: |
+          if [ "$CONFIRM_LIVE_DEPLOYMENT" != "DEPLOY_ONE_CANARY" ]; then
+            echo "This workflow creates one real Network deployment. Enter DEPLOY_ONE_CANARY to continue." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.34.4 --activate
+
+      - name: Materialize the local image fixture
+        working-directory: fixtures/nextjs-platform-canary
+        run: base64 --decode public/canary.png.base64 > public/canary.png
+
+      - name: Deploy one Next.js canary
+        id: deploy
+        working-directory: fixtures/nextjs-platform-canary
+        env:
+          GIGADRIVE_NEXT_TEST_APPLICATION_ID: ${{ secrets.GIGADRIVE_NEXT_TEST_APPLICATION_ID }}
+          GIGADRIVE_BEARER_TOKEN: ${{ secrets.GIGADRIVE_NEXT_TEST_BEARER_TOKEN }}
+          GIGADRIVE_CLIENT_ID: ${{ secrets.GIGADRIVE_NEXT_TEST_CLIENT_ID }}
+          GIGADRIVE_CLIENT_SECRET: ${{ secrets.GIGADRIVE_NEXT_TEST_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          deploy_log="$RUNNER_TEMP/nextjs-canary-deploy.log"
+          pnpm dlx gigadrive@2.5.15 platform deploy \
+            --app "$GIGADRIVE_NEXT_TEST_APPLICATION_ID" 2>&1 | tee "$deploy_log"
+
+          deployment_id="$(sed -n 's/^Deployment ID: //p' "$deploy_log" | tail -1)"
+          deployment_url="$(sed -n 's/^Deployed to //p' "$deploy_log" | tail -1)"
+          if [ -z "$deployment_id" ] || [ -z "$deployment_url" ]; then
+            echo "The Gigadrive CLI did not report a deployment ID and URL." >&2
+            exit 1
+          fi
+
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the live Next.js feature contract
+        env:
+          CANARY_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: node scripts/nextjs-platform-canary.mjs
+
+      - name: Record canary deployment
+        if: always() && steps.deploy.outputs.deployment_id != ''
+        run: |
+          {
+            echo "Deployment ID: ${{ steps.deploy.outputs.deployment_id }}"
+            echo "Deployment URL: ${{ steps.deploy.outputs.deployment_url }}"
+          } > "$RUNNER_TEMP/nextjs-canary-result.txt"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nextjs-platform-canary-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/nextjs-canary-deploy.log
+            ${{ runner.temp }}/nextjs-canary-result.txt
+          if-no-files-found: ignore
+          retention-days: 14

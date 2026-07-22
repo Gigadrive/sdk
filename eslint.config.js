@@ -9,6 +9,8 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/',
+      '**/.gigadrive/',
+      '**/.next/',
       '**/node_modules/',
       '**/storybook-static/',
       '**/.rslib/',
