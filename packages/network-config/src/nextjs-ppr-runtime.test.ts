@@ -31,7 +31,7 @@ describe('persistPprCacheEntry', () => {
 
     expect(runtimeCache.write).toHaveBeenCalledWith(
       'incremental',
-      'ppr:/products/one',
+      'ppr:/products/one?preview=1',
       {
         shell: '<html>shell</html>',
         postponedState: 'opaque-postponed-state',

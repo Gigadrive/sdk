@@ -33,7 +33,8 @@ const normalizeHeaders = (value: unknown): Record<string, string | string[]> => 
 
 const normalizeCacheKey = (value: string): string => {
   try {
-    return new URL(value, 'https://gigadrive.invalid').pathname || '/';
+    const url = new URL(value, 'https://gigadrive.invalid');
+    return `${url.pathname || '/'}${url.search}`;
   } catch {
     return value.startsWith('/') ? value : `/${value}`;
   }
