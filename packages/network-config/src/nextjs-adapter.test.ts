@@ -53,6 +53,12 @@ const modifyConfig = (config: Record<string, unknown>, phase: string, nextVersio
 
 const onBuildComplete = async (context: Record<string, unknown>): Promise<void> => {
   if (!gigadriveNextAdapter.onBuildComplete) throw new Error('Expected onBuildComplete');
+  const projectDir = context.projectDir;
+  if (typeof projectDir !== 'string') throw new Error('Expected projectDir');
+  const pprRuntimePath = path.join(projectDir, '.gigadrive', 'platform', 'nextjs-ppr-runtime.js');
+  await mkdir(path.dirname(pprRuntimePath), { recursive: true });
+  await writeFile(pprRuntimePath, 'export const persistPprCacheEntry = async () => {};');
+  process.env.GIGADRIVE_NEXT_PPR_RUNTIME_PATH = pprRuntimePath;
   await (gigadriveNextAdapter.onBuildComplete as unknown as (context: Record<string, unknown>) => Promise<void>)(
     context
   );
@@ -60,6 +66,7 @@ const onBuildComplete = async (context: Record<string, unknown>): Promise<void> 
 
 afterEach(async () => {
   delete process.env.GIGADRIVE_DEPLOYMENT_ID;
+  delete process.env.GIGADRIVE_NEXT_PPR_RUNTIME_PATH;
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -204,6 +211,7 @@ describe('Gigadrive Next.js adapter', () => {
         'apps/web/.gigadrive/platform/nextjs-cache-components-handler.js':
           'apps/web/.gigadrive/platform/nextjs-cache-components-handler.js',
         'apps/web/.gigadrive/platform/nextjs-image-loader.js': 'apps/web/.gigadrive/platform/nextjs-image-loader.js',
+        'apps/web/.gigadrive/platform/nextjs-ppr-runtime.js': 'apps/web/.gigadrive/platform/nextjs-ppr-runtime.js',
       },
       config: { maxDuration: 45, preferredRegion: ['fra1'] },
     });
@@ -211,6 +219,9 @@ describe('Gigadrive Next.js adapter', () => {
     const wrapper = await readFile(wrapperPath, 'utf8');
     expect(wrapper).toContain('next/dist/build/adapter/setup-node-env.external.js');
     expect(wrapper).toContain('await nextHandler(req, res');
+    expect(wrapper).toContain('onCacheEntryV2');
+    expect(wrapper).toContain('persistPprCacheEntry');
+    expect(wrapper).toContain("req.headers['x-gigadrive-next-cache-key']");
   });
 
   it('invokes Node.js middleware with the Web Request adapter contract', async () => {

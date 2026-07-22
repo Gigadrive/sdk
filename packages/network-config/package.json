@@ -33,6 +33,11 @@
       "types": "./dist/nextjs-image-loader.d.ts",
       "require": "./dist/nextjs-image-loader.js",
       "import": "./dist/nextjs-image-loader.mjs"
+    },
+    "./nextjs-ppr-runtime": {
+      "types": "./dist/nextjs-ppr-runtime.d.ts",
+      "require": "./dist/nextjs-ppr-runtime.js",
+      "import": "./dist/nextjs-ppr-runtime.mjs"
     }
   },
   "main": "dist/index.js",

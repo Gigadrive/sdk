@@ -7,6 +7,11 @@ interface AccessTokenResponse {
   expires_in?: number;
 }
 
+export interface RuntimeCacheTagState {
+  stale: number;
+  expired: number;
+}
+
 let cachedToken: { value: string; expiresAt: number } | undefined;
 
 const apiBaseUrl = (): string => (process.env.GIGADRIVE_API_URL ?? 'https://api.gigadrive.network').replace(/\/$/, '');
@@ -137,6 +142,23 @@ export const getRuntimeCacheTagExpiration = async (kind: string, tags: readonly 
     return typeof value.expiration === 'number' ? value.expiration : 0;
   } catch {
     return 0;
+  }
+};
+
+export const getRuntimeCacheTagState = async (kind: string, tags: readonly string[]): Promise<RuntimeCacheTagState> => {
+  try {
+    const response = await request('/internal/runtime-cache/v1/tags/state', {
+      method: 'POST',
+      body: JSON.stringify({ kind, tags }),
+    });
+    if (!response.ok) return { stale: 0, expired: 0 };
+    const value = (await response.json()) as { stale?: unknown; expired?: unknown };
+    return {
+      stale: typeof value.stale === 'number' ? value.stale : 0,
+      expired: typeof value.expired === 'number' ? value.expired : 0,
+    };
+  } catch {
+    return { stale: 0, expired: 0 };
   }
 };
 
