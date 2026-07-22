@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.14
+
+### Patch Changes
+
+- Run Next.js Node entrypoints from their project directory so monorepo deployments resolve platform cache handlers and server manifests correctly. ([#388](https://github.com/Gigadrive/sdk/pull/388))
+
 ## 3.4.13
 
 ### Patch Changes
