@@ -221,6 +221,9 @@ describe('Gigadrive Next.js adapter', () => {
     expect(wrapper).toContain('await nextHandler(req, res');
     expect(wrapper).toContain('onCacheEntryV2');
     expect(wrapper).toContain('persistPprCacheEntry');
+    expect(wrapper).toContain('revalidateNextPath');
+    expect(wrapper).toContain('revalidate(input) { return revalidateNextPath');
+    expect(wrapper).not.toContain('routerServerContext:');
     expect(wrapper).toContain("req.headers['x-gigadrive-next-cache-key']");
   });
 
