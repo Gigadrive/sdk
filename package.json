@@ -22,6 +22,7 @@
     "lint:fix": "eslint --cache --fix --ext .ts,.tsx,.js,.jsx .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:nextjs-canary-image": "node scripts/generate-nextjs-canary-image.mjs --check",
     "test:watch": "vitest",
     "typecheck": "turbo run typecheck"
   },

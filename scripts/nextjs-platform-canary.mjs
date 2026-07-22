@@ -161,12 +161,14 @@ if (!skipPlatformImage) {
   assert.equal(imageAlias.status, 308, 'Next image alias did not canonicalize');
   const imageLocation = imageAlias.headers.get('location');
   assert(imageLocation?.includes('/_gigadrive/image/'), 'Next image alias returned a non-canonical location');
+  assert(imageLocation.includes('format=avif'), 'Next image alias did not negotiate the configured AVIF format');
   const image = await fetch(imageLocation, {
     headers: { accept: 'image/avif,image/webp,image/*' },
     signal: AbortSignal.timeout(15_000),
   });
   assert.equal(image.ok, true, `Canonical image returned ${image.status}`);
-  assert.match(image.headers.get('content-type') ?? '', /^image\//);
+  assert.equal(image.headers.get('content-type'), 'image/avif', 'Bunny returned the unoptimized source image');
+  assert.equal(image.headers.has('x-bo-processing-error'), false, 'Bunny reported an image processing failure');
   assert.equal(image.headers.get('x-gigadrive-image-source'), 'local');
   assert((await image.arrayBuffer()).byteLength > 0, 'Canonical image response was empty');
 }
