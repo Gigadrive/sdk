@@ -264,6 +264,8 @@ describe('Gigadrive Next.js adapter', () => {
     expect(wrapper).toContain('persistPprCacheEntry');
     expect(wrapper).toContain('revalidateNextPath');
     expect(wrapper).toContain('revalidate(input) { return revalidateNextPath');
+    expect(wrapper).toContain('process.chdir(fileURLToPath(new URL("../../..", import.meta.url)))');
+    expect(wrapper).toContain('relativeProjectDir: "."');
     expect(wrapper).not.toContain('routerServerContext:');
     expect(wrapper).toContain("req.headers['x-gigadrive-next-cache-key']");
   });
@@ -328,21 +330,26 @@ describe('Gigadrive Next.js adapter', () => {
       await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
     ) as GigadriveNextBuildManifestV2;
     const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
-      fetch(request: Request): Promise<Response>;
-    };
-    const response = await wrapper.fetch(
-      new Request('https://example.com/api/echo', {
-        headers: { 'x-gigadrive-next-invocation-target': '/api/echo' },
-      })
-    );
+    const originalCwd = process.cwd();
+    try {
+      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
+        fetch(request: Request): Promise<Response>;
+      };
+      const response = await wrapper.fetch(
+        new Request('https://example.com/api/echo', {
+          headers: { 'x-gigadrive-next-invocation-target': '/api/echo' },
+        })
+      );
 
-    expect(response.headers.get('x-middleware-next')).toBe('1');
-    await expect(response.json()).resolves.toEqual({
-      method: 'GET',
-      pathname: '/api/echo',
-      invocationTarget: '/api/echo',
-    });
+      expect(response.headers.get('x-middleware-next')).toBe('1');
+      await expect(response.json()).resolves.toEqual({
+        method: 'GET',
+        pathname: '/api/echo',
+        invocationTarget: '/api/echo',
+      });
+    } finally {
+      process.chdir(originalCwd);
+    }
   });
 
   it('awaits asynchronous Turbopack Node entrypoint exports before resolving the handler', async () => {
@@ -351,13 +358,21 @@ describe('Gigadrive Next.js adapter', () => {
     const projectDir = path.join(repoRoot, 'app');
     const distDir = path.join(projectDir, '.next');
     const handlerPath = path.join(distDir, 'server', 'app', 'api', 'async', 'route.cjs');
+    const runtimeMarkerPath = path.join(projectDir, '.gigadrive', 'platform', 'runtime-marker.cjs');
     await mkdir(path.dirname(handlerPath), { recursive: true });
+    await mkdir(path.dirname(runtimeMarkerPath), { recursive: true });
+    await writeFile(runtimeMarkerPath, `module.exports = 'project-runtime-loaded';`);
     await writeFile(
       handlerPath,
-      `module.exports = Promise.resolve({
+      `const path = require('node:path');
+      const runtimeMarker = require(path.join(process.cwd(), '.gigadrive', 'platform', 'runtime-marker.cjs'));
+      module.exports = Promise.resolve({
         handler: async (request, response, context) => {
           response.statusCode = 200;
           response.body = request.url;
+          response.cwd = process.cwd();
+          response.relativeProjectDir = context.requestMeta.relativeProjectDir;
+          response.runtimeMarker = runtimeMarker;
           context.waitUntil(Promise.resolve().then(() => { response.waitUntilSettled = true; }));
         },
       });`
@@ -405,17 +420,43 @@ describe('Gigadrive Next.js adapter', () => {
       await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
     ) as GigadriveNextBuildManifestV2;
     const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
-      default(
-        request: { headers: Record<string, string>; url: string },
-        response: { statusCode?: number; body?: string; waitUntilSettled?: boolean }
-      ): Promise<void>;
-    };
-    const response: { statusCode?: number; body?: string; waitUntilSettled?: boolean } = {};
+    const originalCwd = process.cwd();
+    try {
+      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
+        default(
+          request: { headers: Record<string, string>; url: string },
+          response: {
+            statusCode?: number;
+            body?: string;
+            cwd?: string;
+            relativeProjectDir?: string;
+            runtimeMarker?: string;
+            waitUntilSettled?: boolean;
+          }
+        ): Promise<void>;
+      };
+      const response: {
+        statusCode?: number;
+        body?: string;
+        cwd?: string;
+        relativeProjectDir?: string;
+        runtimeMarker?: string;
+        waitUntilSettled?: boolean;
+      } = {};
 
-    await wrapper.default({ headers: { host: 'example.com' }, url: '/api/async' }, response);
+      await wrapper.default({ headers: { host: 'example.com' }, url: '/api/async' }, response);
 
-    expect(response).toEqual({ statusCode: 200, body: '/api/async', waitUntilSettled: true });
+      expect(response).toEqual({
+        statusCode: 200,
+        body: '/api/async',
+        cwd: projectDir,
+        relativeProjectDir: '.',
+        runtimeMarker: 'project-runtime-loaded',
+        waitUntilSettled: true,
+      });
+    } finally {
+      process.chdir(originalCwd);
+    }
   });
 
   it('loads canonical Turbopack Edge assets before invoking the registered handler', async () => {
