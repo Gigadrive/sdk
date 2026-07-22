@@ -1,5 +1,5 @@
 import {
-  getRuntimeCacheTagExpiration,
+  getRuntimeCacheTagState,
   readRuntimeCache,
   revalidateRuntimeCacheTags,
   writeRuntimeCache,
@@ -17,6 +17,20 @@ interface CacheComponentEntry {
 interface SerializedCacheComponentEntry extends Omit<CacheComponentEntry, 'value'> {
   value: Uint8Array;
 }
+
+const isSerializedCacheComponentEntry = (value: unknown): value is SerializedCacheComponentEntry => {
+  if (typeof value !== 'object' || value === null) return false;
+  const entry = value as Partial<SerializedCacheComponentEntry>;
+  return (
+    entry.value instanceof Uint8Array &&
+    Array.isArray(entry.tags) &&
+    entry.tags.every((tag) => typeof tag === 'string') &&
+    typeof entry.stale === 'number' &&
+    typeof entry.timestamp === 'number' &&
+    typeof entry.expire === 'number' &&
+    typeof entry.revalidate === 'number'
+  );
+};
 
 const pendingWrites = new Map<string, Promise<void>>();
 
@@ -43,12 +57,13 @@ const streamToBytes = async (stream: ReadableStream<Uint8Array>): Promise<Uint8A
 const cacheHandler = {
   async get(cacheKey: string, softTags: string[]): Promise<CacheComponentEntry | undefined> {
     await pendingWrites.get(cacheKey);
-    const value = (await readRuntimeCache('component', cacheKey)) as SerializedCacheComponentEntry | undefined;
-    if (!value || !(value.value instanceof Uint8Array)) return undefined;
-    const expiration = await getRuntimeCacheTagExpiration('component', softTags);
-    if (expiration > value.timestamp) return undefined;
+    const value = await readRuntimeCache('component', cacheKey);
+    if (!isSerializedCacheComponentEntry(value)) return undefined;
+    const tagState = await getRuntimeCacheTagState('component', [...new Set([...value.tags, ...softTags])]);
+    if (tagState.expired > value.timestamp) return undefined;
     return {
       ...value,
+      ...(tagState.stale > value.timestamp ? { revalidate: -1 } : {}),
       value: new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(value.value);
@@ -74,8 +89,8 @@ const cacheHandler = {
 
   async refreshTags(): Promise<void> {},
 
-  getExpiration(tags: string[]): Promise<number> {
-    return getRuntimeCacheTagExpiration('component', tags);
+  getExpiration(): Promise<number> {
+    return Promise.resolve(Infinity);
   },
 
   updateTags(tags: string[], durations?: { expire?: number }): Promise<void> {

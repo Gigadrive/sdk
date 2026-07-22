@@ -46,7 +46,20 @@ const readShell = (value: unknown): string | null => {
   return typeof toUnchunkedString === 'function' ? String(toUnchunkedString.call(value)) : null;
 };
 
-/** Persists the atomic shell/postponed pair emitted by Next's PPR response cache. */
+/**
+ * Persists the atomic shell/postponed pair emitted by Next's PPR response cache.
+ *
+ * @param cacheKey - The response-cache URL or pathname associated with the PPR entry.
+ * @param cacheEntry - The Next response-cache entry emitted by `onCacheEntryV2`.
+ * @returns A promise that settles after the entry is written, or immediately for unsupported entries.
+ *
+ * @example
+ * ```ts
+ * await persistPprCacheEntry('/products/one', {
+ *   value: { kind: 'APP_PAGE', html: '<html>shell</html>', postponed: 'opaque-state' },
+ * });
+ * ```
+ */
 export const persistPprCacheEntry = async (cacheKey: string, cacheEntry: ResponseCacheEntry): Promise<void> => {
   if (cacheEntry.value?.kind !== 'APP_PAGE') return;
   const shell = readShell(cacheEntry.value.html);
