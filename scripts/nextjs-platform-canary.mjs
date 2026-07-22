@@ -31,9 +31,13 @@ const token = (body, id) => {
 const eventually = async (label, operation, predicate, maxAttempts = 20) => {
   let latest;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    latest = await operation();
-    if (predicate(latest)) return latest;
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    try {
+      latest = await operation();
+      if (predicate(latest)) return latest;
+    } catch (error) {
+      latest = error instanceof Error ? error.message : String(error);
+    }
+    if (attempt < maxAttempts) await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   assert.fail(`${label} did not converge; last value: ${String(latest)}`);
 };
