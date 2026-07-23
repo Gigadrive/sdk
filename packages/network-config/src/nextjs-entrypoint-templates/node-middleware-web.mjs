@@ -14,18 +14,29 @@ import { fileURLToPath } from 'node:url';
 // invocations cannot race on process-global state.
 process.chdir(fileURLToPath(new URL('__GIGADRIVE_PROJECT_DIR__', import.meta.url)));
 
-const nextEntrypoint = await import('__GIGADRIVE_ENTRYPOINT__');
-// Turbopack builds may export the module (or its default) as a promise.
-const loadedEntrypoint = await Promise.resolve(nextEntrypoint.default ?? nextEntrypoint);
-const nextHandler =
-  nextEntrypoint.handler ??
-  loadedEntrypoint?.handler ??
-  loadedEntrypoint?.default?.handler ??
-  loadedEntrypoint?.default ??
-  loadedEntrypoint;
-if (typeof nextHandler !== 'function') throw new Error('Next.js middleware handler is unavailable');
+// The Next entrypoint must be imported lazily on the first request, not with a
+// top-level await: some route module graphs block on facilities that only
+// exist once the guest server is listening, and eager evaluation deadlocks the
+// boot (observed as MicroVM boot loops in prod). The promise is shared, so the
+// module still evaluates exactly once.
+let handlerPromise;
+const resolveHandler = () =>
+  (handlerPromise ??= (async () => {
+    const nextEntrypoint = await import('__GIGADRIVE_ENTRYPOINT__');
+    // Turbopack builds may export the module (or its default) as a promise.
+    const loadedEntrypoint = await Promise.resolve(nextEntrypoint.default ?? nextEntrypoint);
+    const handler =
+      nextEntrypoint.handler ??
+      loadedEntrypoint?.handler ??
+      loadedEntrypoint?.default?.handler ??
+      loadedEntrypoint?.default ??
+      loadedEntrypoint;
+    if (typeof handler !== 'function') throw new Error('Next.js middleware handler is unavailable');
+    return handler;
+  })());
 
 export async function fetch(request) {
+  const nextHandler = await resolveHandler();
   const pending = [];
   const url = new URL(request.url);
   const response = await nextHandler(request, {
