@@ -109,8 +109,10 @@ async function resolveReadablePath(repoRoot: string, filePath: string) {
   const absolutePath = path.resolve(path.isAbsolute(filePath) ? filePath : path.join(repoRoot, filePath));
   const portablePath = toPortableRelativePath(repoRoot, absolutePath);
   await access(absolutePath);
+  // Validate the symlink-resolved location as well; the call throws when the
+  // real path escapes the repository root.
   const resolvedPath = await realpath(absolutePath);
-  toPortableRelativePath(repoRoot, resolvedPath);
+  void toPortableRelativePath(repoRoot, resolvedPath);
   const fileStat = await stat(absolutePath);
   return { portablePath, fileStat };
 }

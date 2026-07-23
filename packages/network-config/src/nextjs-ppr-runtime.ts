@@ -120,7 +120,9 @@ export const revalidateNextPath = async (input: NextInternalRevalidateInput): Pr
   const headers = new Headers(input.headers);
   headers.set('cache-control', 'no-cache');
   const response = await fetch(url, { method: 'HEAD', headers, redirect: 'manual' });
-  const cacheStatus = response.headers.get('x-vercel-cache') ?? response.headers.get('x-nextjs-cache');
+  // Prefer the platform-owned cache-status header; fall back to the header Next
+  // itself emits. Never rely on CDN-vendor header names here.
+  const cacheStatus = response.headers.get('x-gigadrive-cache') ?? response.headers.get('x-nextjs-cache');
   if (
     cacheStatus?.toUpperCase() !== 'REVALIDATED' &&
     response.status !== 200 &&

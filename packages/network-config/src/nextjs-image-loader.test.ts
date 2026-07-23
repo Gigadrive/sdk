@@ -19,4 +19,10 @@ describe('gigadriveNextImageLoader', () => {
       '/_gigadrive/image/https%3A%2F%2Fimages.example.com%2Frender.php%3Fid%3D1/render.php.png?width=64'
     );
   });
+
+  it('serves oversized source URLs unoptimized instead of emitting an oversized optimizer URL', () => {
+    const src = `https://images.example.com/signed.png?token=${'a'.repeat(3000)}`;
+
+    expect(gigadriveNextImageLoader({ src, width: 640 })).toBe(src);
+  });
 });

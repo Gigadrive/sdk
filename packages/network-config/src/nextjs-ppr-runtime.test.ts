@@ -107,6 +107,48 @@ describe('revalidateNextPath', () => {
     expect(new Headers(init.headers).get('cache-control')).toBe('no-cache');
   });
 
+  it('accepts the platform-owned cache-status header on non-200 responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 304,
+          headers: { 'x-gigadrive-cache': 'REVALIDATED' },
+        })
+      )
+    );
+
+    await expect(
+      revalidateNextPath({
+        urlPath: '/isr',
+        hostname: 'example.gigadrive.app',
+        headers: {},
+        opts: {},
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it('ignores CDN-vendor cache headers when deciding revalidation success', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 500,
+          headers: { 'x-vercel-cache': 'REVALIDATED' },
+        })
+      )
+    );
+
+    await expect(
+      revalidateNextPath({
+        urlPath: '/isr',
+        hostname: 'example.gigadrive.app',
+        headers: {},
+        opts: {},
+      })
+    ).rejects.toThrow('Next.js revalidation failed with status 500');
+  });
+
   it('accepts a missing generated page only when Next requests that behavior', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
 
