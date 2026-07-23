@@ -59,7 +59,15 @@ export async function fetch(request) {
   const reader = response.body.getReader();
   const body = new ReadableStream({
     async pull(controller) {
-      const result = await reader.read();
+      let result;
+      try {
+        result = await reader.read();
+      } catch (error) {
+        // A failing upstream read must still settle queued waitUntil work
+        // (e.g. PPR cache persistence) before the invocation ends.
+        await Promise.allSettled(pending);
+        throw error;
+      }
       if (result.done) {
         await Promise.allSettled(pending);
         controller.close();
