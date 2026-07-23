@@ -1,5 +1,5 @@
 import type { NextAdapter } from 'next';
-import { access, mkdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NormalizedImagePolicy } from './image-policy';
@@ -32,6 +32,49 @@ const CACHE_COMPONENTS_HANDLER_PATH = () =>
   runtimeModulePath('GIGADRIVE_NEXT_CACHE_COMPONENTS_HANDLER_PATH', 'nextjs-cache-components-handler.js');
 const IMAGE_LOADER_PATH = () => runtimeModulePath('GIGADRIVE_NEXT_IMAGE_LOADER_PATH', 'nextjs-image-loader.js');
 const PPR_RUNTIME_PATH = () => runtimeModulePath('GIGADRIVE_NEXT_PPR_RUNTIME_PATH', 'nextjs-ppr-runtime.js');
+
+const TEMPLATE_DIRECTORY = path.join(runtimeDirectory, 'nextjs-entrypoint-templates');
+const templateCache = new Map<string, Promise<string>>();
+
+const loadWrapperTemplate = (name: string): Promise<string> => {
+  let template = templateCache.get(name);
+  if (!template) {
+    template = readFile(path.join(TEMPLATE_DIRECTORY, name), 'utf8');
+    templateCache.set(name, template);
+  }
+  return template;
+};
+
+/**
+ * Replaces quoted `__GIGADRIVE_*__` tokens with JSON-encoded values and the
+ * `__GIGADRIVE_EDGE_IMPORTS__` marker comment with raw source lines. Throws if
+ * a substitution never matched or a placeholder survives, so template and
+ * generator cannot drift apart silently.
+ */
+const renderWrapperTemplate = (
+  templateName: string,
+  template: string,
+  substitutions: { strings?: Record<string, string>; blocks?: Record<string, string> }
+): string => {
+  // Drop the top-of-file header comment: it documents the template mechanics
+  // (including placeholder names, which would trip the leak check below) and
+  // is not meant for the generated wrapper.
+  let rendered = template.replace(/^(?:\/\/[^\n]*\n)+\n?/, '');
+  for (const [token, value] of Object.entries(substitutions.strings ?? {})) {
+    const pattern = new RegExp(`(['"])${token}\\1`, 'g');
+    if (!pattern.test(rendered)) throw new Error(`Wrapper template ${templateName} is missing placeholder ${token}`);
+    rendered = rendered.replace(pattern, JSON.stringify(value).replaceAll('$', '$$$$'));
+  }
+  for (const [token, value] of Object.entries(substitutions.blocks ?? {})) {
+    const marker = `/* ${token} */`;
+    if (!rendered.includes(marker)) throw new Error(`Wrapper template ${templateName} is missing marker ${token}`);
+    rendered = rendered.replace(marker, value.replaceAll('$', '$$$$'));
+  }
+  if (rendered.includes('__GIGADRIVE_')) {
+    throw new Error(`Wrapper template ${templateName} has unsubstituted placeholders`);
+  }
+  return rendered;
+};
 
 const toJsonValue = (value: unknown): JsonValue => {
   const serialized = JSON.stringify(value);
@@ -239,7 +282,7 @@ const writeEntrypointWrappers = async (
     : `./${relativePprRuntimePath}`;
   const relativeProjectDirectory = path.posix.relative(
     portableWrapperDirectory,
-    toPortableRelativePath(repoRoot, projectDir)
+    toPortableRelativePath(repoRoot, projectDir, true)
   );
   const projectDirectorySpecifier = relativeProjectDirectory.startsWith('.')
     ? relativeProjectDirectory
@@ -252,49 +295,58 @@ const writeEntrypointWrappers = async (
       const relativeImport = path.relative(wrapperDirectory, executablePath).replaceAll(path.sep, '/');
       const importSpecifier = relativeImport.startsWith('.') ? relativeImport : `./${relativeImport}`;
       const isMiddleware = middlewareOutputId !== undefined && entrypoint.outputIds.includes(middlewareOutputId);
-      const webHandlerPrelude =
-        entrypoint.runtime === 'edge' && entrypoint.edgeRuntime
-          ? (() => {
-              const edgeMarker = '/server/edge/';
-              const markerIndex = entrypoint.edgeRuntime.modulePath.indexOf(edgeMarker);
-              const distDirectory =
-                markerIndex >= 0
-                  ? entrypoint.edgeRuntime.modulePath.slice(0, markerIndex)
-                  : path.dirname(entrypoint.edgeRuntime.modulePath);
-              const edgeRuntimeAssets = Object.entries(entrypoint.assets)
-                .filter(([, sourcePath]) => sourcePath.startsWith(`${distDirectory}/`) && sourcePath.endsWith('.js'))
-                .sort(([, leftSource], [, rightSource]) => {
-                  if (leftSource === entrypoint.edgeRuntime?.modulePath) return 1;
-                  if (rightSource === entrypoint.edgeRuntime?.modulePath) return -1;
-                  return leftSource.localeCompare(rightSource);
-                });
-              const imports = edgeRuntimeAssets
-                .map(([targetPath, sourcePath]) => {
-                  // Next includes the executable Edge module in `assets` under a
-                  // deployment-relative target such as `server/edge/chunks/*`,
-                  // while `modulePath` retains its canonical `.next/server/*`
-                  // location. Function packaging installs the executable at the
-                  // canonical path, so the wrapper must import it there as well.
-                  const runtimeTargetPath =
-                    sourcePath === entrypoint.edgeRuntime?.modulePath ? entrypoint.edgeRuntime.modulePath : targetPath;
-                  const relativeAssetPath = path.posix.relative(portableWrapperDirectory, runtimeTargetPath);
-                  const assetSpecifier = relativeAssetPath.startsWith('.')
-                    ? relativeAssetPath
-                    : `./${relativeAssetPath}`;
-                  return `  await import(${JSON.stringify(assetSpecifier)});`;
-                })
-                .join('\n');
-              return `import { AsyncLocalStorage } from "node:async_hooks";\n\nconst resolveHandler = async () => {\n  globalThis.self ??= globalThis;\n  globalThis.AsyncLocalStorage ??= AsyncLocalStorage;\n${imports}\n  const registry = globalThis._ENTRIES;\n  if (!registry) throw new Error('Next.js edge entry registry is unavailable');\n  const entry = await registry[${JSON.stringify(entrypoint.edgeRuntime.entryKey)}];\n  const handler = entry?.[${JSON.stringify(entrypoint.edgeRuntime.handlerExport)}];\n  if (typeof handler !== 'function') throw new Error('Next.js edge handler is unavailable');\n  return handler;\n};`;
-            })()
-          : `import { fileURLToPath } from "node:url";\n\nconst resolveHandler = async () => {\n  process.chdir(fileURLToPath(new URL(${JSON.stringify(projectDirectorySpecifier)}, import.meta.url)));\n  const nextEntrypoint = await import(${JSON.stringify(importSpecifier)});\n  const loadedEntrypoint = await Promise.resolve(nextEntrypoint.default ?? nextEntrypoint);\n  const handler = nextEntrypoint.handler ?? loadedEntrypoint?.handler ?? loadedEntrypoint?.default?.handler ?? loadedEntrypoint?.default ?? loadedEntrypoint;\n  if (typeof handler !== 'function') throw new Error('Next.js middleware handler is unavailable');\n  return handler;\n};`;
-      const source =
-        (entrypoint.runtime === 'edge' && entrypoint.edgeRuntime) || isMiddleware
-          ? `import { persistPprCacheEntry } from ${JSON.stringify(pprRuntimeSpecifier)};\n${webHandlerPrelude}\n\nexport async function fetch(request) {\n  const pending = [];\n  const handler = await resolveHandler();\n  const url = new URL(request.url);\n  const response = await handler(request, {\n    signal: request.signal,\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname: url.hostname, invocationTarget: request.headers.get('x-gigadrive-next-invocation-target') ?? url.pathname, routeMatches: Object.fromEntries(new URLSearchParams(request.headers.get('x-now-route-matches') ?? '')), relativeProjectDir: ${JSON.stringify(
-              entrypoint.runtime === 'nodejs' ? '.' : toPortableRelativePath(repoRoot, projectDir, true)
-            )}, onCacheEntryV2(cacheEntry, meta) { pending.push(persistPprCacheEntry(request.headers.get('x-gigadrive-next-cache-key') ?? meta.url ?? request.headers.get('x-matched-path') ?? url.pathname, cacheEntry)); return false; } },\n  });\n  if (!response.body) { await Promise.allSettled(pending); return response; }\n  const reader = response.body.getReader();\n  const body = new ReadableStream({\n    async pull(controller) {\n      const result = await reader.read();\n      if (result.done) { await Promise.allSettled(pending); controller.close(); return; }\n      controller.enqueue(result.value);\n    },\n    async cancel(reason) { try { await reader.cancel(reason); } finally { await Promise.allSettled(pending); } },\n  });\n  return new Response(body, response);\n}\n`
-          : `import "next/dist/build/adapter/setup-node-env.external.js";\nimport { fileURLToPath } from "node:url";\nimport { persistPprCacheEntry, revalidateNextPath } from ${JSON.stringify(pprRuntimeSpecifier)};\n\nconst resolveHandler = async () => {\n  process.chdir(fileURLToPath(new URL(${JSON.stringify(projectDirectorySpecifier)}, import.meta.url)));\n  const nextEntrypoint = await import(${JSON.stringify(importSpecifier)});\n  const loadedEntrypoint = await Promise.resolve(nextEntrypoint.default ?? nextEntrypoint);\n  const handler = nextEntrypoint.handler ?? loadedEntrypoint?.handler ?? loadedEntrypoint?.default?.handler ?? loadedEntrypoint?.default ?? loadedEntrypoint;\n  if (typeof handler !== 'function') throw new Error('Next.js Node handler is unavailable');\n  return handler;\n};\n\nexport default async function handler(req, res) {\n  const pending = [];\n  const nextHandler = await resolveHandler();\n  const hostname = Array.isArray(req.headers.host) ? req.headers.host[0] : req.headers.host;\n  await nextHandler(req, res, {\n    waitUntil(promise) { pending.push(Promise.resolve(promise)); },\n    requestMeta: { hostname, invocationTarget: req.headers['x-gigadrive-next-invocation-target'] ?? req.url, routeMatches: Object.fromEntries(new URLSearchParams(req.headers['x-now-route-matches'] ?? '')), relativeProjectDir: ${JSON.stringify(
-              '.'
-            )}, revalidate(input) { return revalidateNextPath({ ...input, hostname }); }, onCacheEntryV2(cacheEntry, meta) { const cacheKey = req.headers['x-gigadrive-next-cache-key']; const matchedPath = req.headers['x-matched-path']; pending.push(persistPprCacheEntry((Array.isArray(cacheKey) ? cacheKey[0] : cacheKey) ?? meta.url ?? (Array.isArray(matchedPath) ? matchedPath[0] : matchedPath) ?? req.url ?? '/', cacheEntry)); return false; } },\n  });\n  await Promise.allSettled(pending);\n}\n`;
+
+      let source: string;
+      if (entrypoint.runtime === 'edge' && entrypoint.edgeRuntime) {
+        const edgeMarker = '/server/edge/';
+        const markerIndex = entrypoint.edgeRuntime.modulePath.indexOf(edgeMarker);
+        const distDirectory =
+          markerIndex >= 0
+            ? entrypoint.edgeRuntime.modulePath.slice(0, markerIndex)
+            : path.dirname(entrypoint.edgeRuntime.modulePath);
+        const edgeRuntimeAssets = Object.entries(entrypoint.assets)
+          .filter(([, sourcePath]) => sourcePath.startsWith(`${distDirectory}/`) && sourcePath.endsWith('.js'))
+          .sort(([, leftSource], [, rightSource]) => {
+            if (leftSource === entrypoint.edgeRuntime?.modulePath) return 1;
+            if (rightSource === entrypoint.edgeRuntime?.modulePath) return -1;
+            return leftSource.localeCompare(rightSource);
+          });
+        const imports = edgeRuntimeAssets
+          .map(([targetPath, sourcePath]) => {
+            // Next includes the executable Edge module in `assets` under a
+            // deployment-relative target such as `server/edge/chunks/*`,
+            // while `modulePath` retains its canonical `.next/server/*`
+            // location. Function packaging installs the executable at the
+            // canonical path, so the wrapper must import it there as well.
+            const runtimeTargetPath =
+              sourcePath === entrypoint.edgeRuntime?.modulePath ? entrypoint.edgeRuntime.modulePath : targetPath;
+            const relativeAssetPath = path.posix.relative(portableWrapperDirectory, runtimeTargetPath);
+            const assetSpecifier = relativeAssetPath.startsWith('.') ? relativeAssetPath : `./${relativeAssetPath}`;
+            return `await import(${JSON.stringify(assetSpecifier)});`;
+          })
+          .join('\n');
+        source = renderWrapperTemplate('edge-web.mjs', await loadWrapperTemplate('edge-web.mjs'), {
+          strings: {
+            __GIGADRIVE_PPR_RUNTIME__: pprRuntimeSpecifier,
+            __GIGADRIVE_EDGE_ENTRY_KEY__: entrypoint.edgeRuntime.entryKey,
+            __GIGADRIVE_EDGE_HANDLER_EXPORT__: entrypoint.edgeRuntime.handlerExport,
+            __GIGADRIVE_RELATIVE_PROJECT_DIR__: toPortableRelativePath(repoRoot, projectDir, true),
+          },
+          blocks: { __GIGADRIVE_EDGE_IMPORTS__: imports },
+        });
+      } else {
+        const templateName = isMiddleware ? 'node-middleware-web.mjs' : 'node-route.mjs';
+        source = renderWrapperTemplate(templateName, await loadWrapperTemplate(templateName), {
+          strings: {
+            __GIGADRIVE_PPR_RUNTIME__: pprRuntimeSpecifier,
+            __GIGADRIVE_PROJECT_DIR__: projectDirectorySpecifier,
+            __GIGADRIVE_ENTRYPOINT__: importSpecifier,
+            // The Node wrappers chdir into the project directory, so Next
+            // resolves everything relative to ".".
+            __GIGADRIVE_RELATIVE_PROJECT_DIR__: '.',
+          },
+        });
+      }
       await writeFile(wrapperPath, source, 'utf8');
       const portableWrapperPath = toPortableRelativePath(repoRoot, wrapperPath);
       entrypoint.assets[portableWrapperPath] = portableWrapperPath;

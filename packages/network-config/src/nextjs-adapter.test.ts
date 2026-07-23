@@ -262,11 +262,11 @@ describe('Gigadrive Next.js adapter', () => {
     expect(wrapper).toContain('await nextHandler(req, res');
     expect(wrapper).toContain('onCacheEntryV2');
     expect(wrapper).toContain('persistPprCacheEntry');
-    expect(wrapper).toContain('revalidateNextPath');
-    expect(wrapper).toContain('revalidate(input) { return revalidateNextPath');
+    expect(wrapper).toContain('revalidateNextPath({ ...input, hostname })');
     expect(wrapper).toContain('process.chdir(fileURLToPath(new URL("../../..", import.meta.url)))');
     expect(wrapper).toContain('relativeProjectDir: "."');
     expect(wrapper).not.toContain('routerServerContext:');
+    expect(wrapper).not.toContain('__GIGADRIVE_');
     expect(wrapper).toContain("req.headers['x-gigadrive-next-cache-key']");
   });
 
@@ -560,6 +560,183 @@ describe('Gigadrive Next.js adapter', () => {
     const response = await wrapper.fetch(new Request('https://example.com/api/edge'));
 
     await expect(response.json()).resolves.toEqual({ pathname: '/api/edge' });
+  });
+
+  it('generates working wrappers when the project directory is the repository root', async () => {
+    const repoRoot = await mkdtemp(path.join(process.cwd(), '.tmp-network-next-root-'));
+    temporaryDirectories.push(repoRoot);
+    const distDir = path.join(repoRoot, '.next');
+    const handlerPath = path.join(distDir, 'server', 'app', 'route.cjs');
+    await mkdir(path.dirname(handlerPath), { recursive: true });
+    await writeFile(
+      handlerPath,
+      `module.exports.handler = async (request, response, context) => {
+        response.statusCode = 200;
+        response.cwd = process.cwd();
+        response.relativeProjectDir = context.requestMeta.relativeProjectDir;
+      };`
+    );
+
+    await onBuildComplete({
+      projectDir: repoRoot,
+      repoRoot,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'root-build',
+      routing: {
+        beforeMiddleware: [],
+        beforeFiles: [],
+        afterFiles: [],
+        dynamicRoutes: [],
+        onMatch: [],
+        fallback: [],
+        shouldNormalizeNextData: false,
+        rsc: {},
+      },
+      outputs: {
+        pages: [],
+        pagesApi: [],
+        appPages: [],
+        appRoutes: [
+          {
+            id: 'app/route',
+            type: 'APP_ROUTE',
+            filePath: handlerPath,
+            pathname: '/',
+            sourcePage: 'app/route.ts',
+            runtime: 'nodejs',
+            assets: {},
+            config: {},
+          },
+        ],
+        prerenders: [],
+        staticFiles: [],
+      },
+    });
+
+    const manifest = parseGigadriveNextBuildManifest(
+      await readFile(path.join(repoRoot, '.gigadrive', 'nextjs.json'), 'utf8')
+    ) as GigadriveNextBuildManifestV2;
+    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
+    const originalCwd = process.cwd();
+    try {
+      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
+        default(
+          request: { headers: Record<string, string>; url: string },
+          response: { statusCode?: number; cwd?: string; relativeProjectDir?: string }
+        ): Promise<void>;
+      };
+      const response: { statusCode?: number; cwd?: string; relativeProjectDir?: string } = {};
+      await wrapper.default({ headers: { host: 'example.com' }, url: '/' }, response);
+
+      expect(response).toEqual({ statusCode: 200, cwd: repoRoot, relativeProjectDir: '.' });
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it('serves concurrent invocations from a single module-scope handler resolution', async () => {
+    const repoRoot = await mkdtemp(path.join(process.cwd(), '.tmp-network-next-concurrent-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'apps', 'web');
+    const distDir = path.join(projectDir, '.next');
+    const handlerPath = path.join(distDir, 'server', 'app', 'api', 'slow', 'route.cjs');
+    await mkdir(path.dirname(handlerPath), { recursive: true });
+    await writeFile(
+      handlerPath,
+      `module.exports.handler = async (request, response) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        response.statusCode = 200;
+        response.cwd = process.cwd();
+        response.url = request.url;
+      };`
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'concurrent-build',
+      routing: {
+        beforeMiddleware: [],
+        beforeFiles: [],
+        afterFiles: [],
+        dynamicRoutes: [],
+        onMatch: [],
+        fallback: [],
+        shouldNormalizeNextData: false,
+        rsc: {},
+      },
+      outputs: {
+        pages: [],
+        pagesApi: [],
+        appPages: [],
+        appRoutes: [
+          {
+            id: 'app/api/slow/route',
+            type: 'APP_ROUTE',
+            filePath: handlerPath,
+            pathname: '/api/slow',
+            sourcePage: 'app/api/slow/route.ts',
+            runtime: 'nodejs',
+            assets: {},
+            config: {},
+          },
+        ],
+        prerenders: [],
+        staticFiles: [],
+      },
+    });
+
+    const manifest = parseGigadriveNextBuildManifest(
+      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
+    ) as GigadriveNextBuildManifestV2;
+    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
+    const originalCwd = process.cwd();
+    try {
+      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
+        default(
+          request: { headers: Record<string, string>; url: string },
+          response: { statusCode?: number; cwd?: string; url?: string }
+        ): Promise<void>;
+      };
+      const responses = [{}, {}, {}] as Array<{ statusCode?: number; cwd?: string; url?: string }>;
+      await Promise.all(
+        responses.map((response, index) =>
+          wrapper.default({ headers: { host: 'example.com' }, url: `/api/slow?i=${String(index)}` }, response)
+        )
+      );
+
+      for (const [index, response] of responses.entries()) {
+        expect(response).toEqual({ statusCode: 200, cwd: projectDir, url: `/api/slow?i=${String(index)}` });
+      }
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it('keeps the shared template regions identical across wrapper variants', async () => {
+    const templateDirectory = path.join(import.meta.dirname, 'nextjs-entrypoint-templates');
+    const nodeRoute = await readFile(path.join(templateDirectory, 'node-route.mjs'), 'utf8');
+    const nodeMiddleware = await readFile(path.join(templateDirectory, 'node-middleware-web.mjs'), 'utf8');
+    const edgeWeb = await readFile(path.join(templateDirectory, 'edge-web.mjs'), 'utf8');
+
+    const handlerResolution = (template: string): string => {
+      const match = /const nextEntrypoint[\s\S]*?loadedEntrypoint;\n/.exec(template);
+      if (!match) throw new Error('Template is missing the handler resolution block');
+      return match[0];
+    };
+    expect(handlerResolution(nodeMiddleware)).toBe(handlerResolution(nodeRoute));
+
+    const fetchExport = (template: string): string => {
+      const index = template.indexOf('export async function fetch(request)');
+      if (index < 0) throw new Error('Template is missing the fetch export');
+      return template.slice(index);
+    };
+    expect(fetchExport(edgeWeb)).toBe(fetchExport(nodeMiddleware));
   });
 
   it('rejects outputs outside the repository root', async () => {
