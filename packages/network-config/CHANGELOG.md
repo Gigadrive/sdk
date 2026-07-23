@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.17
+
+### Patch Changes
+
+- Import Node route and middleware entrypoints lazily on the first request; eager top-level evaluation deadlocked MicroVM guests whose route module graphs block before the server is listening. ([#396](https://github.com/Gigadrive/sdk/pull/396))
+
 ## 3.4.16
 
 ### Patch Changes
