@@ -825,12 +825,15 @@ describe('Gigadrive Next.js adapter', () => {
     };
     expect(handlerResolution(nodeMiddleware)).toBe(handlerResolution(nodeRoute));
 
-    const fetchExport = (template: string): string => {
-      const index = template.indexOf('export async function fetch(request)');
-      if (index < 0) throw new Error('Template is missing the fetch export');
+    // The edge template resolves its handler lazily inside fetch (chunk
+    // evaluation must not run at module scope), so compare the shared request
+    // contract from the pending-work setup onward.
+    const fetchContract = (template: string): string => {
+      const index = template.indexOf('const pending = [];');
+      if (index < 0) throw new Error('Template is missing the fetch contract');
       return template.slice(index);
     };
-    expect(fetchExport(edgeWeb)).toBe(fetchExport(nodeMiddleware));
+    expect(fetchContract(edgeWeb)).toBe(fetchContract(nodeMiddleware));
   });
 
   it('rejects outputs outside the repository root', async () => {
