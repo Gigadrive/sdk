@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 3.4.16
+
+### Patch Changes
+
+- Evaluate Next.js edge chunks lazily on the first request instead of at wrapper module scope; eager top-level evaluation kept MicroVM guests from reaching their listening state and boot-looped edge-runtime functions. ([#394](https://github.com/Gigadrive/sdk/pull/394))
+
 ## 3.4.15
 
 ### Patch Changes
