@@ -13,6 +13,56 @@
       "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
       "import": "./dist/index.mjs"
+    },
+    "./format": {
+      "types": "./dist/format.d.ts",
+      "require": "./dist/format.js",
+      "import": "./dist/format.mjs"
+    },
+    "./all": {
+      "types": "./dist/all.d.ts",
+      "require": "./dist/all.js",
+      "import": "./dist/all.mjs"
+    },
+    "./deep-merge": {
+      "types": "./dist/deep-merge.d.ts",
+      "require": "./dist/deep-merge.js",
+      "import": "./dist/deep-merge.mjs"
+    },
+    "./enum-default": {
+      "types": "./dist/enum-default.d.ts",
+      "require": "./dist/enum-default.js",
+      "import": "./dist/enum-default.mjs"
+    },
+    "./random": {
+      "types": "./dist/random.d.ts",
+      "require": "./dist/random.js",
+      "import": "./dist/random.mjs"
+    },
+    "./sleep": {
+      "types": "./dist/sleep.d.ts",
+      "require": "./dist/sleep.js",
+      "import": "./dist/sleep.mjs"
+    },
+    "./url": {
+      "types": "./dist/url.d.ts",
+      "require": "./dist/url.js",
+      "import": "./dist/url.mjs"
+    },
+    "./encrypt": {
+      "types": "./dist/encrypt.d.ts",
+      "require": "./dist/encrypt.js",
+      "import": "./dist/encrypt.mjs"
+    },
+    "./sha256": {
+      "types": "./dist/sha256.d.ts",
+      "require": "./dist/sha256.js",
+      "import": "./dist/sha256.mjs"
+    },
+    "./buffered-readable-stream": {
+      "types": "./dist/buffered-readable-stream.d.ts",
+      "require": "./dist/buffered-readable-stream.js",
+      "import": "./dist/buffered-readable-stream.mjs"
     }
   },
   "main": "dist/index.js",
