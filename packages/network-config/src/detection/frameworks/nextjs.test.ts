@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AVAILABLE_REGIONS } from '../../regions';
 import {
   detectProject,
   expectNodePackageManagerPriority,
@@ -19,33 +20,36 @@ const buildManifest = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   });
 
-const adapterManifest = () =>
+const imagePolicy = {
+  localPatterns: [{ pathname: '/images/**' }],
+  remotePatterns: [{ protocol: 'https', hostname: 'images.example.com', pathname: '/**' }],
+  widths: [640, 1080],
+  heights: [],
+  qualities: [75],
+  formats: ['image/webp'],
+  minimumCacheTTL: 60,
+  dangerouslyAllowSVG: false,
+  contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  contentDispositionType: 'attachment',
+  maximumRedirects: 3,
+  maximumResponseBody: 52428800,
+  variants: {},
+};
+
+const standaloneV2Manifest = (overrides: Record<string, unknown> = {}) =>
   JSON.stringify({
     version: 2,
-    mode: 'adapter-v2',
+    mode: 'standalone-v2',
     distDir: '.next',
     repoRootToProject: '.',
     nextVersion: '16.2.10',
     buildId: 'build-id',
+    server: { maxDuration: 45, env: { FEATURE_FLAG: 'on' } },
     config: {
       basePath: '',
       trailingSlash: false,
       cacheComponents: true,
-      images: {
-        localPatterns: [{ pathname: '/images/**' }],
-        remotePatterns: [{ protocol: 'https', hostname: 'images.example.com', pathname: '/**' }],
-        widths: [640, 1080],
-        heights: [],
-        qualities: [75],
-        formats: ['image/webp'],
-        minimumCacheTTL: 60,
-        dangerouslyAllowSVG: false,
-        contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-        contentDispositionType: 'attachment',
-        maximumRedirects: 3,
-        maximumResponseBody: 52428800,
-        variants: {},
-      },
+      images: imagePolicy,
     },
     routing: {
       beforeMiddleware: [],
@@ -58,73 +62,20 @@ const adapterManifest = () =>
       rsc: {},
     },
     outputs: {
-      pages: [
+      prerenders: [
         {
-          id: 'page',
-          type: 'PAGES',
-          filePath: '.next/server/page.js',
-          pathname: '/',
-          sourcePage: 'pages/index.tsx',
-          runtime: 'nodejs',
-          assets: {
-            '.next/server/page.js': '.next/server/page.js',
-            '.next/server/shared.js': '.next/server/shared.js',
-          },
-          config: { maxDuration: 20 },
+          id: 'isr',
+          type: 'PRERENDER',
+          pathname: '/isr',
+          parentOutputId: 'app',
+          groupId: 1,
+          fallback: { filePath: '.next/server/app/isr.html', initialRevalidate: 5 },
+          config: { renderingMode: 'PARTIALLY_STATIC' },
         },
       ],
-      appPages: [
-        {
-          id: 'app',
-          type: 'APP_PAGE',
-          filePath: '.next/server/app.js',
-          pathname: '/app',
-          sourcePage: 'app/page.tsx',
-          runtime: 'nodejs',
-          assets: {
-            '.next/server/app.js': '.next/server/app.js',
-            '.next/server/shared.js': '.next/server/shared.js',
-          },
-          config: { maxDuration: 40 },
-        },
-      ],
-      pagesApi: [],
-      appRoutes: [],
-      prerenders: [],
-      staticFiles: [
-        {
-          id: 'static',
-          type: 'STATIC_FILE',
-          filePath: '.next/static/app.js',
-          pathname: '/_next/static/app.js',
-        },
-      ],
+      staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
     },
-    entrypoints: [
-      {
-        id: 'next-0',
-        runtime: 'nodejs',
-        filePath: '.gigadrive/nextjs/entrypoints/next-0.mjs',
-        outputIds: ['page'],
-        assets: {
-          '.gigadrive/nextjs/entrypoints/next-0.mjs': '.gigadrive/nextjs/entrypoints/next-0.mjs',
-          '.next/server/shared.js': '.next/server/shared.js',
-        },
-        config: { maxDuration: 20 },
-      },
-      {
-        id: 'next-1',
-        runtime: 'nodejs',
-        filePath: '.gigadrive/nextjs/entrypoints/next-1.mjs',
-        outputIds: ['app'],
-        assets: {
-          '.gigadrive/nextjs/entrypoints/next-1.mjs': '.gigadrive/nextjs/entrypoints/next-1.mjs',
-          '.next/server/shared.js': '.next/server/shared.js',
-        },
-        config: { maxDuration: 40 },
-      },
-    ],
-    outputEntrypoints: { page: 'next-0', app: 'next-1' },
+    ...overrides,
   });
 
 describe('Next.js framework detection', () => {
@@ -203,6 +154,7 @@ describe('Next.js framework detection', () => {
         '.next/static/chunks/app.js': { path: '_next/static/chunks/app.js' },
         '.next/static/css/app.css': { path: '_next/static/css/app.css' },
       },
+      prefixes: undefined,
       dynamicRoutes: true,
       populateCache: true,
     });
@@ -231,81 +183,67 @@ describe('Next.js framework detection', () => {
     expect(result.config.routes[0]?.destination).toBe('apps/web/server.js');
   });
 
-  it('should create split Next 16 functions, shared artifacts, framework routing, and managed images', async () => {
+  it('should create a single Next 16 standalone server with a static prefix, framework routing, and managed images', async () => {
     const result = await detectProject({
       '/project/package.json': packageJson(dependencies),
-      '/project/.gigadrive/nextjs.json': adapterManifest(),
-      '/project/.gigadrive/nextjs/entrypoints/next-0.mjs': 'export default async function handler() {}',
-      '/project/.gigadrive/nextjs/entrypoints/next-1.mjs': 'export default async function handler() {}',
-      '/project/.next/server/page.js': 'export const handler = () => {}',
-      '/project/.next/server/app.js': 'export const handler = () => {}',
-      '/project/.next/server/shared.js': 'export const shared = true',
-      '/project/.next/static/app.js': 'static',
+      '/project/.gigadrive/nextjs.json': standaloneV2Manifest(),
+      '/project/.next/standalone/server.js': 'server',
+      '/project/.next/standalone/node_modules/next/package.json': '{}',
+      '/project/.next/server/app/isr.html': '<html>isr</html>',
       '/project/public/gigadrive-mark.svg': '<svg />',
     });
 
-    expect(result.config.entrypoints).toHaveLength(2);
-    expect(result.config.regions).toEqual(['us-east-1']);
-    expect(result.config.assets).toMatchObject({
-      paths: expect.arrayContaining(['public/gigadrive-mark.svg', '.next/static/app.js']),
-      overrides: expect.objectContaining({
-        'public/gigadrive-mark.svg': { path: 'gigadrive-mark.svg' },
-      }),
-    });
-    expect(result.config.entrypoints).toEqual([
-      expect.objectContaining({
-        path: '.gigadrive/nextjs/entrypoints/next-0.mjs',
-        maxDuration: 20,
-        environmentVariables: expect.objectContaining({ GIGADRIVE_NEXT_ENTRYPOINT_ID: 'next-0' }),
-        package: expect.objectContaining({
-          includeProjectFiles: false,
-          filePathMap: expect.objectContaining({
-            '/project/.next/server/page.js': '.next/server/page.js',
-          }),
-          preserveSymlinks: true,
-          sharedArtifactIds: ['next-shared'],
-        }),
-      }),
-      expect.objectContaining({
-        path: '.gigadrive/nextjs/entrypoints/next-1.mjs',
-        maxDuration: 40,
-        package: expect.objectContaining({
-          includeProjectFiles: false,
-          filePathMap: expect.objectContaining({
-            '/project/.next/server/app.js': '.next/server/app.js',
-          }),
-          preserveSymlinks: true,
-          sharedArtifactIds: ['next-shared'],
-        }),
-      }),
-    ]);
-    expect(result.config.routes).toEqual([]);
-    expect(result.config.sharedArtifacts).toEqual([
-      {
-        id: 'next-shared',
-        filePathMap: { '/project/.next/server/shared.js': '.next/server/shared.js' },
+    expect(result.config.entrypoints).toHaveLength(1);
+    expect(result.config.entrypoints[0]).toMatchObject({
+      displayName: 'next-server',
+      path: 'server.js',
+      runtime: 'node-22',
+      streaming: true,
+      maxDuration: 45,
+      environmentVariables: { NEXT_BUILD_ID: 'build-id', FEATURE_FLAG: 'on' },
+      package: {
+        trace: false,
+        rootOverwrite: '/project/.next/standalone',
+        filePathMap: { '/project/public/gigadrive-mark.svg': 'public/gigadrive-mark.svg' },
       },
+    });
+    expect(result.config.regions).toEqual([...AVAILABLE_REGIONS]);
+    expect(result.config.routes).toEqual([
+      expect.objectContaining({ path: '/*', destination: 'server.js', handler: 'SERVERLESS_FUNCTION_STREAMING' }),
     ]);
+    // `.next/static` is registered as one prefix, not enumerated file-by-file.
+    expect(result.config.assets).toMatchObject({
+      paths: expect.arrayContaining(['public/gigadrive-mark.svg', '.next/server/app/isr.html']),
+      prefixes: [{ source: '.next/static', destination: '_next/static', immutable: true, populateCache: true }],
+      overrides: {
+        'public/gigadrive-mark.svg': { path: 'gigadrive-mark.svg' },
+        // The prerender shell is published to an internal asset path for edge seeding.
+        '.next/server/app/isr.html': { path: '_gigadrive/prerender/isr.html' },
+      },
+      populateCache: true,
+    });
     expect(result.config.framework).toMatchObject({
       type: 'nextjs',
       schemaVersion: 2,
+      mode: 'standalone-v2',
       buildId: 'build-id',
       routing: { shouldNormalizeNextData: true },
+      outputs: {
+        staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
+      },
+    });
+    expect(result.config.framework?.outputs.prerenders[0]).toMatchObject({
+      id: 'isr',
+      fallback: { filePath: '/_gigadrive/prerender/isr.html', initialRevalidate: 5 },
     });
     expect(result.config.images).toMatchObject({
       remotePatterns: [{ protocol: 'https', hostname: 'images.example.com', pathname: '/**' }],
       widths: [640, 1080],
     });
-    expect(result.config.assets).toMatchObject({
-      paths: ['public/gigadrive-mark.svg', '.next/static/app.js'],
-      overrides: {
-        'public/gigadrive-mark.svg': { path: 'gigadrive-mark.svg' },
-        '.next/static/app.js': { path: '_next/static/app.js' },
-      },
-    });
+    expect(result.config.sharedArtifacts).toEqual([]);
   });
 
-  it('should ignore malformed or unsafe adapter metadata', async () => {
+  it('should ignore malformed, unsafe, or legacy adapter-v2 metadata', async () => {
     const malformed = await detectProject({
       '/project/package.json': packageJson(dependencies),
       '/project/.gigadrive/nextjs.json': '{invalid',
@@ -315,9 +253,14 @@ describe('Next.js framework detection', () => {
       '/project/.gigadrive/nextjs.json': buildManifest({ distDir: '../outside' }),
       '/outside/standalone/server.js': 'server',
     });
+    const legacyAdapterV2 = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.gigadrive/nextjs.json': standaloneV2Manifest({ mode: 'adapter-v2' }),
+    });
 
     expect(malformed.config.entrypoints[0]?.path).toBe('.next/standalone/server.js');
     expect(unsafe.config.entrypoints[0]?.path).toBe('.next/standalone/server.js');
+    expect(legacyAdapterV2.config.entrypoints[0]?.path).toBe('.next/standalone/server.js');
   });
 
   it('should publish static export routes without a runtime entrypoint', async () => {

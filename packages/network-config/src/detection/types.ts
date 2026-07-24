@@ -80,6 +80,14 @@ export interface FrameworkDefaultConfig {
   assetPaths?: string[];
   /** Public path overrides keyed by project-relative asset path. */
   assetOverrides?: Record<string, { path?: string; contentType?: string }>;
+  /** Directory subtrees to publish under a URL prefix without per-file enumeration. */
+  assetPrefixes?: Array<{
+    source: string;
+    destination: string;
+    immutable?: boolean;
+    populateCache?: boolean;
+    contentType?: string;
+  }>;
   populateAssetCache?: boolean;
   routes: Array<{ source: string; destination: string }>;
   environmentVariables: Record<string, string>;

@@ -3,52 +3,6 @@ import type { NormalizedImagePolicy } from './image-policy';
 /** JSON values accepted in the portable Next.js adapter manifest. */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
-export type GigadriveNextRuntime = 'nodejs' | 'edge';
-
-export interface GigadriveNextEdgeRuntime {
-  modulePath: string;
-  entryKey: string;
-  handlerExport: string;
-}
-
-export interface GigadriveNextEntrypoint {
-  id: string;
-  runtime: GigadriveNextRuntime;
-  filePath: string;
-  outputIds: string[];
-  assets: Record<string, string>;
-  wasmAssets?: Record<string, string>;
-  edgeRuntime?: GigadriveNextEdgeRuntime;
-  config: {
-    maxDuration?: number;
-    preferredRegion?: string | string[];
-    env?: Record<string, string>;
-  };
-}
-
-export interface GigadriveNextRouteOutput {
-  id: string;
-  type: 'PAGES' | 'PAGES_API' | 'APP_PAGE' | 'APP_ROUTE' | 'MIDDLEWARE';
-  filePath: string;
-  pathname: string;
-  sourcePage: string;
-  runtime: GigadriveNextRuntime;
-  assets: Record<string, string>;
-  wasmAssets?: Record<string, string>;
-  edgeRuntime?: GigadriveNextEdgeRuntime;
-  config: {
-    maxDuration?: number;
-    preferredRegion?: string | string[];
-    env?: Record<string, string>;
-    matchers?: Array<{
-      source: string;
-      sourceRegex: string;
-      has?: JsonValue[];
-      missing?: JsonValue[];
-    }>;
-  };
-}
-
 export interface GigadriveNextPrerenderOutput {
   id: string;
   type: 'PRERENDER';
@@ -75,12 +29,18 @@ export interface GigadriveNextPrerenderOutput {
   };
 }
 
-export interface GigadriveNextStaticOutput {
-  id: string;
-  type: 'STATIC_FILE';
-  filePath: string;
-  pathname: string;
-  immutableHash?: string;
+/**
+ * A directory subtree published under a single URL prefix, registered as one
+ * descriptor instead of enumerating every file. Used to collapse `.next/static`
+ * (thousands of content-hashed chunks) into a single edge-served prefix.
+ */
+export interface GigadriveNextStaticAssetPrefix {
+  /** Project-relative source directory (e.g. `.next/static`). */
+  sourceDir: string;
+  /** Public URL prefix the subtree is served under (e.g. `_next/static`). */
+  urlPrefix: string;
+  /** Entries are content-hashed and safe to serve with immutable cache-control. */
+  immutable: boolean;
 }
 
 export interface GigadriveNextBuildManifestV1 {
@@ -92,14 +52,30 @@ export interface GigadriveNextBuildManifestV1 {
   buildId: string;
 }
 
-/** Portable build/runtime plan emitted by the Next.js 16 deployment adapter. */
-export interface GigadriveNextBuildManifestV2 {
+/** Aggregated runtime configuration collapsed onto the single standalone server. */
+export interface GigadriveNextServerDescriptor {
+  maxDuration?: number;
+  preferredRegion?: string | string[];
+  env?: Record<string, string>;
+}
+
+/**
+ * Portable runtime plan for the single standalone Next.js server (Next >= 16.2).
+ *
+ * The whole deployment runs as one `next start` standalone server, so the plan
+ * carries only what the platform needs to route around it: prerender/ISR/PPR
+ * seeds, the `.next/static` prefix, and the routing/image configuration. It
+ * deliberately omits per-route outputs and entrypoints — the server owns
+ * routing, middleware, edge routes, and PPR resume in-process.
+ */
+export interface GigadriveNextBuildManifestV2Standalone {
   version: 2;
-  mode: 'adapter-v2' | 'export';
+  mode: 'standalone-v2';
   distDir: string;
   repoRootToProject: string;
   nextVersion: string;
   buildId: string;
+  server: GigadriveNextServerDescriptor;
   config: {
     basePath: string;
     trailingSlash: boolean;
@@ -118,17 +94,22 @@ export interface GigadriveNextBuildManifestV2 {
     rsc: JsonValue;
   };
   outputs: {
-    pages: GigadriveNextRouteOutput[];
-    middleware?: GigadriveNextRouteOutput;
-    appPages: GigadriveNextRouteOutput[];
-    pagesApi: GigadriveNextRouteOutput[];
-    appRoutes: GigadriveNextRouteOutput[];
     prerenders: GigadriveNextPrerenderOutput[];
-    staticFiles: GigadriveNextStaticOutput[];
+    staticAssets: GigadriveNextStaticAssetPrefix[];
   };
-  entrypoints: GigadriveNextEntrypoint[];
-  outputEntrypoints: Record<string, string>;
 }
+
+/** Minimal plan for static-export builds (Next >= 16.2). */
+export interface GigadriveNextBuildManifestV2Export {
+  version: 2;
+  mode: 'export';
+  distDir: string;
+  repoRootToProject: string;
+  nextVersion: string;
+  buildId: string;
+}
+
+export type GigadriveNextBuildManifestV2 = GigadriveNextBuildManifestV2Standalone | GigadriveNextBuildManifestV2Export;
 
 export type GigadriveNextBuildManifest = GigadriveNextBuildManifestV1 | GigadriveNextBuildManifestV2;
 
@@ -156,17 +137,6 @@ const isJsonValue = (value: unknown): value is JsonValue => {
   return isRecord(value) && Object.values(value).every(isJsonValue);
 };
 
-const isRouteOutput = (value: unknown): value is GigadriveNextRouteOutput =>
-  isRecord(value) &&
-  typeof value.id === 'string' &&
-  ['PAGES', 'PAGES_API', 'APP_PAGE', 'APP_ROUTE', 'MIDDLEWARE'].includes(String(value.type)) &&
-  isPortableRelativePath(value.filePath) &&
-  typeof value.pathname === 'string' &&
-  typeof value.sourcePage === 'string' &&
-  (value.runtime === 'nodejs' || value.runtime === 'edge') &&
-  isStringRecord(value.assets) &&
-  isRecord(value.config);
-
 const isPrerenderOutput = (value: unknown): value is GigadriveNextPrerenderOutput =>
   isRecord(value) &&
   value.type === 'PRERENDER' &&
@@ -179,22 +149,19 @@ const isPrerenderOutput = (value: unknown): value is GigadriveNextPrerenderOutpu
     (isRecord(value.fallback) &&
       (value.fallback.filePath === undefined || isPortableRelativePath(value.fallback.filePath))));
 
-const isStaticOutput = (value: unknown): value is GigadriveNextStaticOutput =>
+const isStaticAssetPrefix = (value: unknown): value is GigadriveNextStaticAssetPrefix =>
   isRecord(value) &&
-  value.type === 'STATIC_FILE' &&
-  typeof value.id === 'string' &&
-  typeof value.pathname === 'string' &&
-  isPortableRelativePath(value.filePath);
+  isPortableRelativePath(value.sourceDir) &&
+  isPortableRelativePath(value.urlPrefix) &&
+  typeof value.immutable === 'boolean';
 
-const isEntrypoint = (value: unknown): value is GigadriveNextEntrypoint =>
+const isServerDescriptor = (value: unknown): value is GigadriveNextServerDescriptor =>
   isRecord(value) &&
-  typeof value.id === 'string' &&
-  (value.runtime === 'nodejs' || value.runtime === 'edge') &&
-  isPortableRelativePath(value.filePath) &&
-  Array.isArray(value.outputIds) &&
-  value.outputIds.every((item) => typeof item === 'string') &&
-  isStringRecord(value.assets) &&
-  isRecord(value.config);
+  (value.maxDuration === undefined || typeof value.maxDuration === 'number') &&
+  (value.preferredRegion === undefined ||
+    typeof value.preferredRegion === 'string' ||
+    (Array.isArray(value.preferredRegion) && value.preferredRegion.every((region) => typeof region === 'string'))) &&
+  (value.env === undefined || isStringRecord(value.env));
 
 const isImagePolicy = (value: unknown): value is NormalizedImagePolicy =>
   isRecord(value) &&
@@ -236,46 +203,46 @@ export const parseGigadriveNextBuildManifest = (content: string): GigadriveNextB
       return value as unknown as GigadriveNextBuildManifestV1;
     }
 
-    if (
-      value.version !== 2 ||
-      (value.mode !== 'adapter-v2' && value.mode !== 'export') ||
-      !isPortableRelativePath(value.distDir) ||
-      !isPortableRelativePath(value.repoRootToProject, true) ||
-      typeof value.nextVersion !== 'string' ||
-      typeof value.buildId !== 'string' ||
-      !isRecord(value.config) ||
-      typeof value.config.basePath !== 'string' ||
-      typeof value.config.trailingSlash !== 'boolean' ||
-      typeof value.config.cacheComponents !== 'boolean' ||
-      (value.config.images !== undefined && !isImagePolicy(value.config.images)) ||
-      !isRecord(value.routing) ||
-      !isJsonValue(value.routing) ||
-      !isRecord(value.outputs) ||
-      !Array.isArray(value.outputs.pages) ||
-      !value.outputs.pages.every(isRouteOutput) ||
-      !Array.isArray(value.outputs.pagesApi) ||
-      !value.outputs.pagesApi.every(isRouteOutput) ||
-      !Array.isArray(value.outputs.appPages) ||
-      !value.outputs.appPages.every(isRouteOutput) ||
-      !Array.isArray(value.outputs.appRoutes) ||
-      !value.outputs.appRoutes.every(isRouteOutput) ||
-      !Array.isArray(value.outputs.prerenders) ||
-      !value.outputs.prerenders.every(isPrerenderOutput) ||
-      !Array.isArray(value.outputs.staticFiles) ||
-      !value.outputs.staticFiles.every(isStaticOutput) ||
-      (value.outputs.middleware !== undefined && !isRouteOutput(value.outputs.middleware)) ||
-      !Array.isArray(value.entrypoints) ||
-      !value.entrypoints.every(isEntrypoint) ||
-      !isStringRecord(value.outputEntrypoints)
-    ) {
+    if (value.version === 2) {
+      if (
+        !isPortableRelativePath(value.distDir) ||
+        !isPortableRelativePath(value.repoRootToProject, true) ||
+        typeof value.nextVersion !== 'string' ||
+        typeof value.buildId !== 'string'
+      ) {
+        return undefined;
+      }
+
+      if (value.mode === 'export') {
+        return value as unknown as GigadriveNextBuildManifestV2Export;
+      }
+
+      if (value.mode === 'standalone-v2') {
+        if (
+          !isServerDescriptor(value.server) ||
+          !isRecord(value.config) ||
+          typeof value.config.basePath !== 'string' ||
+          typeof value.config.trailingSlash !== 'boolean' ||
+          typeof value.config.cacheComponents !== 'boolean' ||
+          (value.config.images !== undefined && !isImagePolicy(value.config.images)) ||
+          !isRecord(value.routing) ||
+          !isJsonValue(value.routing) ||
+          !isRecord(value.outputs) ||
+          !Array.isArray(value.outputs.prerenders) ||
+          !value.outputs.prerenders.every(isPrerenderOutput) ||
+          !Array.isArray(value.outputs.staticAssets) ||
+          !value.outputs.staticAssets.every(isStaticAssetPrefix)
+        ) {
+          return undefined;
+        }
+        return value as unknown as GigadriveNextBuildManifestV2Standalone;
+      }
+
+      // Legacy `mode: 'adapter-v2'` (per-route split) is no longer produced or consumed.
       return undefined;
     }
 
-    const entrypointIds = new Set(value.entrypoints.map((item) => item.id));
-    if (Object.values(value.outputEntrypoints).some((entrypointId) => !entrypointIds.has(entrypointId)))
-      return undefined;
-
-    return value as unknown as GigadriveNextBuildManifestV2;
+    return undefined;
   } catch {
     return undefined;
   }

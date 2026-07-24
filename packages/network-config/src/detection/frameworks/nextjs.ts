@@ -4,12 +4,67 @@ import { getDefaultPathMap } from '../../build-output-v3/get-default-path-map';
 import {
   parseGigadriveNextBuildManifest,
   type GigadriveNextBuildManifestV1,
-  type GigadriveNextBuildManifestV2,
+  type GigadriveNextBuildManifestV2Standalone,
 } from '../../nextjs-manifest';
-import type { NormalizedConfigEntrypoint, NormalizedSharedArtifact } from '../../normalized-config';
+import type { NormalizedConfigEntrypoint } from '../../normalized-config';
+import { AVAILABLE_REGIONS } from '../../regions';
 import type { FrameworkDefaultConfig, FrameworkDefinition } from '../types';
 
 const toPortablePath = (value: string): string => value.replaceAll('\\', '/');
+
+/**
+ * Locates the standalone `server.js` produced by `output: 'standalone'`, preferring
+ * the monorepo-nested path (`standalone/<repoRootToProject>/server.js`) over the root
+ * one. Returns `undefined` when neither exists (e.g. a build that did not run in
+ * standalone mode), so callers can fall back to plain framework defaults.
+ */
+const resolveStandaloneServer = Effect.fn('nextjs.resolveStandaloneServer')(function* (
+  projectFolder: string,
+  distDir: string,
+  repoRootToProject: string
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+  const standaloneRoot = pathService.join(projectFolder, distDir, 'standalone');
+  const monorepoServer = pathService.join(standaloneRoot, repoRootToProject, 'server.js');
+  const rootServer = pathService.join(standaloneRoot, 'server.js');
+  const monorepoServerExists = yield* fs.exists(monorepoServer).pipe(Effect.catchAll(() => Effect.succeed(false)));
+  const serverPath = monorepoServerExists ? monorepoServer : rootServer;
+  const serverExists = yield* fs.exists(serverPath).pipe(Effect.catchAll(() => Effect.succeed(false)));
+  if (!serverExists) return undefined;
+
+  const serverDirectory = pathService.dirname(serverPath);
+  const entrypoint = toPortablePath(pathService.relative(standaloneRoot, serverPath));
+  return { standaloneRoot, serverDirectory, entrypoint };
+});
+
+/**
+ * Enumerates the project `public/` tree into per-file static assets plus a package
+ * map that copies each file into the standalone server directory. Public files sit
+ * at arbitrary root paths and are low-cardinality, so they stay per-file (only the
+ * high-cardinality `.next/static` tree is collapsed to a prefix).
+ */
+const buildStandalonePublicAssets = Effect.fn('nextjs.buildStandalonePublicAssets')(function* (
+  projectFolder: string,
+  standaloneRoot: string,
+  serverDirectory: string
+) {
+  const pathService = yield* Path.Path;
+  const publicFiles = yield* getDefaultPathMap(pathService.join(projectFolder, 'public'));
+  const assetPaths: string[] = [];
+  const assetOverrides: Record<string, { path: string }> = {};
+  const filePathMap: Record<string, string> = {};
+  for (const [absolutePath, relativePath] of Object.entries(publicFiles)) {
+    const portableRelativePath = toPortablePath(relativePath);
+    const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
+    assetPaths.push(projectRelativePath);
+    assetOverrides[projectRelativePath] = { path: portableRelativePath };
+    filePathMap[absolutePath] = toPortablePath(
+      pathService.relative(standaloneRoot, pathService.join(serverDirectory, 'public', relativePath))
+    );
+  }
+  return { assetPaths, assetOverrides, filePathMap };
+});
 
 const createStaticExportConfig = Effect.fn('nextjs.createStaticExportConfig')(function* (
   defaults: FrameworkDefaultConfig,
@@ -52,38 +107,19 @@ const createStandaloneConfig = Effect.fn('nextjs.createStandaloneConfig')(functi
   projectFolder: string,
   manifest: GigadriveNextBuildManifestV1
 ) {
-  const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
-  const standaloneRoot = pathService.join(projectFolder, manifest.distDir, 'standalone');
-  const monorepoServer = pathService.join(standaloneRoot, manifest.repoRootToProject, 'server.js');
-  const rootServer = pathService.join(standaloneRoot, 'server.js');
-  const monorepoServerExists = yield* fs.exists(monorepoServer).pipe(Effect.catchAll(() => Effect.succeed(false)));
-  const serverPath = monorepoServerExists ? monorepoServer : rootServer;
-  const serverExists = yield* fs.exists(serverPath).pipe(Effect.catchAll(() => Effect.succeed(false)));
-  if (!serverExists) return defaults;
+  const resolved = yield* resolveStandaloneServer(projectFolder, manifest.distDir, manifest.repoRootToProject);
+  if (!resolved) return defaults;
+  const { standaloneRoot, serverDirectory, entrypoint } = resolved;
 
-  const serverDirectory = pathService.dirname(serverPath);
-  const entrypoint = toPortablePath(pathService.relative(standaloneRoot, serverPath));
-  const publicDirectory = pathService.join(projectFolder, 'public');
-  const staticDirectory = pathService.join(projectFolder, manifest.distDir, 'static');
-  const [publicFiles, staticFiles] = yield* Effect.all([
-    getDefaultPathMap(publicDirectory),
-    getDefaultPathMap(staticDirectory),
-  ]);
-  const assetPaths: string[] = [];
-  const assetOverrides: Record<string, { path: string }> = {};
-  const filePathMap: Record<string, string> = {};
+  const publicAssets = yield* buildStandalonePublicAssets(projectFolder, standaloneRoot, serverDirectory);
+  const assetPaths = [...publicAssets.assetPaths];
+  const assetOverrides: Record<string, { path: string }> = { ...publicAssets.assetOverrides };
+  const filePathMap: Record<string, string> = { ...publicAssets.filePathMap };
 
-  for (const [absolutePath, relativePath] of Object.entries(publicFiles)) {
-    const portableRelativePath = toPortablePath(relativePath);
-    const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
-    assetPaths.push(projectRelativePath);
-    assetOverrides[projectRelativePath] = { path: portableRelativePath };
-    filePathMap[absolutePath] = toPortablePath(
-      pathService.relative(standaloneRoot, pathService.join(serverDirectory, 'public', relativePath))
-    );
-  }
-
+  // Legacy path (Next < 16.2): the network prefix matcher may not be available,
+  // so `.next/static` stays enumerated per file and copied into the standalone tree.
+  const staticFiles = yield* getDefaultPathMap(pathService.join(projectFolder, manifest.distDir, 'static'));
   for (const [absolutePath, relativePath] of Object.entries(staticFiles)) {
     const portableRelativePath = toPortablePath(relativePath);
     const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
@@ -110,104 +146,40 @@ const createStandaloneConfig = Effect.fn('nextjs.createStandaloneConfig')(functi
   };
 });
 
-const createAdapterV2Config = Effect.fn('nextjs.createAdapterV2Config')(function* (
+const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(function* (
   defaults: FrameworkDefaultConfig,
   projectFolder: string,
-  manifest: GigadriveNextBuildManifestV2
+  manifest: GigadriveNextBuildManifestV2Standalone
 ) {
   const pathService = yield* Path.Path;
+  const resolved = yield* resolveStandaloneServer(projectFolder, manifest.distDir, manifest.repoRootToProject);
+  if (!resolved) return defaults;
+  const { standaloneRoot, serverDirectory, entrypoint } = resolved;
+
+  // Prerender fallback file paths are repo-root-relative; walk up from the project
+  // folder by the depth of `repoRootToProject` to recover the repo root.
   let repoRoot = projectFolder;
   if (manifest.repoRootToProject !== '.') {
     repoRoot = manifest.repoRootToProject.split('/').reduce((root) => pathService.dirname(root), repoRoot);
   }
 
-  const artifactUseCount = new Map<string, number>();
-  for (const entrypoint of manifest.entrypoints) {
-    for (const [targetPath, sourcePath] of Object.entries(entrypoint.assets)) {
-      const identity = `${targetPath}\0${sourcePath}`;
-      artifactUseCount.set(identity, (artifactUseCount.get(identity) ?? 0) + 1);
-    }
-  }
+  const publicAssets = yield* buildStandalonePublicAssets(projectFolder, standaloneRoot, serverDirectory);
+  const assetPaths = [...publicAssets.assetPaths];
+  const assetOverrides: Record<string, { path: string }> = { ...publicAssets.assetOverrides };
+  const filePathMap: Record<string, string> = { ...publicAssets.filePathMap };
 
-  const sharedFilePathMap: Record<string, string> = {};
-  for (const [identity, useCount] of artifactUseCount) {
-    if (useCount < 2) continue;
-    const [targetPath, sourcePath] = identity.split('\0');
-    sharedFilePathMap[pathService.join(repoRoot, sourcePath)] = targetPath;
-  }
-  const sharedArtifacts: NormalizedSharedArtifact[] =
-    Object.keys(sharedFilePathMap).length > 0 ? [{ id: 'next-shared', filePathMap: sharedFilePathMap }] : [];
+  // `.next/static` collapses into edge-served prefixes (one descriptor, not one
+  // registration per hashed chunk). The subtree is served by the edge, not copied
+  // into the server package, so it is deliberately absent from `filePathMap`.
+  const assetPrefixes = manifest.outputs.staticAssets.map((staticAsset) => ({
+    source: staticAsset.sourceDir,
+    destination: staticAsset.urlPrefix,
+    immutable: staticAsset.immutable,
+    populateCache: true,
+  }));
 
-  const executablePathByOutputId = new Map(
-    [
-      ...manifest.outputs.pages,
-      ...manifest.outputs.pagesApi,
-      ...manifest.outputs.appPages,
-      ...manifest.outputs.appRoutes,
-      ...(manifest.outputs.middleware ? [manifest.outputs.middleware] : []),
-    ].map((output) => [output.id, output.edgeRuntime?.modulePath ?? output.filePath] as const)
-  );
-
-  const entrypoints: NormalizedConfigEntrypoint[] = manifest.entrypoints.map((entrypoint) => {
-    const filePathMap: Record<string, string> = {};
-    for (const [targetPath, sourcePath] of Object.entries({
-      ...entrypoint.assets,
-      ...entrypoint.wasmAssets,
-    })) {
-      const identity = `${targetPath}\0${sourcePath}`;
-      if ((artifactUseCount.get(identity) ?? 0) >= 2) continue;
-      filePathMap[pathService.join(repoRoot, sourcePath)] = targetPath;
-    }
-    for (const executablePath of new Set(
-      entrypoint.outputIds.flatMap((outputId) => {
-        const executablePath = executablePathByOutputId.get(outputId);
-        return executablePath ? [executablePath] : [];
-      })
-    )) {
-      filePathMap[pathService.join(repoRoot, executablePath)] = executablePath;
-    }
-    filePathMap[pathService.join(repoRoot, entrypoint.filePath)] = entrypoint.filePath;
-
-    return {
-      displayName: entrypoint.id,
-      path: entrypoint.filePath,
-      runtime: 'node-22',
-      memory: defaults.memory,
-      maxDuration: entrypoint.config.maxDuration ?? defaults.maxDuration,
-      streaming: true,
-      environmentVariables: {
-        GIGADRIVE_NEXT_ENTRYPOINT_ID: entrypoint.id,
-        GIGADRIVE_NEXT_RUNTIME: entrypoint.runtime,
-        NEXT_BUILD_ID: manifest.buildId,
-        ...entrypoint.config.env,
-      },
-      package: {
-        trace: false,
-        includeProjectFiles: false,
-        preserveSymlinks: true,
-        rootOverwrite: repoRoot,
-        filePathMap,
-        ...(sharedArtifacts.length > 0 ? { sharedArtifactIds: sharedArtifacts.map((artifact) => artifact.id) } : {}),
-      },
-    };
-  });
-
-  const assetPaths: string[] = [];
-  const assetOverrides: Record<string, { path: string }> = {};
-  const publicFiles = yield* getDefaultPathMap(pathService.join(projectFolder, 'public'));
-  for (const [absolutePath, relativePath] of Object.entries(publicFiles)) {
-    const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
-    assetPaths.push(projectRelativePath);
-    assetOverrides[projectRelativePath] = { path: toPortablePath(relativePath) };
-  }
-  for (const output of manifest.outputs.staticFiles) {
-    const absolutePath = pathService.join(repoRoot, output.filePath);
-    const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
-    if (projectRelativePath.startsWith('../')) continue;
-    assetPaths.push(projectRelativePath);
-    assetOverrides[projectRelativePath] = { path: output.pathname.replace(/^\//, '') };
-  }
-
+  // Rewrite each prerender fallback to an internal asset path and publish the shell
+  // so the edge can seed fresh static/PPR responses without customer compute.
   const prerenders = manifest.outputs.prerenders.map((output) => {
     if (!output.fallback?.filePath) return output;
     const absolutePath = pathService.join(repoRoot, output.fallback.filePath);
@@ -222,40 +194,65 @@ const createAdapterV2Config = Effect.fn('nextjs.createAdapterV2Config')(function
     };
   });
 
+  const singleEntrypoint: NormalizedConfigEntrypoint = {
+    displayName: 'next-server',
+    path: entrypoint,
+    runtime: defaults.runtime,
+    memory: defaults.memory,
+    maxDuration: manifest.server.maxDuration ?? defaults.maxDuration,
+    streaming: true,
+    environmentVariables: {
+      NEXT_BUILD_ID: manifest.buildId,
+      ...manifest.server.env,
+    },
+    package: {
+      trace: false,
+      rootOverwrite: standaloneRoot,
+      filePathMap,
+    },
+  };
+
   const framework = {
     mode: manifest.mode,
     distDir: manifest.distDir,
     repoRootToProject: manifest.repoRootToProject,
     nextVersion: manifest.nextVersion,
     buildId: manifest.buildId,
+    server: manifest.server,
     config: manifest.config,
     routing: manifest.routing,
-    outputs: manifest.outputs,
-    entrypoints: manifest.entrypoints,
-    outputEntrypoints: manifest.outputEntrypoints,
+    outputs: { prerenders, staticAssets: manifest.outputs.staticAssets },
+    type: 'nextjs' as const,
+    schemaVersion: 2 as const,
   };
+
   return {
     ...defaults,
     entrypoint: undefined,
     routes: [],
     assetPaths,
     assetOverrides,
+    assetPrefixes,
     assetsDir: manifest.distDir,
     assetsPrefixToStrip: '',
+    populateAssetCache: true,
     package: undefined,
     normalizedConfig: {
-      regions: ['us-east-1' as const],
-      entrypoints,
-      routes: [],
-      framework: {
-        ...framework,
-        outputs: { ...framework.outputs, prerenders },
-        type: 'nextjs' as const,
-        schemaVersion: 2 as const,
-      },
+      regions: [...AVAILABLE_REGIONS],
+      entrypoints: [singleEntrypoint],
+      routes: [
+        {
+          path: '/*',
+          destination: entrypoint,
+          handler: 'SERVERLESS_FUNCTION_STREAMING' as const,
+          methods: ['ANY' as const],
+          headers: {},
+        },
+      ],
+      framework,
       images: manifest.config.images,
-      sharedArtifacts,
-      userArchive: { rootOverwrite: repoRoot },
+      sharedArtifacts: [],
+      userArchive: { rootOverwrite: standaloneRoot },
     },
   };
 });
@@ -290,7 +287,7 @@ export const nextjs: FrameworkDefinition = {
       if (manifest.version === 2) {
         return manifest.mode === 'export'
           ? yield* createStaticExportConfig(defaults, projectFolder)
-          : yield* createAdapterV2Config(defaults, projectFolder, manifest);
+          : yield* createStandaloneV2Config(defaults, projectFolder, manifest);
       }
       return manifest.output === 'export'
         ? yield* createStaticExportConfig(defaults, projectFolder)
