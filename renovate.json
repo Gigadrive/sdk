@@ -26,7 +26,7 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 06:00 on monday"],
-    "automerge": false
+    "automerge": true
   },
   "packageRules": [
     {
@@ -34,6 +34,12 @@
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true,
       "automerge": false
+    },
+    {
+      "description": "Automerge pin and pinDigest updates - they never change the resolved version",
+      "matchUpdateTypes": ["pin", "pinDigest"],
+      "automerge": true,
+      "automergeType": "pr"
     },
     {
       "description": "Automerge devDependency patch, minor and digest updates once they pass CI",
@@ -44,9 +50,18 @@
       "automergeType": "pr"
     },
     {
-      "description": "Never automerge runtime dependency updates - they ship to users",
+      "description": "Automerge runtime dependency patch updates once they pass CI - semver-safe bugfixes, guarded by the 3-day minimumReleaseAge",
       "matchManagers": ["npm"],
       "matchDepTypes": ["dependencies", "optionalDependencies", "peerDependencies"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Never automerge runtime dependency minor updates - they ship to users and warrant a manual look",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["dependencies", "optionalDependencies", "peerDependencies"],
+      "matchUpdateTypes": ["minor"],
       "automerge": false
     },
     {
@@ -57,15 +72,16 @@
       "automergeType": "pr"
     },
     {
-      "description": "Use the bump range strategy for the pnpm catalog and never automerge it",
+      "description": "Use the bump range strategy for the pnpm catalog and never automerge it (a single entry drives the whole monorepo)",
       "matchFileNames": ["pnpm-workspace.yaml"],
       "rangeStrategy": "bump",
       "automerge": false
     },
     {
-      "description": "Group ESLint-related packages and review them manually (cross-version incompatibilities)",
+      "description": "Group ESLint-related packages; automerge patch releases but review minor and major manually (cross-version incompatibilities)",
       "groupName": "eslint",
       "matchPackageNames": ["eslint", "@eslint/*", "eslint-*", "typescript-eslint", "@typescript-eslint/*", "globals"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
@@ -76,27 +92,31 @@
       "enabled": false
     },
     {
-      "description": "Group Prettier-related packages and review them manually",
+      "description": "Group Prettier-related packages; automerge patch releases but review minor and major manually",
       "groupName": "prettier",
       "matchPackageNames": ["prettier", "prettier-plugin-*"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
-      "description": "Group Vitest and Vite packages so they always move together and are reviewed manually",
+      "description": "Group Vitest and Vite packages so they always move together; automerge patch releases but review minor and major manually",
       "groupName": "vitest",
       "matchPackageNames": ["vitest", "@vitest/*", "vite", "@vitejs/*"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
-      "description": "Group the Effect ecosystem to satisfy peer dependencies and review manually",
+      "description": "Group the Effect ecosystem to satisfy peer dependencies; automerge patch releases but review minor and major manually",
       "groupName": "effect",
       "matchPackageNames": ["effect", "@effect/*"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
-      "description": "Group React packages and review them manually",
+      "description": "Group React packages; automerge patch releases but review minor and major manually",
       "groupName": "react",
       "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
@@ -105,15 +125,17 @@
       "matchPackageNames": ["@changesets/*", "@svitejs/changesets-*"]
     },
     {
-      "description": "Group Radix UI packages and review them manually",
+      "description": "Group Radix UI packages; automerge patch releases but review minor and major manually",
       "groupName": "radix-ui",
       "matchPackageNames": ["@radix-ui/*", "radix-ui"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
-      "description": "Group Storybook packages and review them manually",
+      "description": "Group Storybook packages; automerge patch releases but review minor and major manually",
       "groupName": "storybook",
       "matchPackageNames": ["storybook", "@storybook/*", "eslint-plugin-storybook"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
@@ -122,15 +144,17 @@
       "matchPackageNames": ["@dnd-kit/*"]
     },
     {
-      "description": "Group Tailwind CSS packages and review them manually",
+      "description": "Group Tailwind CSS packages; automerge patch releases but review minor and major manually",
       "groupName": "tailwindcss",
       "matchPackageNames": ["tailwindcss", "@tailwindcss/*", "tailwind-merge", "tailwindcss-animate"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
-      "description": "Group Rsbuild and Rslib packages and review them manually",
+      "description": "Group Rsbuild and Rslib packages; automerge patch releases but review minor and major manually",
       "groupName": "rsbuild",
       "matchPackageNames": ["@rsbuild/*", "@rslib/*"],
+      "matchUpdateTypes": ["minor", "major"],
       "automerge": false
     },
     {
