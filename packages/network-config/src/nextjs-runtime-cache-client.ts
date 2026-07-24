@@ -23,6 +23,17 @@ const encodeBinary = (value: unknown, seen = new WeakSet<object>()): unknown => 
   if (value instanceof ArrayBuffer) {
     return { __gigadriveType: 'bytes', value: Buffer.from(value).toString('base64') };
   }
+  // Next stores App Router RSC segment payloads as a `Map<string, Buffer>`
+  // (`segmentData`). `Object.entries` on a Map yields nothing, so without an
+  // explicit branch the whole map would serialize to `{}` and every prefetched
+  // segment would be silently lost on the next read.
+  if (value instanceof Map) {
+    if (seen.has(value)) throw new Error('Next.js cache entry contains a circular value');
+    seen.add(value);
+    const entries = [...value.entries()].map(([key, item]) => [encodeBinary(key, seen), encodeBinary(item, seen)]);
+    seen.delete(value);
+    return { __gigadriveType: 'map', value: entries };
+  }
   if (Array.isArray(value)) return value.map((item) => encodeBinary(item, seen));
   if (typeof value !== 'object' || value === null) return value;
   if (seen.has(value)) throw new Error('Next.js cache entry contains a circular value');
@@ -39,6 +50,14 @@ const decodeBinary = (value: unknown): unknown => {
   const record = value as Record<string, unknown>;
   if (record.__gigadriveType === 'bytes' && typeof record.value === 'string')
     return Buffer.from(record.value, 'base64');
+  if (record.__gigadriveType === 'map' && Array.isArray(record.value)) {
+    return new Map(
+      (record.value as unknown[]).map((entry) => {
+        const [key, item] = entry as [unknown, unknown];
+        return [decodeBinary(key), decodeBinary(item)];
+      })
+    );
+  }
   return Object.fromEntries(Object.entries(record).map(([key, item]) => [key, decodeBinary(item)]));
 };
 

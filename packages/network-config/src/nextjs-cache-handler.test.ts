@@ -115,4 +115,64 @@ describe('GigadriveNextCacheHandler', () => {
 
     await expect(new GigadriveNextCacheHandler().get('/isr')).resolves.toBeNull();
   });
+
+  // Next never puts tags on the set context for APP_PAGE/APP_ROUTE/PAGES; they
+  // only exist inside the value's own headers. Reading them from there is what
+  // keeps `revalidateTag` working for pages.
+  it('indexes page tags from the value headers, which Next omits from the set context', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_784_670_700_000);
+    const value = {
+      kind: 'APP_PAGE',
+      html: '<html />',
+      headers: { 'x-next-cache-tags': '_N_T_/layout,_N_T_/posts, post:1 ' },
+    };
+
+    await new GigadriveNextCacheHandler().set('/posts/1', value, {});
+
+    expect(runtimeCache.write).toHaveBeenCalledWith('incremental', '/posts/1', expect.objectContaining({ value }), [
+      '_N_T_/layout',
+      '_N_T_/posts',
+      'post:1',
+    ]);
+  });
+
+  it('serves the build-time prerender from the bundle when nothing was regenerated', async () => {
+    runtimeCache.read.mockResolvedValue(null);
+    const onDisk = { lastModified: 500, value: { kind: 'APP_PAGE', html: '<prerendered />' } };
+    const fileSystemCache = { get: vi.fn().mockResolvedValue(onDisk) };
+    const handler = new GigadriveNextCacheHandler();
+    // The real handler builds this from Next's constructor context; injecting it
+    // keeps the test off Next's private module layout.
+    Object.assign(handler, { buildOutputCache: Promise.resolve(fileSystemCache) });
+
+    await expect(handler.get('/about', { kind: 'APP_PAGE' })).resolves.toEqual(onDisk);
+    expect(fileSystemCache.get).toHaveBeenCalledWith('/about', { kind: 'APP_PAGE' });
+  });
+
+  it('does not resurrect a build-time prerender whose tag was revalidated', async () => {
+    runtimeCache.read.mockResolvedValue(null);
+    runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: 9_000 });
+    const handler = new GigadriveNextCacheHandler();
+    Object.assign(handler, {
+      buildOutputCache: Promise.resolve({
+        get: vi.fn().mockResolvedValue({
+          lastModified: 500,
+          value: { kind: 'APP_PAGE', html: '<stale />', headers: { 'x-next-cache-tags': 'post:1' } },
+        }),
+      }),
+    });
+
+    // Tag state is resolved against the remote index, not Next's in-process tag
+    // manifest, which is always empty here and would otherwise serve stale HTML.
+    await expect(handler.get('/posts/1')).resolves.toBeNull();
+    expect(runtimeCache.getTagState).toHaveBeenCalledWith('incremental', ['post:1']);
+  });
+
+  it('falls back to a miss when the bundle has no prerender for the key', async () => {
+    runtimeCache.read.mockResolvedValue(null);
+    const handler = new GigadriveNextCacheHandler();
+    Object.assign(handler, { buildOutputCache: Promise.resolve({ get: vi.fn().mockResolvedValue(null) }) });
+
+    await expect(handler.get('/dynamic')).resolves.toBeNull();
+  });
 });

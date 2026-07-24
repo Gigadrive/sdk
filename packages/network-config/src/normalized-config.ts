@@ -234,6 +234,12 @@ export type NormalizedFramework = NormalizedNextjsFramework;
 export type NormalizedNextjsFramework = Omit<GigadriveNextBuildManifestV2Standalone, 'version'> & {
   type: 'nextjs';
   schemaVersion: 2;
+  /**
+   * Bounded sample of prerendered page paths, used to warm the CDN. Replaces
+   * carrying the deployment's full prerender table, which grew to tens of
+   * thousands of entries on large content sites.
+   */
+  entryPagePaths?: string[];
 };
 
 export interface NormalizedSharedArtifact {

@@ -106,6 +106,31 @@ describe('nextjs runtime cache client', () => {
     expect(Buffer.from(decoded.nested[0].buffer)).toEqual(Buffer.from(bytes));
   });
 
+  // Next stores App Router RSC segment payloads as a `Map<string, Buffer>`.
+  // `Object.entries` on a Map is empty, so without an explicit branch the whole
+  // map serialized to `{}` and every prefetched segment was lost on read.
+  it('round-trips RSC segment maps instead of flattening them to an empty object', async () => {
+    fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(jsonResponse({}));
+    const segment = new Uint8Array([9, 8, 7]);
+    const segmentData = new Map([['/_tree', segment]]);
+
+    await writeRuntimeCache('incremental', 'segments', { value: { segmentData } });
+
+    const writeInit = fetchMock.mock.calls[1][1] as RequestInit;
+    const payload = JSON.parse(String(writeInit.body)) as { value: { value: { segmentData: unknown } } };
+    expect(payload.value.value.segmentData).toEqual({
+      __gigadriveType: 'map',
+      value: [['/_tree', { __gigadriveType: 'bytes', value: Buffer.from(segment).toString('base64') }]],
+    });
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ value: payload.value }));
+    const decoded = (await readRuntimeCache('incremental', 'segments')) as {
+      value: { segmentData: Map<string, Buffer> };
+    };
+    expect(decoded.value.segmentData).toBeInstanceOf(Map);
+    expect(Buffer.from(decoded.value.segmentData.get('/_tree') as Buffer)).toEqual(Buffer.from(segment));
+  });
+
   it('rejects circular cache values instead of hanging', async () => {
     fetchMock.mockResolvedValueOnce(tokenResponse());
     const circular: Record<string, unknown> = {};

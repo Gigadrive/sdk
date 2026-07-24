@@ -213,15 +213,16 @@ describe('Next.js framework detection', () => {
     ]);
     // `.next/static` is registered as one prefix, not enumerated file-by-file.
     expect(result.config.assets).toMatchObject({
-      paths: expect.arrayContaining(['public/gigadrive-mark.svg', '.next/server/app/isr.html']),
+      paths: ['public/gigadrive-mark.svg'],
       prefixes: [{ source: '.next/static', destination: '_next/static', immutable: true, populateCache: true }],
-      overrides: {
-        'public/gigadrive-mark.svg': { path: 'gigadrive-mark.svg' },
-        // The prerender shell is published to an internal asset path for edge seeding.
-        '.next/server/app/isr.html': { path: '_gigadrive/prerender/isr.html' },
-      },
+      overrides: { 'public/gigadrive-mark.svg': { path: 'gigadrive-mark.svg' } },
       populateCache: true,
     });
+    // Prerender shells are served by the standalone server from its own bundle,
+    // so they are never uploaded as assets (they numbered in the tens of
+    // thousands on large content sites).
+    expect(result.config.assets?.paths).not.toContain('.next/server/app/isr.html');
+    expect(Object.keys(result.config.assets?.overrides ?? {})).not.toContain('.next/server/app/isr.html');
     expect(result.config.framework).toMatchObject({
       type: 'nextjs',
       schemaVersion: 2,
@@ -232,10 +233,9 @@ describe('Next.js framework detection', () => {
         staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
       },
     });
-    expect(result.config.framework?.outputs.prerenders[0]).toMatchObject({
-      id: 'isr',
-      fallback: { filePath: '/_gigadrive/prerender/isr.html', initialRevalidate: 5 },
-    });
+    // The full prerender table is not forwarded; only a bounded warming sample.
+    expect(result.config.framework?.outputs.prerenders).toEqual([]);
+    expect(result.config.framework?.entryPagePaths).toEqual(['/isr']);
     expect(result.config.images).toMatchObject({
       remotePatterns: [{ protocol: 'https', hostname: 'images.example.com', pathname: '/**' }],
       widths: [640, 1080],

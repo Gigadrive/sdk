@@ -13,6 +13,13 @@ import type { FrameworkDefaultConfig, FrameworkDefinition } from '../types';
 const toPortablePath = (value: string): string => value.replaceAll('\\', '/');
 
 /**
+ * Upper bound on the prerendered paths exported for CDN warming. Warming only
+ * needs a representative sample; carrying the full table is what produced the
+ * multi-megabyte gateway configuration this list replaces.
+ */
+const MAXIMUM_ENTRY_PAGE_PATHS = 50;
+
+/**
  * Locates the standalone `server.js` produced by `output: 'standalone'`, preferring
  * the monorepo-nested path (`standalone/<repoRootToProject>/server.js`) over the root
  * one. Returns `undefined` when neither exists (e.g. a build that did not run in
@@ -151,17 +158,9 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
   projectFolder: string,
   manifest: GigadriveNextBuildManifestV2Standalone
 ) {
-  const pathService = yield* Path.Path;
   const resolved = yield* resolveStandaloneServer(projectFolder, manifest.distDir, manifest.repoRootToProject);
   if (!resolved) return defaults;
   const { standaloneRoot, serverDirectory, entrypoint } = resolved;
-
-  // Prerender fallback file paths are repo-root-relative; walk up from the project
-  // folder by the depth of `repoRootToProject` to recover the repo root.
-  let repoRoot = projectFolder;
-  if (manifest.repoRootToProject !== '.') {
-    repoRoot = manifest.repoRootToProject.split('/').reduce((root) => pathService.dirname(root), repoRoot);
-  }
 
   const publicAssets = yield* buildStandalonePublicAssets(projectFolder, standaloneRoot, serverDirectory);
   const assetPaths = [...publicAssets.assetPaths];
@@ -178,21 +177,25 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
     populateCache: true,
   }));
 
-  // Rewrite each prerender fallback to an internal asset path and publish the shell
-  // so the edge can seed fresh static/PPR responses without customer compute.
-  const prerenders = manifest.outputs.prerenders.map((output) => {
-    if (!output.fallback?.filePath) return output;
-    const absolutePath = pathService.join(repoRoot, output.fallback.filePath);
-    const projectRelativePath = toPortablePath(pathService.relative(projectFolder, absolutePath));
-    if (projectRelativePath.startsWith('../')) return output;
-    const internalAssetPath = `_gigadrive/prerender/${encodeURIComponent(output.id)}.html`;
-    assetPaths.push(projectRelativePath);
-    assetOverrides[projectRelativePath] = { path: internalAssetPath };
-    return {
-      ...output,
-      fallback: { ...output.fallback, filePath: `/${internalAssetPath}` },
-    };
-  });
+  // Prerender shells are NOT published as assets here. The single standalone
+  // server already ships every build-time prerender inside its own bundle
+  // (`writeStandaloneDirectory` recursively copies `.next/server/{app,pages}`)
+  // and the cache handler reads them from there, so uploading a second copy
+  // produced one object + one asset row per prerendered output — tens of
+  // thousands for a large content site — that nothing ever read.
+  //
+  // A bounded, representative sample of prerendered paths is still exported so
+  // the platform can warm the CDN without carrying the full output table.
+  const entryPagePaths = [
+    ...new Set(
+      manifest.outputs.prerenders
+        .filter((output) => !output.fallback?.postponedState)
+        .map((output) => output.pathname)
+        .filter((pathname) => pathname.startsWith('/') && !pathname.includes('['))
+    ),
+  ]
+    .sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))
+    .slice(0, MAXIMUM_ENTRY_PAGE_PATHS);
 
   const singleEntrypoint: NormalizedConfigEntrypoint = {
     displayName: 'next-server',
@@ -221,7 +224,11 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
     server: manifest.server,
     config: manifest.config,
     routing: manifest.routing,
-    outputs: { prerenders, staticAssets: manifest.outputs.staticAssets },
+    // The prerender table is deliberately not forwarded: the standalone server
+    // serves build-time prerenders from its own bundle, so the platform only
+    // needs the warming sample below.
+    outputs: { prerenders: [], staticAssets: manifest.outputs.staticAssets },
+    entryPagePaths,
     type: 'nextjs' as const,
     schemaVersion: 2 as const,
   };
