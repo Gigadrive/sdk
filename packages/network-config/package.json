@@ -33,11 +33,6 @@
       "types": "./dist/nextjs-image-loader.d.ts",
       "require": "./dist/nextjs-image-loader.js",
       "import": "./dist/nextjs-image-loader.mjs"
-    },
-    "./nextjs-ppr-runtime": {
-      "types": "./dist/nextjs-ppr-runtime.d.ts",
-      "require": "./dist/nextjs-ppr-runtime.js",
-      "import": "./dist/nextjs-ppr-runtime.mjs"
     }
   },
   "main": "dist/index.js",
@@ -48,7 +43,7 @@
     "**/*.json"
   ],
   "scripts": {
-    "build": "tsup && mkdir -p dist/v4 && cp -r ./src/v4/schema.json ./dist/v4/schema.json && cp ./src/nextjs-adapter.cjs ./dist/nextjs-adapter.cjs && cp -r ./src/nextjs-entrypoint-templates ./dist/nextjs-entrypoint-templates",
+    "build": "tsup && mkdir -p dist/v4 && cp -r ./src/v4/schema.json ./dist/v4/schema.json && cp ./src/nextjs-adapter.cjs ./dist/nextjs-adapter.cjs",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit"
   },

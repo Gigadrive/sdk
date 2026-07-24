@@ -1,9 +1,9 @@
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import gigadriveNextAdapter from './nextjs-adapter';
-import { parseGigadriveNextBuildManifest, type GigadriveNextBuildManifestV2 } from './nextjs-manifest';
+import { parseGigadriveNextBuildManifest, type GigadriveNextBuildManifestV2Standalone } from './nextjs-manifest';
 
 const temporaryDirectories: string[] = [];
 
@@ -41,6 +41,26 @@ const nextConfig = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const emptyRouting = {
+  beforeMiddleware: [],
+  beforeFiles: [],
+  afterFiles: [],
+  dynamicRoutes: [],
+  onMatch: [],
+  fallback: [],
+  shouldNormalizeNextData: false,
+  rsc: {},
+};
+
+const emptyOutputs = {
+  pages: [],
+  pagesApi: [],
+  appPages: [],
+  appRoutes: [],
+  prerenders: [],
+  staticFiles: [],
+};
+
 const modifyConfig = (config: Record<string, unknown>, phase: string, nextVersion?: string) => {
   if (!gigadriveNextAdapter.modifyConfig) throw new Error('Expected modifyConfig');
   return (
@@ -53,28 +73,21 @@ const modifyConfig = (config: Record<string, unknown>, phase: string, nextVersio
 
 const onBuildComplete = async (context: Record<string, unknown>): Promise<void> => {
   if (!gigadriveNextAdapter.onBuildComplete) throw new Error('Expected onBuildComplete');
-  const projectDir = context.projectDir;
-  if (typeof projectDir !== 'string') throw new Error('Expected projectDir');
-  const pprRuntimePath = path.join(projectDir, '.gigadrive', 'platform', 'nextjs-ppr-runtime.js');
-  await mkdir(path.dirname(pprRuntimePath), { recursive: true });
-  await writeFile(
-    pprRuntimePath,
-    'export const persistPprCacheEntry = async () => {}; export const revalidateNextPath = async () => {};'
-  );
-  process.env.GIGADRIVE_NEXT_PPR_RUNTIME_PATH = pprRuntimePath;
   await (gigadriveNextAdapter.onBuildComplete as unknown as (context: Record<string, unknown>) => Promise<void>)(
     context
   );
 };
 
+const readManifest = async (projectDir: string) =>
+  parseGigadriveNextBuildManifest(await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8'));
+
 afterEach(async () => {
   delete process.env.GIGADRIVE_DEPLOYMENT_ID;
-  delete process.env.GIGADRIVE_NEXT_PPR_RUNTIME_PATH;
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
 describe('Gigadrive Next.js adapter', () => {
-  it('enables the Next 16 platform cache and image loader without forcing standalone output', () => {
+  it('runs the managed build as one standalone server with the platform cache and image loader', () => {
     const config = nextConfig({ reactStrictMode: true });
     process.env.GIGADRIVE_DEPLOYMENT_ID = 'deployment-id';
 
@@ -83,6 +96,7 @@ describe('Gigadrive Next.js adapter', () => {
     expect(result).toMatchObject({
       reactStrictMode: true,
       deploymentId: 'deployment-id',
+      output: 'standalone',
       cacheMaxMemorySize: 0,
       cacheHandlers: {
         default: expect.stringContaining('nextjs-cache-components-handler.js'),
@@ -93,14 +107,20 @@ describe('Gigadrive Next.js adapter', () => {
         loaderFile: expect.stringContaining('nextjs-image-loader.js'),
       },
     });
-    expect(result.output).toBeUndefined();
     expect(result.cacheHandler).toEqual(expect.stringContaining('nextjs-cache-handler.js'));
+    // The caller's config object is never mutated in place.
     expect(config.output).toBeUndefined();
   });
 
-  it('preserves development, static export, and explicit user runtime integrations', () => {
+  it('preserves development and static export builds without standalone or injection', () => {
     const developmentConfig = nextConfig({ reactStrictMode: true });
     const exportConfig = nextConfig({ output: 'export', trailingSlash: true });
+
+    expect(modifyConfig(developmentConfig, 'phase-development-server', '16.2.10')).toBe(developmentConfig);
+    expect(modifyConfig(exportConfig, 'phase-production-build', '16.2.10')).toEqual(exportConfig);
+  });
+
+  it('keeps explicit user cache and image integrations while still forcing standalone output', () => {
     const customConfig = nextConfig({
       cacheHandler: '/user/cache.js',
       cacheHandlers: { remote: '/user/components.js' },
@@ -108,13 +128,20 @@ describe('Gigadrive Next.js adapter', () => {
       images: { ...nextConfig().images, loader: 'custom', loaderFile: '/user/image.js' },
     });
 
-    expect(modifyConfig(developmentConfig, 'phase-development-server', '16.2.10')).toBe(developmentConfig);
-    expect(modifyConfig(exportConfig, 'phase-production-build', '16.2.10')).toEqual(exportConfig);
-    expect(modifyConfig(customConfig, 'phase-production-build', '16.2.10')).toEqual(customConfig);
+    expect(modifyConfig(customConfig, 'phase-production-build', '16.2.10')).toMatchObject({
+      output: 'standalone',
+      cacheHandler: '/user/cache.js',
+      cacheHandlers: { remote: '/user/components.js' },
+      cacheMaxMemorySize: 1024,
+      images: { loader: 'custom', loaderFile: '/user/image.js' },
+    });
   });
 
-  it('retains standalone output for Next 14 and 15', () => {
-    expect(modifyConfig(nextConfig(), 'phase-production-build', '15.5.20')).toMatchObject({ output: 'standalone' });
+  it('retains standalone output for Next 14 and 15 without managed injections', () => {
+    const result = modifyConfig(nextConfig(), 'phase-production-build', '15.5.20');
+    expect(result).toMatchObject({ output: 'standalone' });
+    expect(result.cacheHandler).toBeUndefined();
+    expect(result.cacheHandlers).toBeUndefined();
     expect(modifyConfig(nextConfig({ output: 'export' }), 'phase-production-build', '14.2.0')).toMatchObject({
       output: 'export',
     });
@@ -145,10 +172,7 @@ describe('Gigadrive Next.js adapter', () => {
       buildId: 'next-16-1-build',
     });
 
-    const manifest = parseGigadriveNextBuildManifest(
-      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
-    );
-    expect(manifest).toEqual({
+    expect(await readManifest(projectDir)).toEqual({
       version: 1,
       output: 'standalone',
       distDir: '.next',
@@ -158,692 +182,129 @@ describe('Gigadrive Next.js adapter', () => {
     });
   });
 
-  it('writes a portable v2 plan, deduplicates executable outputs, and generates a direct handler wrapper', async () => {
-    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-adapter-'));
+  it('writes a single-server standalone-v2 manifest with a static prefix and prerender metadata', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-standalone-v2-'));
     temporaryDirectories.push(repoRoot);
     const projectDir = path.join(repoRoot, 'apps', 'web');
-    const distDir = path.join(projectDir, '.next-custom');
-    const handlerPath = path.join(distDir, 'server', 'app.js');
-    const sharedPath = path.join(distDir, 'server', 'chunks', 'shared.js');
-    const tracedPackagePath = path.join(repoRoot, 'node_modules', '@swc', 'helpers');
-    const tracedPackageModulePath = path.join(tracedPackagePath, 'cjs', 'index.js');
-    const staticPath = path.join(distDir, 'static', 'app.js');
-    const platformRuntimeDirectory = path.join(projectDir, '.gigadrive', 'platform');
-    const cacheHandlerPath = path.join(platformRuntimeDirectory, 'nextjs-cache-handler.js');
-    const cacheComponentsHandlerPath = path.join(platformRuntimeDirectory, 'nextjs-cache-components-handler.js');
-    const imageLoaderPath = path.join(platformRuntimeDirectory, 'nextjs-image-loader.js');
-    await mkdir(path.dirname(sharedPath), { recursive: true });
-    await mkdir(path.dirname(tracedPackageModulePath), { recursive: true });
-    await mkdir(path.dirname(staticPath), { recursive: true });
-    await mkdir(platformRuntimeDirectory, { recursive: true });
-    await writeFile(handlerPath, 'export async function handler() {}');
-    await writeFile(sharedPath, 'export const shared = true');
-    await writeFile(path.join(tracedPackagePath, 'package.json'), '{"name":"@swc/helpers"}');
-    await writeFile(tracedPackageModulePath, 'module.exports = {}');
-    await writeFile(staticPath, 'console.log("static")');
-    await writeFile(cacheHandlerPath, 'export default class CacheHandler {}');
-    await writeFile(cacheComponentsHandlerPath, 'export default class CacheComponentsHandler {}');
-    await writeFile(imageLoaderPath, 'export default function loader() {}');
+    const distDir = path.join(projectDir, '.next');
+    const fallbackPath = path.join(distDir, 'server', 'app', 'isr.html');
+    await mkdir(path.dirname(fallbackPath), { recursive: true });
+    await writeFile(fallbackPath, '<html>isr</html>');
 
-    const commonOutput = {
-      filePath: handlerPath,
-      sourcePage: 'app/page.tsx',
+    const routeOutput = (id: string, config: Record<string, unknown>) => ({
+      id,
+      type: 'APP_PAGE',
+      filePath: `${distDir}/server/app/${id}.js`,
+      pathname: `/${id}`,
+      sourcePage: `app/${id}/page.tsx`,
       runtime: 'nodejs',
-      assets: {
-        'apps/web/.next-custom/server/chunks/shared.js': sharedPath,
-        'node_modules/@swc/helpers': tracedPackagePath,
-      },
-      config: { maxDuration: 45, preferredRegion: ['fra1'] },
-    };
+      assets: {},
+      config,
+    });
+
     await onBuildComplete({
       projectDir,
       repoRoot,
       distDir,
-      config: nextConfig({
-        cacheHandler: cacheHandlerPath,
-        cacheHandlers: { default: cacheComponentsHandlerPath, remote: cacheComponentsHandlerPath },
-        images: { ...nextConfig().images, loader: 'custom', loaderFile: imageLoaderPath },
-      }),
+      config: nextConfig(),
       nextVersion: '16.2.10',
       buildId: 'build-id',
-      routing: {
-        beforeMiddleware: [{ sourceRegex: '^/old$', destination: '/new' }],
-        beforeFiles: [],
-        afterFiles: [],
-        dynamicRoutes: [{ sourceRegex: '^/blog/([^/]+)$' }],
-        onMatch: [],
-        fallback: [],
-        shouldNormalizeNextData: true,
-        rsc: { header: 'rsc' },
-      },
+      routing: { ...emptyRouting, shouldNormalizeNextData: true, rsc: { header: 'rsc' } },
       outputs: {
-        pages: [{ ...commonOutput, id: 'page-html', type: 'PAGES', pathname: '/page' }],
+        pages: [{ ...routeOutput('home', { maxDuration: 30 }), type: 'PAGES', pathname: '/' }],
         pagesApi: [],
-        appPages: [{ ...commonOutput, id: 'page-rsc', type: 'APP_PAGE', pathname: '/page.rsc' }],
+        appPages: [routeOutput('blog', { maxDuration: 60, env: { FEATURE_FLAG: 'on' } })],
         appRoutes: [],
-        prerenders: [],
-        staticFiles: [
-          { id: 'static-app', type: 'STATIC_FILE', filePath: staticPath, pathname: '/_next/static/app.js' },
+        prerenders: [
+          {
+            id: 'isr',
+            type: 'PRERENDER',
+            pathname: '/isr',
+            parentOutputId: 'blog',
+            groupId: 1,
+            fallback: {
+              filePath: fallbackPath,
+              initialRevalidate: 5,
+              initialExpiration: 31_536_000,
+              postponedState: 'postponed',
+            },
+            config: { renderingMode: 'PARTIALLY_STATIC', allowQuery: ['q'] },
+          },
         ],
+        staticFiles: [],
       },
     });
 
-    const content = await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8');
-    const manifest = parseGigadriveNextBuildManifest(content) as GigadriveNextBuildManifestV2;
+    const manifest = (await readManifest(projectDir)) as GigadriveNextBuildManifestV2Standalone;
     expect(manifest).toMatchObject({
       version: 2,
-      mode: 'adapter-v2',
-      distDir: '.next-custom',
+      mode: 'standalone-v2',
+      distDir: '.next',
       repoRootToProject: 'apps/web',
       nextVersion: '16.2.10',
       buildId: 'build-id',
-      outputEntrypoints: { 'page-html': 'next-0', 'page-rsc': 'next-0' },
-      routing: { shouldNormalizeNextData: true },
-      config: { images: { localPatterns: [{ pathname: '/images/**' }], qualities: [75] } },
-    });
-    expect(manifest.entrypoints).toHaveLength(1);
-    expect(manifest.entrypoints[0]).toMatchObject({
-      id: 'next-0',
-      runtime: 'nodejs',
-      outputIds: ['page-html', 'page-rsc'],
-      assets: {
-        'node_modules/@swc/helpers': 'node_modules/@swc/helpers',
-        'apps/web/.gigadrive/platform/nextjs-cache-handler.js': 'apps/web/.gigadrive/platform/nextjs-cache-handler.js',
-        'apps/web/.gigadrive/platform/nextjs-cache-components-handler.js':
-          'apps/web/.gigadrive/platform/nextjs-cache-components-handler.js',
-        'apps/web/.gigadrive/platform/nextjs-image-loader.js': 'apps/web/.gigadrive/platform/nextjs-image-loader.js',
-        'apps/web/.gigadrive/platform/nextjs-ppr-runtime.js': 'apps/web/.gigadrive/platform/nextjs-ppr-runtime.js',
+      // One server honors one duration limit: the max across every route.
+      server: { maxDuration: 60, env: { FEATURE_FLAG: 'on' } },
+      config: { basePath: '', trailingSlash: false, cacheComponents: false, images: { qualities: [75] } },
+      routing: { shouldNormalizeNextData: true, rsc: { header: 'rsc' } },
+      outputs: {
+        staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
       },
-      config: { maxDuration: 45, preferredRegion: ['fra1'] },
     });
-    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    const wrapper = await readFile(wrapperPath, 'utf8');
-    expect(wrapper).toContain('next/dist/build/adapter/setup-node-env.external.js');
-    expect(wrapper).toContain('await nextHandler(req, res');
-    expect(wrapper).toContain('onCacheEntryV2');
-    expect(wrapper).toContain('persistPprCacheEntry');
-    expect(wrapper).toContain('revalidateNextPath({ ...input, hostname })');
-    expect(wrapper).toContain('process.chdir(fileURLToPath(new URL("../../..", import.meta.url)))');
-    expect(wrapper).toContain('relativeProjectDir: "."');
-    expect(wrapper).not.toContain('routerServerContext:');
-    expect(wrapper).not.toContain('__GIGADRIVE_');
-    expect(wrapper).toContain("req.headers['x-gigadrive-next-cache-key']");
+    expect(manifest.outputs.prerenders).toHaveLength(1);
+    expect(manifest.outputs.prerenders[0]).toMatchObject({
+      id: 'isr',
+      pathname: '/isr',
+      fallback: {
+        filePath: 'apps/web/.next/server/app/isr.html',
+        initialRevalidate: 5,
+        initialExpiration: 31_536_000,
+        postponedState: 'postponed',
+      },
+      config: { renderingMode: 'PARTIALLY_STATIC', allowQuery: ['q'] },
+    });
+    // No per-route entrypoints or wrappers exist in the single-server model.
+    expect((manifest as unknown as Record<string, unknown>).entrypoints).toBeUndefined();
+    expect((manifest as unknown as Record<string, unknown>).outputEntrypoints).toBeUndefined();
+    await expect(readFile(path.join(projectDir, '.gigadrive', 'nextjs', 'entrypoints'))).rejects.toThrow();
   });
 
-  it('invokes Node.js middleware with the Web Request adapter contract', async () => {
-    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-middleware-'));
+  it('writes a minimal export manifest for static export on the managed runtime', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-export-'));
     temporaryDirectories.push(repoRoot);
-    const projectDir = path.join(repoRoot, 'app');
+    const projectDir = repoRoot;
     const distDir = path.join(projectDir, '.next');
-    const middlewarePath = path.join(distDir, 'server', 'middleware.js');
-    await mkdir(path.dirname(middlewarePath), { recursive: true });
-    await writeFile(
-      middlewarePath,
-      `module.exports.handler = async (request, context) => {
-        context.waitUntil(Promise.resolve());
-        return Response.json({
-          method: request.method,
-          pathname: new URL(request.url).pathname,
-          invocationTarget: context.requestMeta.invocationTarget,
-        }, { headers: { 'x-middleware-next': '1' } });
-      };`
-    );
+    await mkdir(projectDir, { recursive: true });
 
     await onBuildComplete({
       projectDir,
       repoRoot,
       distDir,
-      config: nextConfig(),
+      config: nextConfig({ output: 'export' }),
       nextVersion: '16.2.10',
-      buildId: 'middleware-build',
-      routing: {
-        beforeMiddleware: [],
-        beforeFiles: [],
-        afterFiles: [],
-        dynamicRoutes: [],
-        onMatch: [],
-        fallback: [],
-        shouldNormalizeNextData: false,
-        rsc: {},
-      },
-      outputs: {
-        pages: [],
-        pagesApi: [],
-        appPages: [],
-        appRoutes: [],
-        middleware: {
-          id: '/_middleware',
-          type: 'MIDDLEWARE',
-          filePath: middlewarePath,
-          pathname: '/_middleware',
-          sourcePage: 'middleware',
-          runtime: 'nodejs',
-          assets: {},
-          config: {},
-        },
-        prerenders: [],
-        staticFiles: [],
-      },
+      buildId: 'export-build',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
     });
 
-    const manifest = parseGigadriveNextBuildManifest(
-      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
-    ) as GigadriveNextBuildManifestV2;
-    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    const originalCwd = process.cwd();
-    try {
-      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
-        fetch(request: Request): Promise<Response>;
-      };
-      const response = await wrapper.fetch(
-        new Request('https://example.com/api/echo', {
-          headers: { 'x-gigadrive-next-invocation-target': '/api/echo' },
-        })
-      );
-
-      expect(response.headers.get('x-middleware-next')).toBe('1');
-      await expect(response.json()).resolves.toEqual({
-        method: 'GET',
-        pathname: '/api/echo',
-        invocationTarget: '/api/echo',
-      });
-    } finally {
-      process.chdir(originalCwd);
-    }
-  });
-
-  it('awaits asynchronous Turbopack Node entrypoint exports before resolving the handler', async () => {
-    const repoRoot = await mkdtemp(path.join(process.cwd(), '.tmp-network-next-turbopack-'));
-    temporaryDirectories.push(repoRoot);
-    const projectDir = path.join(repoRoot, 'app');
-    const distDir = path.join(projectDir, '.next');
-    const handlerPath = path.join(distDir, 'server', 'app', 'api', 'async', 'route.cjs');
-    const runtimeMarkerPath = path.join(projectDir, '.gigadrive', 'platform', 'runtime-marker.cjs');
-    await mkdir(path.dirname(handlerPath), { recursive: true });
-    await mkdir(path.dirname(runtimeMarkerPath), { recursive: true });
-    await writeFile(runtimeMarkerPath, `module.exports = 'project-runtime-loaded';`);
-    await writeFile(
-      handlerPath,
-      `const path = require('node:path');
-      const runtimeMarker = require(path.join(process.cwd(), '.gigadrive', 'platform', 'runtime-marker.cjs'));
-      module.exports = Promise.resolve({
-        handler: async (request, response, context) => {
-          response.statusCode = 200;
-          response.body = request.url;
-          response.cwd = process.cwd();
-          response.relativeProjectDir = context.requestMeta.relativeProjectDir;
-          response.runtimeMarker = runtimeMarker;
-          context.waitUntil(Promise.resolve().then(() => { response.waitUntilSettled = true; }));
-        },
-      });`
-    );
-
-    await onBuildComplete({
-      projectDir,
-      repoRoot,
-      distDir,
-      config: nextConfig(),
+    expect(await readManifest(projectDir)).toEqual({
+      version: 2,
+      mode: 'export',
+      distDir: '.next',
+      repoRootToProject: '.',
       nextVersion: '16.2.10',
-      buildId: 'turbopack-build',
-      routing: {
-        beforeMiddleware: [],
-        beforeFiles: [],
-        afterFiles: [],
-        dynamicRoutes: [],
-        onMatch: [],
-        fallback: [],
-        shouldNormalizeNextData: false,
-        rsc: {},
-      },
-      outputs: {
-        pages: [],
-        pagesApi: [],
-        appPages: [],
-        appRoutes: [
-          {
-            id: 'app/api/async/route',
-            type: 'APP_ROUTE',
-            filePath: handlerPath,
-            pathname: '/api/async',
-            sourcePage: 'app/api/async/route.ts',
-            runtime: 'nodejs',
-            assets: {},
-            config: {},
-          },
-        ],
-        prerenders: [],
-        staticFiles: [],
-      },
+      buildId: 'export-build',
     });
-
-    const manifest = parseGigadriveNextBuildManifest(
-      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
-    ) as GigadriveNextBuildManifestV2;
-    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    const originalCwd = process.cwd();
-    try {
-      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
-        default(
-          request: { headers: Record<string, string>; url: string },
-          response: {
-            statusCode?: number;
-            body?: string;
-            cwd?: string;
-            relativeProjectDir?: string;
-            runtimeMarker?: string;
-            waitUntilSettled?: boolean;
-          }
-        ): Promise<void>;
-      };
-      const response: {
-        statusCode?: number;
-        body?: string;
-        cwd?: string;
-        relativeProjectDir?: string;
-        runtimeMarker?: string;
-        waitUntilSettled?: boolean;
-      } = {};
-
-      await wrapper.default({ headers: { host: 'example.com' }, url: '/api/async' }, response);
-
-      expect(response).toEqual({
-        statusCode: 200,
-        body: '/api/async',
-        cwd: projectDir,
-        relativeProjectDir: '.',
-        runtimeMarker: 'project-runtime-loaded',
-        waitUntilSettled: true,
-      });
-    } finally {
-      process.chdir(originalCwd);
-    }
   });
 
-  it('loads canonical Turbopack Edge assets before invoking the registered handler', async () => {
-    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-edge-'));
-    temporaryDirectories.push(repoRoot);
-    const projectDir = path.join(repoRoot, 'app');
-    const distDir = path.join(projectDir, '.next');
-    const requiredServerFilesPath = path.join(distDir, 'required-server-files.js');
-    const edgeChunksDirectory = path.join(distDir, 'server', 'edge', 'chunks');
-    const dependencyChunkPath = path.join(edgeChunksDirectory, 'dependency.js');
-    const runtimeModulePath = path.join(edgeChunksDirectory, 'runtime.js');
-    await mkdir(edgeChunksDirectory, { recursive: true });
-    await writeFile(requiredServerFilesPath, 'self.__SERVER_FILES_MANIFEST = { loaded: true };');
-    await writeFile(dependencyChunkPath, 'globalThis.__edgeDependencyLoaded = true;');
-    await writeFile(
-      runtimeModulePath,
-      `if (!self.__SERVER_FILES_MANIFEST?.loaded || !globalThis.__edgeDependencyLoaded) {
-        throw new Error('Edge dependencies were not evaluated first');
-      }
-      globalThis._ENTRIES = {
-        edge_test: Promise.resolve({
-          handler: async (request) => Response.json({ pathname: new URL(request.url).pathname }),
-        }),
-      };`
-    );
-
-    await onBuildComplete({
-      projectDir,
-      repoRoot,
-      distDir,
-      config: nextConfig(),
-      nextVersion: '16.2.10',
-      buildId: 'edge-build',
-      routing: {
-        beforeMiddleware: [],
-        beforeFiles: [],
-        afterFiles: [],
-        dynamicRoutes: [],
-        onMatch: [],
-        fallback: [],
-        shouldNormalizeNextData: false,
-        rsc: {},
-      },
-      outputs: {
-        pages: [],
-        pagesApi: [],
-        appPages: [],
-        appRoutes: [
-          {
-            id: 'app/api/edge/route',
-            type: 'APP_ROUTE',
-            filePath: runtimeModulePath,
-            pathname: '/api/edge',
-            sourcePage: 'app/api/edge/route.ts',
-            runtime: 'edge',
-            assets: {
-              'required-server-files.js': requiredServerFilesPath,
-              'server/edge/chunks/dependency.js': dependencyChunkPath,
-              'server/edge/chunks/runtime.js': runtimeModulePath,
-            },
-            wasmAssets: {},
-            edgeRuntime: {
-              modulePath: runtimeModulePath,
-              entryKey: 'edge_test',
-              handlerExport: 'handler',
-            },
-            config: {},
-          },
-        ],
-        prerenders: [],
-        staticFiles: [],
-      },
-    });
-
-    const manifest = parseGigadriveNextBuildManifest(
-      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
-    ) as GigadriveNextBuildManifestV2;
-    expect(manifest.entrypoints[0].assets).toMatchObject({
-      'required-server-files.js': 'app/.next/required-server-files.js',
-      'server/edge/chunks/dependency.js': 'app/.next/server/edge/chunks/dependency.js',
-    });
-
-    const archiveRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-adapter-archive-'));
-    temporaryDirectories.push(archiveRoot);
-    const entrypoint = manifest.entrypoints[0];
-    for (const [targetPath, sourcePath] of Object.entries(entrypoint.assets)) {
-      const archivePath = path.join(archiveRoot, targetPath);
-      await mkdir(path.dirname(archivePath), { recursive: true });
-      await copyFile(path.join(repoRoot, sourcePath), archivePath);
-    }
-    const canonicalRuntimePath = path.join(archiveRoot, entrypoint.edgeRuntime!.modulePath);
-    await mkdir(path.dirname(canonicalRuntimePath), { recursive: true });
-    await copyFile(runtimeModulePath, canonicalRuntimePath);
-    const wrapperPath = path.join(archiveRoot, entrypoint.filePath);
-    await expect(readFile(wrapperPath, 'utf8')).resolves.toContain(
-      'await import("../../../.next/server/edge/chunks/runtime.js")'
-    );
-    const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
-      fetch(request: Request): Promise<Response>;
-    };
-    const response = await wrapper.fetch(new Request('https://example.com/api/edge'));
-
-    await expect(response.json()).resolves.toEqual({ pathname: '/api/edge' });
-  });
-
-  it('settles pending waitUntil work when the streamed response body errors mid-read', async () => {
-    const repoRoot = await mkdtemp(path.join(process.cwd(), '.tmp-network-next-stream-error-'));
-    temporaryDirectories.push(repoRoot);
-    const projectDir = path.join(repoRoot, 'app');
-    const distDir = path.join(projectDir, '.next');
-    const middlewarePath = path.join(distDir, 'server', 'middleware.js');
-    await mkdir(path.dirname(middlewarePath), { recursive: true });
-    await writeFile(
-      middlewarePath,
-      `module.exports.handler = async (request, context) => {
-        context.waitUntil(new Promise((resolve) => setTimeout(() => {
-          globalThis.__streamErrorWaitUntilSettled = true;
-          resolve();
-        }, 10)));
-        const body = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode('first-chunk'));
-          },
-          pull(controller) {
-            controller.error(new Error('upstream read failed'));
-          },
-        });
-        return new Response(body, { status: 200 });
-      };`
-    );
-
-    await onBuildComplete({
-      projectDir,
-      repoRoot,
-      distDir,
-      config: nextConfig(),
-      nextVersion: '16.2.10',
-      buildId: 'stream-error-build',
-      routing: {
-        beforeMiddleware: [],
-        beforeFiles: [],
-        afterFiles: [],
-        dynamicRoutes: [],
-        onMatch: [],
-        fallback: [],
-        shouldNormalizeNextData: false,
-        rsc: {},
-      },
-      outputs: {
-        pages: [],
-        pagesApi: [],
-        appPages: [],
-        appRoutes: [],
-        middleware: {
-          id: '/_middleware',
-          type: 'MIDDLEWARE',
-          filePath: middlewarePath,
-          pathname: '/_middleware',
-          sourcePage: 'middleware',
-          runtime: 'nodejs',
-          assets: {},
-          config: {},
-        },
-        prerenders: [],
-        staticFiles: [],
-      },
-    });
-
-    const manifest = parseGigadriveNextBuildManifest(
-      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
-    ) as GigadriveNextBuildManifestV2;
-    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    const originalCwd = process.cwd();
-    const globalState = globalThis as { __streamErrorWaitUntilSettled?: boolean };
-    try {
-      delete globalState.__streamErrorWaitUntilSettled;
-      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
-        fetch(request: Request): Promise<Response>;
-      };
-      const response = await wrapper.fetch(new Request('https://example.com/stream'));
-      const reader = response.body?.getReader();
-      await expect(
-        (async () => {
-          for (;;) {
-            const result = await reader?.read();
-            if (!result || result.done) break;
-          }
-        })()
-      ).rejects.toThrow('upstream read failed');
-
-      // The waitUntil promise must have settled before the stream error
-      // propagated to the consumer.
-      expect(globalState.__streamErrorWaitUntilSettled).toBe(true);
-    } finally {
-      delete globalState.__streamErrorWaitUntilSettled;
-      process.chdir(originalCwd);
-    }
-  });
-
-  it('generates working wrappers when the project directory is the repository root', async () => {
-    const repoRoot = await mkdtemp(path.join(process.cwd(), '.tmp-network-next-root-'));
-    temporaryDirectories.push(repoRoot);
-    const distDir = path.join(repoRoot, '.next');
-    const handlerPath = path.join(distDir, 'server', 'app', 'route.cjs');
-    await mkdir(path.dirname(handlerPath), { recursive: true });
-    await writeFile(
-      handlerPath,
-      `module.exports.handler = async (request, response, context) => {
-        response.statusCode = 200;
-        response.cwd = process.cwd();
-        response.relativeProjectDir = context.requestMeta.relativeProjectDir;
-      };`
-    );
-
-    await onBuildComplete({
-      projectDir: repoRoot,
-      repoRoot,
-      distDir,
-      config: nextConfig(),
-      nextVersion: '16.2.10',
-      buildId: 'root-build',
-      routing: {
-        beforeMiddleware: [],
-        beforeFiles: [],
-        afterFiles: [],
-        dynamicRoutes: [],
-        onMatch: [],
-        fallback: [],
-        shouldNormalizeNextData: false,
-        rsc: {},
-      },
-      outputs: {
-        pages: [],
-        pagesApi: [],
-        appPages: [],
-        appRoutes: [
-          {
-            id: 'app/route',
-            type: 'APP_ROUTE',
-            filePath: handlerPath,
-            pathname: '/',
-            sourcePage: 'app/route.ts',
-            runtime: 'nodejs',
-            assets: {},
-            config: {},
-          },
-        ],
-        prerenders: [],
-        staticFiles: [],
-      },
-    });
-
-    const manifest = parseGigadriveNextBuildManifest(
-      await readFile(path.join(repoRoot, '.gigadrive', 'nextjs.json'), 'utf8')
-    ) as GigadriveNextBuildManifestV2;
-    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    const originalCwd = process.cwd();
-    try {
-      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
-        default(
-          request: { headers: Record<string, string>; url: string },
-          response: { statusCode?: number; cwd?: string; relativeProjectDir?: string }
-        ): Promise<void>;
-      };
-      const response: { statusCode?: number; cwd?: string; relativeProjectDir?: string } = {};
-      await wrapper.default({ headers: { host: 'example.com' }, url: '/' }, response);
-
-      expect(response).toEqual({ statusCode: 200, cwd: repoRoot, relativeProjectDir: '.' });
-    } finally {
-      process.chdir(originalCwd);
-    }
-  });
-
-  it('serves concurrent invocations from a single module-scope handler resolution', async () => {
-    const repoRoot = await mkdtemp(path.join(process.cwd(), '.tmp-network-next-concurrent-'));
-    temporaryDirectories.push(repoRoot);
-    const projectDir = path.join(repoRoot, 'apps', 'web');
-    const distDir = path.join(projectDir, '.next');
-    const handlerPath = path.join(distDir, 'server', 'app', 'api', 'slow', 'route.cjs');
-    await mkdir(path.dirname(handlerPath), { recursive: true });
-    await writeFile(
-      handlerPath,
-      `module.exports.handler = async (request, response) => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        response.statusCode = 200;
-        response.cwd = process.cwd();
-        response.url = request.url;
-      };`
-    );
-
-    await onBuildComplete({
-      projectDir,
-      repoRoot,
-      distDir,
-      config: nextConfig(),
-      nextVersion: '16.2.10',
-      buildId: 'concurrent-build',
-      routing: {
-        beforeMiddleware: [],
-        beforeFiles: [],
-        afterFiles: [],
-        dynamicRoutes: [],
-        onMatch: [],
-        fallback: [],
-        shouldNormalizeNextData: false,
-        rsc: {},
-      },
-      outputs: {
-        pages: [],
-        pagesApi: [],
-        appPages: [],
-        appRoutes: [
-          {
-            id: 'app/api/slow/route',
-            type: 'APP_ROUTE',
-            filePath: handlerPath,
-            pathname: '/api/slow',
-            sourcePage: 'app/api/slow/route.ts',
-            runtime: 'nodejs',
-            assets: {},
-            config: {},
-          },
-        ],
-        prerenders: [],
-        staticFiles: [],
-      },
-    });
-
-    const manifest = parseGigadriveNextBuildManifest(
-      await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8')
-    ) as GigadriveNextBuildManifestV2;
-    const wrapperPath = path.join(repoRoot, manifest.entrypoints[0].filePath);
-    const originalCwd = process.cwd();
-    try {
-      const wrapper = (await import(`${wrapperPath}?test=${String(Date.now())}`)) as {
-        default(
-          request: { headers: Record<string, string>; url: string },
-          response: { statusCode?: number; cwd?: string; url?: string }
-        ): Promise<void>;
-      };
-      const responses = [{}, {}, {}] as Array<{ statusCode?: number; cwd?: string; url?: string }>;
-      await Promise.all(
-        responses.map((response, index) =>
-          wrapper.default({ headers: { host: 'example.com' }, url: `/api/slow?i=${String(index)}` }, response)
-        )
-      );
-
-      for (const [index, response] of responses.entries()) {
-        expect(response).toEqual({ statusCode: 200, cwd: projectDir, url: `/api/slow?i=${String(index)}` });
-      }
-    } finally {
-      process.chdir(originalCwd);
-    }
-  });
-
-  it('keeps the shared template regions identical across wrapper variants', async () => {
-    const templateDirectory = path.join(import.meta.dirname, 'nextjs-entrypoint-templates');
-    const nodeRoute = await readFile(path.join(templateDirectory, 'node-route.mjs'), 'utf8');
-    const nodeMiddleware = await readFile(path.join(templateDirectory, 'node-middleware-web.mjs'), 'utf8');
-    const edgeWeb = await readFile(path.join(templateDirectory, 'edge-web.mjs'), 'utf8');
-
-    const handlerResolution = (template: string): string => {
-      const match = /const nextEntrypoint[\s\S]*?loadedEntrypoint;\n/.exec(template);
-      if (!match) throw new Error('Template is missing the handler resolution block');
-      return match[0];
-    };
-    expect(handlerResolution(nodeMiddleware)).toBe(handlerResolution(nodeRoute));
-
-    // The edge template resolves its handler lazily inside fetch (chunk
-    // evaluation must not run at module scope), so compare the shared request
-    // contract from the pending-work setup onward.
-    const fetchContract = (template: string): string => {
-      const index = template.indexOf('const pending = [];');
-      if (index < 0) throw new Error('Template is missing the fetch contract');
-      return template.slice(index);
-    };
-    expect(fetchContract(edgeWeb)).toBe(fetchContract(nodeMiddleware));
-  });
-
-  it('rejects outputs outside the repository root', async () => {
+  it('rejects a prerender fallback outside the repository root', async () => {
     const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-adapter-safe-'));
     const outsideRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-adapter-outside-'));
     temporaryDirectories.push(repoRoot, outsideRoot);
     const projectDir = path.join(repoRoot, 'app');
-    const outsideHandler = path.join(outsideRoot, 'handler.js');
+    const outsideFallback = path.join(outsideRoot, 'shell.html');
     await mkdir(projectDir, { recursive: true });
-    await writeFile(outsideHandler, 'export const handler = () => {}');
+    await writeFile(outsideFallback, '<html>escaped</html>');
 
     await expect(
       onBuildComplete({
@@ -853,34 +314,20 @@ describe('Gigadrive Next.js adapter', () => {
         config: nextConfig(),
         nextVersion: '16.2.10',
         buildId: 'build-id',
-        routing: {
-          beforeMiddleware: [],
-          beforeFiles: [],
-          afterFiles: [],
-          dynamicRoutes: [],
-          onMatch: [],
-          fallback: [],
-          shouldNormalizeNextData: false,
-          rsc: {},
-        },
+        routing: emptyRouting,
         outputs: {
-          pages: [
+          ...emptyOutputs,
+          prerenders: [
             {
               id: 'unsafe',
-              type: 'PAGES',
-              filePath: outsideHandler,
+              type: 'PRERENDER',
               pathname: '/',
-              sourcePage: 'pages/index.tsx',
-              runtime: 'nodejs',
-              assets: {},
+              parentOutputId: 'p',
+              groupId: 0,
+              fallback: { filePath: outsideFallback },
               config: {},
             },
           ],
-          pagesApi: [],
-          appPages: [],
-          appRoutes: [],
-          prerenders: [],
-          staticFiles: [],
         },
       })
     ).rejects.toThrow('outside the repository root');

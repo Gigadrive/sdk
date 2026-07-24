@@ -1,5 +1,5 @@
 import type { NormalizedImagePolicy } from './image-policy';
-import type { GigadriveNextBuildManifestV2 } from './nextjs-manifest';
+import type { GigadriveNextBuildManifestV2Standalone } from './nextjs-manifest';
 import { type Region } from './regions';
 import { type Runtime } from './runtime';
 
@@ -51,6 +51,25 @@ export interface NormalizedConfig {
         contentType?: string;
       }
     >;
+
+    /**
+     * Directory subtrees published under a single URL prefix, registered as one
+     * descriptor each instead of enumerating every file. Used to collapse
+     * high-cardinality immutable trees such as `.next/static` into a single
+     * edge-served prefix (one object-storage sync + one route, not one per file).
+     */
+    prefixes?: Array<{
+      /** Project-relative source directory root (e.g. `.next/static`). */
+      source: string;
+      /** Public URL prefix to serve the subtree under (e.g. `_next/static`). */
+      destination: string;
+      /** Serve with immutable cache-control (content-hashed assets). */
+      immutable?: boolean;
+      /** Populate the edge cache for this subtree at deployment time. */
+      populateCache?: boolean;
+      /** Optional Content-Type override applied to the whole subtree. */
+      contentType?: string;
+    }>;
 
     /**
      * Whether routes for the assets should be generated during deployment.
@@ -206,7 +225,13 @@ export interface NormalizedConfigEntrypoint {
 
 export type NormalizedFramework = NormalizedNextjsFramework;
 
-export type NormalizedNextjsFramework = Omit<GigadriveNextBuildManifestV2, 'version'> & {
+/**
+ * Framework runtime metadata the Network gateway consumes. Mirrors the single
+ * standalone-server manifest (minus the wire `version`) plus the persisted
+ * discriminators. The whole deployment runs as one standalone server, so this
+ * carries prerender/routing/image metadata but no per-route entrypoints.
+ */
+export type NormalizedNextjsFramework = Omit<GigadriveNextBuildManifestV2Standalone, 'version'> & {
   type: 'nextjs';
   schemaVersion: 2;
 };
