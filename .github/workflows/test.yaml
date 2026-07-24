@@ -26,7 +26,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup
         uses: ./.github/actions/setup
@@ -48,13 +48,13 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup
         uses: ./.github/actions/setup
 
       - name: Restore ESLint cache
-        uses: useblacksmith/cache@v5
+        uses: useblacksmith/cache@71c7c918062ba3861252d84b07fe5ab2a6b467a6 # v5
         with:
           path: .eslintcache
           key: eslint-${{ runner.os }}-${{ hashFiles('eslint.config.*', '.eslintrc*', 'pnpm-lock.yaml') }}
@@ -72,7 +72,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup
         uses: ./.github/actions/setup
@@ -88,7 +88,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup
         uses: ./.github/actions/setup
