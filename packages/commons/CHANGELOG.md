@@ -1,5 +1,11 @@
 # @gigadrive/commons
 
+## 2.2.0
+
+### Minor Changes
+
+- Add per-module subpath exports (e.g. `@gigadrive/commons/format`) so pure, browser-safe utilities can be imported without pulling in the Node-only modules (`encrypt`/`decrypt`, `sha256`, `buffered-readable-stream`). This fixes client-side bundling crashes in environments without Node globals. The root `.` export is unchanged and remains a full barrel. ([#402](https://github.com/Gigadrive/sdk/pull/402))
+
 ## 2.1.1
 
 ### Patch Changes
