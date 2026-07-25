@@ -14,12 +14,13 @@ vi.mock('./nextjs-runtime-cache-client', () => ({
   writeRuntimeCache: runtimeCache.write,
 }));
 
-import GigadriveNextCacheHandler from './nextjs-cache-handler';
+import GigadriveNextCacheHandler, { clearLocalEntryCacheForTesting } from './nextjs-cache-handler';
 
 describe('GigadriveNextCacheHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    clearLocalEntryCacheForTesting();
     runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: 0 });
   });
   afterEach(() => {
@@ -174,5 +175,54 @@ describe('GigadriveNextCacheHandler', () => {
     Object.assign(handler, { buildOutputCache: Promise.resolve({ get: vi.fn().mockResolvedValue(null) }) });
 
     await expect(handler.get('/dynamic')).resolves.toBeNull();
+  });
+
+  // The remote entry store is an HTTP service backed by object storage; when it
+  // degrades, every render of a cached page degrades with it. Entry bytes are
+  // therefore served from an in-process cache while tag state stays remote.
+  it('serves repeat reads locally without a second remote entry read', async () => {
+    const entry = { lastModified: 1_000, value: { kind: 'FETCH' }, tags: ['tags'] };
+    runtimeCache.read.mockResolvedValue(entry);
+    const handler = new GigadriveNextCacheHandler();
+
+    await expect(handler.get('/tags-data')).resolves.toEqual(entry);
+    await expect(handler.get('/tags-data')).resolves.toEqual(entry);
+
+    expect(runtimeCache.read).toHaveBeenCalledTimes(1);
+    // Tag state is still consulted on every read, so revalidateTag stays authoritative.
+    expect(runtimeCache.getTagState).toHaveBeenCalledTimes(2);
+  });
+
+  it('serves a freshly written entry without any remote read', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_784_670_700_000);
+    const handler = new GigadriveNextCacheHandler();
+
+    await handler.set('/written', { kind: 'FETCH' }, { tags: ['tags'] });
+    await expect(handler.get('/written')).resolves.toMatchObject({ value: { kind: 'FETCH' } });
+
+    expect(runtimeCache.read).not.toHaveBeenCalled();
+  });
+
+  it('does not serve a locally cached entry whose tag has been revalidated', async () => {
+    const entry = { lastModified: 1_000, value: { kind: 'FETCH' }, tags: ['tags'] };
+    runtimeCache.read.mockResolvedValue(entry);
+    const handler = new GigadriveNextCacheHandler();
+    await handler.get('/tags-data');
+
+    runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: 2_000 });
+
+    await expect(handler.get('/tags-data')).resolves.toBeNull();
+  });
+
+  it('drops the local copy when the durable write fails', async () => {
+    runtimeCache.write.mockRejectedValue(new Error('storage down'));
+    runtimeCache.read.mockResolvedValue(null);
+    const handler = new GigadriveNextCacheHandler();
+    Object.assign(handler, { buildOutputCache: Promise.resolve({ get: vi.fn().mockResolvedValue(null) }) });
+
+    await expect(handler.set('/flaky', { kind: 'FETCH' }, {})).rejects.toThrow('storage down');
+    // A read must go back to the remote store instead of masking the failed write.
+    await expect(handler.get('/flaky')).resolves.toBeNull();
+    expect(runtimeCache.read).toHaveBeenCalledTimes(1);
   });
 });

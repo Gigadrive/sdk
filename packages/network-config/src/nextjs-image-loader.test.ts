@@ -25,4 +25,26 @@ describe('gigadriveNextImageLoader', () => {
 
     expect(gigadriveNextImageLoader({ src, width: 640 })).toBe(src);
   });
+
+  // Next appends `?dpl=<deploymentId>` to local sources when a deployment id is
+  // configured. The optimizer resolves the deployment from the hostname and
+  // never reads `dpl`, so a per-deploy URL only invalidates the CDN's image
+  // cache on every release.
+  it('strips the dpl marker so optimizer URLs stay stable across deploys', () => {
+    expect(
+      gigadriveNextImageLoader({ src: '/_next/static/media/logo.1uniit1qnbxaq.png?dpl=dpl_123', width: 256 })
+    ).toBe('/_gigadrive/image/%2F_next%2Fstatic%2Fmedia%2Flogo.1uniit1qnbxaq.png/logo.1uniit1qnbxaq.png?width=256');
+  });
+
+  it('keeps other local query parameters while stripping dpl', () => {
+    expect(gigadriveNextImageLoader({ src: '/images/photo.png?v=2&dpl=dpl_123', width: 640 })).toBe(
+      '/_gigadrive/image/%2Fimages%2Fphoto.png%3Fv%3D2/photo.png?width=640'
+    );
+  });
+
+  it('leaves remote sources untouched by the dpl strip', () => {
+    expect(gigadriveNextImageLoader({ src: 'https://images.example.com/a.png?dpl=x', width: 64 })).toBe(
+      '/_gigadrive/image/https%3A%2F%2Fimages.example.com%2Fa.png%3Fdpl%3Dx/a.png?width=64'
+    );
+  });
 });

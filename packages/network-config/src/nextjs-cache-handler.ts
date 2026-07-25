@@ -73,6 +73,93 @@ const collectTags = (
 
 const isBuildPhase = (): boolean => process.env.GIGADRIVE_NEXT_BUILD === '1';
 
+/**
+ * How long a locally cached entry may serve before the remote copy is re-read.
+ * Bounds staleness when another instance rewrites the entry; tag-driven
+ * invalidation is unaffected because tag state is checked remotely on every
+ * read regardless of where the entry bytes came from.
+ */
+const LOCAL_ENTRY_TTL_MS = 5 * 60_000;
+const LOCAL_CACHE_MAX_ENTRIES = 256;
+const LOCAL_CACHE_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+const LOCAL_CACHE_MAX_ENTRY_BYTES = 8 * 1024 * 1024;
+
+interface LocalCacheSlot {
+  entry: IncrementalCacheEntry;
+  cachedAt: number;
+  bytes: number;
+}
+
+const approximateEntryBytes = (entry: IncrementalCacheEntry): number => {
+  try {
+    return JSON.stringify(entry)?.length ?? LOCAL_CACHE_MAX_ENTRY_BYTES + 1;
+  } catch {
+    // Circular or otherwise unserializable values are never cached locally.
+    return LOCAL_CACHE_MAX_ENTRY_BYTES + 1;
+  }
+};
+
+/**
+ * Byte-bounded in-process LRU in front of the remote entry store.
+ *
+ * The remote store is an HTTP service backed by object storage, so every miss
+ * costs a network round trip — and when that store degrades, page renders
+ * degrade with it (a production incident showed second-level blob latency
+ * turning every render of a cached page into a multi-second response).
+ * Serving entry bytes locally removes that dependency from the hot path while
+ * the per-read remote tag-state check keeps `revalidateTag` authoritative.
+ */
+class LocalEntryCache {
+  private readonly slots = new Map<string, LocalCacheSlot>();
+  private totalBytes = 0;
+
+  get(key: string): IncrementalCacheEntry | undefined {
+    const slot = this.slots.get(key);
+    if (!slot) return undefined;
+    if (Date.now() - slot.cachedAt > LOCAL_ENTRY_TTL_MS) {
+      this.delete(key);
+      return undefined;
+    }
+    // Refresh recency for LRU eviction.
+    this.slots.delete(key);
+    this.slots.set(key, slot);
+    return slot.entry;
+  }
+
+  set(key: string, entry: IncrementalCacheEntry): void {
+    const bytes = approximateEntryBytes(entry);
+    if (bytes > LOCAL_CACHE_MAX_ENTRY_BYTES) {
+      this.delete(key);
+      return;
+    }
+    this.delete(key);
+    this.slots.set(key, { entry, cachedAt: Date.now(), bytes });
+    this.totalBytes += bytes;
+    while (this.slots.size > LOCAL_CACHE_MAX_ENTRIES || this.totalBytes > LOCAL_CACHE_MAX_TOTAL_BYTES) {
+      const oldest = this.slots.keys().next().value;
+      if (oldest === undefined) break;
+      this.delete(oldest);
+    }
+  }
+
+  delete(key: string): void {
+    const slot = this.slots.get(key);
+    if (!slot) return;
+    this.slots.delete(key);
+    this.totalBytes -= slot.bytes;
+  }
+
+  clear(): void {
+    this.slots.clear();
+    this.totalBytes = 0;
+  }
+}
+
+const localEntries = new LocalEntryCache();
+
+/** Test-only: the local entry cache is process-wide, so suites must isolate it. */
+export const clearLocalEntryCacheForTesting = (): void => localEntries.clear();
+
 /** Shared Network cache handler for ISR, server responses, fetches, and image metadata. */
 export default class GigadriveNextCacheHandler {
   private readonly buildEntries = new Map<string, IncrementalCacheEntry>();
@@ -136,8 +223,14 @@ export default class GigadriveNextCacheHandler {
       return isIncrementalCacheEntry(buildEntry) ? buildEntry : null;
     }
 
+    const local = localEntries.get(key);
+    if (local) {
+      return this.applyTagState(local, collectTags(local.tags, local.value, context));
+    }
+
     const remote = await readRuntimeCache('incremental', key);
     if (isIncrementalCacheEntry(remote)) {
+      localEntries.set(key, remote);
       return this.applyTagState(remote, collectTags(remote.tags, remote.value, context));
     }
 
@@ -158,7 +251,15 @@ export default class GigadriveNextCacheHandler {
       this.buildEntries.set(key, entry);
       return;
     }
-    await writeRuntimeCache('incremental', key, entry, tags);
+    localEntries.set(key, entry);
+    try {
+      await writeRuntimeCache('incremental', key, entry, tags);
+    } catch (error) {
+      // The local copy would outlive a failed durable write and mask it from
+      // this instance for the whole TTL; drop it so reads retry remotely.
+      localEntries.delete(key);
+      throw error;
+    }
   }
 
   async revalidateTag(tags: string | string[], durations?: { expire?: number }): Promise<void> {
