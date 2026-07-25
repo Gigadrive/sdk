@@ -200,6 +200,9 @@ describe('Next.js framework detection', () => {
       runtime: 'node-22',
       streaming: true,
       maxDuration: 45,
+      // One server renders the whole app, so it is sized well above the
+      // per-route function default it replaced.
+      memory: 1024,
       environmentVariables: { NEXT_BUILD_ID: 'build-id', FEATURE_FLAG: 'on' },
       package: {
         trace: false,

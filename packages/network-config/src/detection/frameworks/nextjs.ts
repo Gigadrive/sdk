@@ -20,6 +20,18 @@ const toPortablePath = (value: string): string => value.replaceAll('\\', '/');
 const MAXIMUM_ENTRY_PAGE_PATHS = 50;
 
 /**
+ * Memory for the single standalone server, in MB.
+ *
+ * The per-route default (256 MB) sized a function that served one route with a
+ * small module graph. One standalone server instead holds the whole
+ * application's graph and renders its heaviest pages, so the same floor leaves
+ * it thrashing the garbage collector on large documents. Node itself sizes its
+ * old-space heap from the container limit, which makes 256 MB actively harmful
+ * for server rendering rather than merely tight.
+ */
+const STANDALONE_SERVER_MEMORY_MB = 1024;
+
+/**
  * Locates the standalone `server.js` produced by `output: 'standalone'`, preferring
  * the monorepo-nested path (`standalone/<repoRootToProject>/server.js`) over the root
  * one. Returns `undefined` when neither exists (e.g. a build that did not run in
@@ -201,7 +213,7 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
     displayName: 'next-server',
     path: entrypoint,
     runtime: defaults.runtime,
-    memory: defaults.memory,
+    memory: Math.max(defaults.memory, STANDALONE_SERVER_MEMORY_MB),
     maxDuration: manifest.server.maxDuration ?? defaults.maxDuration,
     streaming: true,
     environmentVariables: {
