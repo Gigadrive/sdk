@@ -1,5 +1,13 @@
 # gigadrive
 
+## 2.5.26
+
+### Patch Changes
+
+- Updated dependencies [[`861844d`](https://github.com/Gigadrive/sdk/commit/861844dac583a36ffe3e0141af8e408913a16aec)]:
+  - @gigadrive/network-config@4.2.0
+  - @gigadrive/sdk@0.7.20
+
 ## 2.5.25
 
 ### Patch Changes
