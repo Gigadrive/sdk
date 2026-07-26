@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 4.3.1
+
+### Patch Changes
+
+- The Next.js runtime cache client now re-establishes its connection and refreshes its workload token when the microVM resumes from a suspend snapshot (SIGUSR2), so the first request after a wake no longer serializes behind reconnection. ([`ddbd1f9`](https://github.com/Gigadrive/sdk/commit/ddbd1f9570856a962137e789dc59ab0eeb30f678))
+
 ## 4.3.0
 
 ### Minor Changes
