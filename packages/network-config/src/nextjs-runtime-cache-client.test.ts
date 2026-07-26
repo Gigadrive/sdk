@@ -156,3 +156,50 @@ describe('nextjs runtime cache client', () => {
     await expect(getRuntimeCacheTagState('incremental', ['tag'])).resolves.toEqual({ stale: 0, expired: 0 });
   });
 });
+
+// The guest runtime delivers SIGUSR2 after a microVM resume; the client must
+// re-open TCP+TLS and refresh its token so the first real cache read after a
+// wake does not serialize behind reconnection. The listener registers at module
+// load, so these tests import a fresh module copy with the environment set.
+describe('resume rewarm', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    process.removeAllListeners('SIGUSR2');
+    vi.unstubAllGlobals();
+    delete process.env.GIGADRIVE_CLIENT_ID;
+    delete process.env.GIGADRIVE_CLIENT_SECRET;
+    delete process.env.GIGADRIVE_DEPLOYMENT_ID;
+  });
+
+  it('refreshes the token and dials a warmup read on SIGUSR2 when running on Gigadrive', async () => {
+    process.env.GIGADRIVE_CLIENT_ID = 'client-id';
+    process.env.GIGADRIVE_CLIENT_SECRET = 'client-secret';
+    process.env.GIGADRIVE_DEPLOYMENT_ID = 'deployment-1';
+    fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await import('./nextjs-runtime-cache-client');
+
+    process.emit('SIGUSR2');
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.gigadrive.network/oauth2/token');
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://api.gigadrive.network/internal/runtime-cache/v1/entries/warmup/__resume__'
+    );
+  });
+
+  it('registers no signal listener outside a Gigadrive deployment', async () => {
+    const listenersBefore = process.listenerCount('SIGUSR2');
+    await import('./nextjs-runtime-cache-client');
+
+    expect(process.listenerCount('SIGUSR2')).toBe(listenersBefore);
+    process.emit('SIGUSR2');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

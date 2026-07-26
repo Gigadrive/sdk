@@ -184,3 +184,29 @@ export const getRuntimeCacheTagState = async (kind: string, tags: readonly strin
 export const resetRuntimeCacheClientForTests = (): void => {
   cachedToken = undefined;
 };
+
+/**
+ * Re-establishes the client's network state after a microVM resume.
+ *
+ * The guest runtime delivers SIGUSR2 when the instance is restored from a
+ * suspend snapshot. At that moment every kept-alive TCP connection from before
+ * the freeze is dead, and the cached OAuth token may have expired while the
+ * clock was stopped. Dropping the token and dialing one throwaway read
+ * re-opens TCP+TLS and refreshes the token concurrently with the guest's own
+ * wake-up work, so the first real cache read after a resume does not
+ * serialize behind reconnection.
+ *
+ * Registered only when a Gigadrive deployment marker is present in the
+ * environment, so local `next dev`/`next build` never gains a signal listener.
+ */
+const registerResumeRewarm = (): void => {
+  const onGigadrive =
+    process.env.GIGADRIVE_DEPLOYMENT_ID ?? process.env.NEBULA_DEPLOYMENT_ID ?? process.env.GIGADRIVE_CLIENT_ID;
+  if (!onGigadrive) return;
+  process.on('SIGUSR2', () => {
+    cachedToken = undefined;
+    if (!process.env.GIGADRIVE_CLIENT_ID || !process.env.GIGADRIVE_CLIENT_SECRET) return;
+    void readRuntimeCache('warmup', '__resume__');
+  });
+};
+registerResumeRewarm();
