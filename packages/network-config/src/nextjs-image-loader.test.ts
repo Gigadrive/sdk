@@ -56,6 +56,10 @@ describe('gigadriveNextImageLoader', () => {
     ['a remote source', 'https://images.example.com/icon.svg'],
     ['an uppercase extension', '/images/logo.SVG'],
     ['a query string', '/images/logo.svg?v=2'],
+    // A sprite fragment must not defeat the bypass, and a remote URL's pathname
+    // already excludes it — local sources have to be stripped to match.
+    ['a sprite fragment', '/images/sprite.svg#icon'],
+    ['a remote sprite fragment', 'https://images.example.com/sprite.svg#icon'],
     ['the dpl marker', '/_next/static/media/logo.1uniit1qnbxaq.svg?dpl=dpl_123'],
   ])('bypasses the optimizer for an SVG with %s', (_name, src) => {
     expect(gigadriveNextImageLoader({ src, width: 640, quality: 75 })).toBe(src);

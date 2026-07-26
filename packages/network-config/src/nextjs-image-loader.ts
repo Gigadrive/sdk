@@ -4,9 +4,9 @@ interface NextImageLoaderOptions {
   quality?: number;
 }
 
-/** The path portion of a source, with any query string removed. */
+/** The path portion of a source, with any query string or fragment removed. */
 const sourcePathname = (source: string): string =>
-  source.startsWith('http://') || source.startsWith('https://') ? new URL(source).pathname : source.split('?', 1)[0];
+  source.startsWith('http://') || source.startsWith('https://') ? new URL(source).pathname : source.split(/[?#]/, 1)[0];
 
 const filenameHint = (source: string): string => {
   const candidate = sourcePathname(source).split('/').filter(Boolean).at(-1) ?? 'image';
