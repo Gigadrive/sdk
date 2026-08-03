@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 4.3.3
+
+### Patch Changes
+
+- Keep the runtime cache client compatible with Next.js Edge route builds while retaining Node microVM resume rewarming. ([#416](https://github.com/Gigadrive/sdk/pull/416))
+
 ## 4.3.2
 
 ### Patch Changes
