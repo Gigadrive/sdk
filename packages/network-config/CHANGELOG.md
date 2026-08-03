@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 4.3.4
+
+### Patch Changes
+
+- Keep the Node-only resume signal listener out of Edge route bundles when a Gigadrive deployment ID is present during Next.js production builds. ([#420](https://github.com/Gigadrive/sdk/pull/420))
+
 ## 4.3.3
 
 ### Patch Changes
