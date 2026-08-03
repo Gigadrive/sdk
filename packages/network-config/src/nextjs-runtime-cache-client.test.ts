@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getRuntimeCacheTagState,
@@ -201,5 +202,11 @@ describe('resume rewarm', () => {
     expect(process.listenerCount('SIGUSR2')).toBe(listenersBefore);
     process.emit('SIGUSR2');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Edge-shared client free of a statically analyzable Node signal call', async () => {
+    const source = await readFile(new URL('./nextjs-runtime-cache-client.ts', import.meta.url), 'utf8');
+
+    expect(source).not.toMatch(/\bprocess\s*\.\s*on\s*\(/);
   });
 });
