@@ -200,6 +200,12 @@ export const resetRuntimeCacheClientForTests = (): void => {
  * environment, so local `next dev`/`next build` never gains a signal listener.
  */
 const registerResumeRewarm = (): void => {
+  // The deployment id is intentionally available during `next build`, but the
+  // shared cache client is also bundled into Edge routes at that point. Keep
+  // every Node-only signal reference behind the build-phase guard so Turbopack
+  // can eliminate this branch before its Edge runtime validation runs.
+  if (process.env.GIGADRIVE_NEXT_BUILD === '1') return;
+
   const onGigadrive =
     process.env.GIGADRIVE_DEPLOYMENT_ID ?? process.env.NEBULA_DEPLOYMENT_ID ?? process.env.GIGADRIVE_CLIENT_ID;
   if (!onGigadrive) return;

@@ -34,6 +34,7 @@ describe('nextjs runtime cache client', () => {
     delete process.env.GIGADRIVE_CLIENT_ID;
     delete process.env.GIGADRIVE_CLIENT_SECRET;
     delete process.env.GIGADRIVE_DEPLOYMENT_ID;
+    delete process.env.GIGADRIVE_NEXT_BUILD;
   });
 
   it('authenticates with workload credentials and reuses the cached token', async () => {
@@ -197,6 +198,18 @@ describe('resume rewarm', () => {
 
   it('registers no signal listener outside a Gigadrive deployment', async () => {
     const listenersBefore = process.listenerCount('SIGUSR2');
+    await import('./nextjs-runtime-cache-client');
+
+    expect(process.listenerCount('SIGUSR2')).toBe(listenersBefore);
+    process.emit('SIGUSR2');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('registers no signal listener while Next builds a Gigadrive deployment', async () => {
+    process.env.GIGADRIVE_DEPLOYMENT_ID = 'deployment-1';
+    process.env.GIGADRIVE_NEXT_BUILD = '1';
+    const listenersBefore = process.listenerCount('SIGUSR2');
+
     await import('./nextjs-runtime-cache-client');
 
     expect(process.listenerCount('SIGUSR2')).toBe(listenersBefore);
