@@ -174,10 +174,12 @@ describe('resume rewarm', () => {
 
   afterEach(() => {
     process.removeAllListeners('SIGUSR2');
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     delete process.env.GIGADRIVE_CLIENT_ID;
     delete process.env.GIGADRIVE_CLIENT_SECRET;
     delete process.env.GIGADRIVE_DEPLOYMENT_ID;
+    delete process.env.GIGADRIVE_NEXT_BUILD;
   });
 
   it('refreshes the token and dials a warmup read on SIGUSR2 when running on Gigadrive', async () => {
@@ -212,6 +214,27 @@ describe('resume rewarm', () => {
 
     await import('./nextjs-runtime-cache-client');
 
+    expect(process.listenerCount('SIGUSR2')).toBe(listenersBefore);
+    process.emit('SIGUSR2');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not inspect Node signal APIs when evaluated in Edge Runtime', async () => {
+    process.env.GIGADRIVE_DEPLOYMENT_ID = 'deployment-1';
+    vi.stubGlobal('EdgeRuntime', 'edge-runtime');
+    const originalReflectGet = Reflect.get;
+    const reflectGet = vi.spyOn(Reflect, 'get').mockImplementation((target, propertyKey, receiver) => {
+      if (target === globalThis && propertyKey === 'process')
+        throw new Error('Edge Runtime process proxy was inspected');
+      return receiver === undefined
+        ? originalReflectGet(target, propertyKey)
+        : originalReflectGet(target, propertyKey, receiver);
+    });
+    const listenersBefore = process.listenerCount('SIGUSR2');
+
+    await import('./nextjs-runtime-cache-client');
+
+    expect(reflectGet).not.toHaveBeenCalledWith(globalThis, 'process');
     expect(process.listenerCount('SIGUSR2')).toBe(listenersBefore);
     process.emit('SIGUSR2');
     expect(fetchMock).not.toHaveBeenCalled();
