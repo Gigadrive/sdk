@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 4.3.5
+
+### Patch Changes
+
+- Avoid inspecting Node.js signal APIs when the Next.js runtime cache client is evaluated inside Edge Runtime. ([#424](https://github.com/Gigadrive/sdk/pull/424))
+
 ## 4.3.4
 
 ### Patch Changes

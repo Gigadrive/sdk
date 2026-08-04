@@ -200,6 +200,11 @@ export const resetRuntimeCacheClientForTests = (): void => {
  * environment, so local `next dev`/`next build` never gains a signal listener.
  */
 const registerResumeRewarm = (): void => {
+  // Next exposes this marker before evaluating an Edge route bundle. Bail out
+  // before touching `process`: its Edge compatibility proxy throws when the
+  // Node-only signal API is read, including through Reflect.
+  if (Reflect.has(globalThis, 'EdgeRuntime')) return;
+
   // The deployment id is intentionally available during `next build`, but the
   // shared cache client is also bundled into Edge routes at that point. Keep
   // every Node-only signal reference behind the build-phase guard so Turbopack
@@ -210,11 +215,8 @@ const registerResumeRewarm = (): void => {
     process.env.GIGADRIVE_DEPLOYMENT_ID ?? process.env.NEBULA_DEPLOYMENT_ID ?? process.env.GIGADRIVE_CLIENT_ID;
   if (!onGigadrive) return;
 
-  // This module is shared by Node and Edge cache-handler bundles. Next.js 16.2
-  // rejects a statically analyzable `process.on` call while collecting Edge
-  // route data, even though the listener only runs inside the Node runtime.
-  // Resolve the optional Node signal API reflectively so Edge builds can load
-  // the shared client while Node deployments retain resume rewarming.
+  // Resolve the optional Node signal API reflectively so non-Node runtimes can
+  // load the shared client while Node deployments retain resume rewarming.
   const runtimeProcess = Reflect.get(globalThis, 'process') as NodeJS.Process | undefined;
   const addSignalListener = runtimeProcess && Reflect.get(runtimeProcess, 'on');
   if (typeof addSignalListener !== 'function') return;
