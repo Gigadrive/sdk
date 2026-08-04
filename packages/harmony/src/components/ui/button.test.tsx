@@ -7,6 +7,7 @@ describe('Button', () => {
     const html = renderToString(<Button variant="outline">Billing</Button>);
     expect(html).toContain('<button');
     expect(html).toContain('Billing');
+    expect(html).not.toContain('<span');
   });
 
   it('should render the child element when asChild is set', () => {
@@ -20,6 +21,7 @@ describe('Button', () => {
     expect(html).toContain('href="/x"');
     expect(html).not.toContain('<button');
     expect(html).toContain('Billing');
+    expect(html).not.toContain('<span');
   });
 
   it('should merge button classes onto the asChild element', () => {
