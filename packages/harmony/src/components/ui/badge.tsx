@@ -1,20 +1,18 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as React from 'react';
 
-import { cn, wrapTextNodes } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:shrink-0',
+  'inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:shrink-0',
   {
     variants: {
       variant: {
-        default:
-          'border-transparent bg-primary text-primary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-primary/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
-        secondary:
-          'border-transparent bg-secondary text-secondary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-secondary/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
-        destructive:
-          'border-transparent bg-destructive text-destructive-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_1px_2px_0_rgba(0,0,0,0.1)] hover:bg-destructive/80 bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)]',
-        outline: 'text-foreground',
+        default: 'border-transparent bg-primary text-primary-foreground hover:bg-primary/90',
+        secondary: 'border-foreground/[0.08] bg-secondary text-secondary-foreground hover:bg-secondary/70',
+        destructive: 'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        outline: 'border-border bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+        soft: 'border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 dark:bg-primary/15 dark:text-[color:color-mix(in_srgb,hsl(var(--primary)),white_45%)]',
       },
     },
     defaultVariants: {
@@ -28,7 +26,7 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement>, Varian
 const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(({ className, variant, children, ...props }, ref) => {
   return (
     <div className={cn(badgeVariants({ variant }), className)} ref={ref} {...props}>
-      {wrapTextNodes(children)}
+      {children}
     </div>
   );
 });

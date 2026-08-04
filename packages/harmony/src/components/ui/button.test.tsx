@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { Button } from './button';
 
 describe('Button', () => {
-  it('should render a button element with its text wrapped in a span', () => {
+  it('should render a button element with its text', () => {
     const html = renderToString(<Button variant="outline">Billing</Button>);
     expect(html).toContain('<button');
-    expect(html).toContain('<span class="mt-[var(--text-correction)]">Billing</span>');
+    expect(html).toContain('Billing');
+    expect(html).not.toContain('<span');
   });
 
   it('should render the child element when asChild is set', () => {
@@ -19,7 +20,8 @@ describe('Button', () => {
     expect(html).toContain('<a');
     expect(html).toContain('href="/x"');
     expect(html).not.toContain('<button');
-    expect(html).toContain('<span class="mt-[var(--text-correction)]">Billing</span>');
+    expect(html).toContain('Billing');
+    expect(html).not.toContain('<span');
   });
 
   it('should merge button classes onto the asChild element', () => {

@@ -1,7 +1,7 @@
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import * as React from 'react';
 
-import { cn, getInitials, wrapTextNodes } from '@/lib/utils';
+import { cn, getInitials } from '@/lib/utils';
 
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
@@ -48,7 +48,7 @@ const AvatarFallback = React.forwardRef<
       )}
       {...props}
     >
-      {wrapTextNodes(content)}
+      {content}
     </AvatarPrimitive.Fallback>
   );
 });
