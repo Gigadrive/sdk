@@ -1,5 +1,35 @@
 # @gigadrive/network-config
 
+## 4.3.4
+
+### Patch Changes
+
+- Keep the Node-only resume signal listener out of Edge route bundles when a Gigadrive deployment ID is present during Next.js production builds. ([#420](https://github.com/Gigadrive/sdk/pull/420))
+
+## 4.3.3
+
+### Patch Changes
+
+- Keep the runtime cache client compatible with Next.js Edge route builds while retaining Node microVM resume rewarming. ([#416](https://github.com/Gigadrive/sdk/pull/416))
+
+## 4.3.2
+
+### Patch Changes
+
+- Bypass the image optimizer for SVG sources in the injected Next.js loader. ([#405](https://github.com/Gigadrive/sdk/pull/405))
+
+  Next's own `get-img-props` marks `.svg` sources `unoptimized` before any loader runs, but that bypass only applies to the default loader — configuring a custom `loaderFile`, which this adapter injects, skips it. Every `<Image src="*.svg">` was therefore routed through `/_gigadrive/image/`, costing a format-negotiation redirect and an optimizer request for bytes no backend can rasterize anyway.
+
+  The loader now returns SVG sources unchanged, matching Next's behavior and the existing handling of oversized source URLs.
+
+  One behavioral note for apps that set `dangerouslyAllowSVG: true`: a remote SVG is now fetched by the browser directly from its origin instead of being proxied through the app host. That is what Next's `unoptimized` path does, and it keeps third-party SVG off the app's own origin.
+
+## 4.3.1
+
+### Patch Changes
+
+- The Next.js runtime cache client now re-establishes its connection and refreshes its workload token when the microVM resumes from a suspend snapshot (SIGUSR2), so the first request after a wake no longer serializes behind reconnection. ([`ddbd1f9`](https://github.com/Gigadrive/sdk/commit/ddbd1f9570856a962137e789dc59ab0eeb30f678))
+
 ## 4.3.0
 
 ### Minor Changes

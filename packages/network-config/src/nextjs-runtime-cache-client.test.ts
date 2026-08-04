@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getRuntimeCacheTagState,
@@ -33,6 +34,7 @@ describe('nextjs runtime cache client', () => {
     delete process.env.GIGADRIVE_CLIENT_ID;
     delete process.env.GIGADRIVE_CLIENT_SECRET;
     delete process.env.GIGADRIVE_DEPLOYMENT_ID;
+    delete process.env.GIGADRIVE_NEXT_BUILD;
   });
 
   it('authenticates with workload credentials and reuses the cached token', async () => {
@@ -201,5 +203,23 @@ describe('resume rewarm', () => {
     expect(process.listenerCount('SIGUSR2')).toBe(listenersBefore);
     process.emit('SIGUSR2');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('registers no signal listener while Next builds a Gigadrive deployment', async () => {
+    process.env.GIGADRIVE_DEPLOYMENT_ID = 'deployment-1';
+    process.env.GIGADRIVE_NEXT_BUILD = '1';
+    const listenersBefore = process.listenerCount('SIGUSR2');
+
+    await import('./nextjs-runtime-cache-client');
+
+    expect(process.listenerCount('SIGUSR2')).toBe(listenersBefore);
+    process.emit('SIGUSR2');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Edge-shared client free of a statically analyzable Node signal call', async () => {
+    const source = await readFile(new URL('./nextjs-runtime-cache-client.ts', import.meta.url), 'utf8');
+
+    expect(source).not.toMatch(/\bprocess\s*\.\s*on\s*\(/);
   });
 });

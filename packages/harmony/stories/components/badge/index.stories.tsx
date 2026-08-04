@@ -16,7 +16,7 @@ const meta = {
 A versatile badge component for displaying short status descriptors, labels, or counts.
 
 ## Features
-- Multiple visual variants (default, secondary, destructive, outline)
+- Multiple visual variants (default, secondary, destructive, outline, soft)
 - Customizable through className
 - Support for icons and text
 - Hover states for interactive badges
@@ -30,6 +30,7 @@ A versatile badge component for displaying short status descriptors, labels, or 
 - Use secondary variant for supplementary information
 - Use destructive variant for error states or warnings
 - Use outline variant for subtle indicators
+- Use soft variant for tonal accents such as plan or tier labels
 - Keep text content short and concise
 - Consider using icons to enhance meaning
 
@@ -62,7 +63,7 @@ A versatile badge component for displaying short status descriptors, labels, or 
     variant: {
       description: 'The visual style variant of the badge',
       control: 'select',
-      options: ['default', 'secondary', 'destructive', 'outline'],
+      options: ['default', 'secondary', 'destructive', 'outline', 'soft'],
       table: {
         defaultValue: { summary: 'default' },
       },
@@ -136,6 +137,20 @@ export const Outline: Story = {
   },
 };
 
+export const Soft: Story = {
+  args: {
+    variant: 'soft',
+    children: 'Pro',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Soft variant — a tonal pill for plan, tier or category labels.',
+      },
+    },
+  },
+};
+
 export const WithCustomClass: Story = {
   args: {
     children: 'Custom',
@@ -157,6 +172,7 @@ export const AllVariants: Story = {
       <Badge variant="secondary">Secondary</Badge>
       <Badge variant="destructive">Destructive</Badge>
       <Badge variant="outline">Outline</Badge>
+      <Badge variant="soft">Soft</Badge>
     </div>
   ),
   parameters: {
@@ -189,6 +205,50 @@ export const WithIcons: Story = {
     docs: {
       description: {
         story: 'Examples of badges with icons to enhance visual meaning.',
+      },
+    },
+  },
+};
+
+const ShowcasePanel = ({ theme }: { theme: 'light' | 'dark' }) => (
+  <div className={`${theme} w-[420px] rounded-xl border border-border bg-background p-6 text-foreground`}>
+    <p className="mb-4 text-xs uppercase tracking-wide text-muted-foreground">{theme}</p>
+    <div className="mb-6 flex flex-wrap gap-2">
+      <Badge>Default</Badge>
+      <Badge variant="secondary">Secondary</Badge>
+      <Badge variant="destructive">Destructive</Badge>
+      <Badge variant="outline">Outline</Badge>
+      <Badge variant="soft">Soft</Badge>
+    </div>
+    <div className="mb-6 flex items-center gap-2 border-t border-border pt-5">
+      <div className="size-7 rounded-full bg-muted" />
+      <span className="text-lg font-semibold">Northwind Labs</span>
+      <Badge variant="soft">Pro</Badge>
+    </div>
+    <div className="divide-y divide-border border-t border-border">
+      {['main', 'feat/badges', 'fix/theme'].map((branch) => (
+        <div key={branch} className="flex items-center justify-between py-2.5 text-sm">
+          <span className="text-muted-foreground">{branch}</span>
+          <Badge variant="outline" className="font-normal">
+            Preview
+          </Badge>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+export const Showcase: Story = {
+  render: () => (
+    <div className="flex gap-6">
+      <ShowcasePanel theme="light" />
+      <ShowcasePanel theme="dark" />
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Every variant rendered in both themes, plus the header and table contexts badges appear in.',
       },
     },
   },

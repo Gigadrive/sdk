@@ -47,4 +47,27 @@ describe('gigadriveNextImageLoader', () => {
       '/_gigadrive/image/https%3A%2F%2Fimages.example.com%2Fa.png%3Fdpl%3Dx/a.png?width=64'
     );
   });
+
+  // No optimizer backend rasterizes SVG, so the optimizer can only ever hand the
+  // bytes back unchanged. Next's own get-img-props marks `.svg` unoptimized, but
+  // that bypass is skipped once this adapter injects a custom loaderFile.
+  it.each([
+    ['a local source', '/images/logo.svg'],
+    ['a remote source', 'https://images.example.com/icon.svg'],
+    ['an uppercase extension', '/images/logo.SVG'],
+    ['a query string', '/images/logo.svg?v=2'],
+    // A sprite fragment must not defeat the bypass, and a remote URL's pathname
+    // already excludes it — local sources have to be stripped to match.
+    ['a sprite fragment', '/images/sprite.svg#icon'],
+    ['a remote sprite fragment', 'https://images.example.com/sprite.svg#icon'],
+    ['the dpl marker', '/_next/static/media/logo.1uniit1qnbxaq.svg?dpl=dpl_123'],
+  ])('bypasses the optimizer for an SVG with %s', (_name, src) => {
+    expect(gigadriveNextImageLoader({ src, width: 640, quality: 75 })).toBe(src);
+  });
+
+  it('still optimizes a source where .svg is not the final extension', () => {
+    expect(gigadriveNextImageLoader({ src: '/images/hero.svg.png', width: 640 })).toBe(
+      '/_gigadrive/image/%2Fimages%2Fhero.svg.png/hero.svg.png?width=640'
+    );
+  });
 });

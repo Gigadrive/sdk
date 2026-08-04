@@ -1,3 +1,39 @@
+/* METRIC OVERRIDES
+ *
+ * Two problems, both fixed by the same three descriptors on every face.
+ *
+ * 1. Cross-platform drift. Resist Sans carries disagreeing vertical metrics:
+ *
+ *      hhea / OS-2 typo   ascender 756  descender -244  lineGap 491..571 (per weight)
+ *      OS-2 usWin         usWinAscent 1190  usWinDescent 301
+ *
+ *    and USE_TYPO_METRICS (OS/2 fsSelection bit 7) is not set, so macOS/iOS build the
+ *    line box from hhea while Windows builds it from usWin. Same box height, but the
+ *    baseline sat ~0.19em lower on Windows — 2px at 12px, 3px at 14px, 5px at 24px. A
+ *    fixed CSS nudge could never fix that (the error scales with the em and flips sign
+ *    per platform), which is why the old --text-correction variable was removed.
+ *
+ * 2. Optical centring. `align-items: center` centres the line box, whose middle sits
+ *    (ascent - descent) / 2 above the baseline. Text reads as centred when the
+ *    cap-height band is, and that sits capHeight / 2 = 0.3475em above the baseline.
+ *    Fonts that are built well make these coincide — Arial is within 0.005em. Resist
+ *    Sans ships an unusually low ascent (0.756) with its breathing room in lineGap
+ *    instead, leaving a 0.09em gap: text sat ~1px high at 12px in every centred
+ *    container.
+ *
+ * The values below fix both: ascent - descent = 0.96 - 0.265 = 0.695 = capHeight, so
+ * the line-box centre and the cap-height band coincide and centred text lands right at
+ * any size or line-height, with no per-component padding. Descent stays above the real
+ * descender depth (0.244) so nothing clips, and the per-weight line gap is dropped
+ * because it otherwise makes line boxes differ between Regular, Medium and Bold.
+ *
+ * Note this moves text on macOS/iOS too, not just Windows — the earlier 75.6%/24.4%
+ * values preserved macOS exactly but kept the 1px optical offset everywhere.
+ *
+ * Only the Text family is overridden here; the Display family carries identical
+ * metrics and is handled where those faces are declared.
+ */
+
 :root {
   --font-sans-text: 'Resist Sans Text', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   --font-sans-display: 'Resist Sans Display', var(--font-sans-text);
@@ -122,6 +158,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.ttf') format('truetype');
   font-weight: 500;
   font-style: normal;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -137,6 +177,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.ttf') format('truetype');
   font-weight: 300;
   font-style: italic;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -152,6 +196,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.ttf') format('truetype');
   font-weight: 500;
   font-style: italic;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -196,6 +244,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.ttf') format('truetype');
   font-weight: bold;
   font-style: normal;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -225,6 +277,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.ttf') format('truetype');
   font-weight: 300;
   font-style: normal;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -240,6 +296,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.ttf') format('truetype');
   font-weight: bold;
   font-style: italic;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -270,6 +330,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.ttf') format('truetype');
   font-weight: normal;
   font-style: italic;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -284,6 +348,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.ttf') format('truetype');
   font-weight: 100;
   font-style: normal;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -299,6 +367,10 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.ttf') format('truetype');
   font-weight: 100;
   font-style: italic;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -314,4 +386,8 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }

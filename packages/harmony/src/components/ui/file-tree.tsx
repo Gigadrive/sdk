@@ -4,7 +4,7 @@ import React, { createContext, forwardRef, useCallback, useContext, useEffect, u
 
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn, wrapTextNodes } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 type TreeViewElement = {
   id: string;
@@ -250,7 +250,7 @@ const File = forwardRef<
         onClick={() => selectItem(value)}
       >
         {fileIcon ?? <FileIcon className="size-4" />}
-        {wrapTextNodes(children)}
+        {children}
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Item>
   );

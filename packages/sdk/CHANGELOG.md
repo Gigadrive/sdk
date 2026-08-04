@@ -1,5 +1,33 @@
 # @gigadrive/sdk
 
+## 0.7.25
+
+### Patch Changes
+
+- Updated dependencies [[`ae7a4ab`](https://github.com/Gigadrive/sdk/commit/ae7a4abf09180d7e624d0931b24c3080e1e89a44)]:
+  - @gigadrive/network-config@4.3.4
+
+## 0.7.24
+
+### Patch Changes
+
+- Updated dependencies [[`50d11e6`](https://github.com/Gigadrive/sdk/commit/50d11e6d3912634aab1cef9c5e5923bfe6013de0)]:
+  - @gigadrive/network-config@4.3.3
+
+## 0.7.23
+
+### Patch Changes
+
+- Updated dependencies [[`e3c4946`](https://github.com/Gigadrive/sdk/commit/e3c494682ecedc8a7bbe0104648ced5c72e90b7e)]:
+  - @gigadrive/network-config@4.3.2
+
+## 0.7.22
+
+### Patch Changes
+
+- Updated dependencies [[`ddbd1f9`](https://github.com/Gigadrive/sdk/commit/ddbd1f9570856a962137e789dc59ab0eeb30f678)]:
+  - @gigadrive/network-config@4.3.1
+
 ## 0.7.21
 
 ### Patch Changes
