@@ -134,6 +134,8 @@ const Theme = ({
 
     // Intentionally use deprecated listener methods to support iOS & old browsers
     media.addListener(handleMediaQuery);
+    // Prime the resolved theme from the current media state on subscribe.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     handleMediaQuery(media);
 
     return () => media.removeListener(handleMediaQuery);

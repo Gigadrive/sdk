@@ -1006,7 +1006,7 @@ function InsetLayoutDemo() {
                       <p className="text-sm font-medium">Order #{4200 + i}</p>
                       <p className="text-xs text-muted-foreground">2 hours ago</p>
                     </div>
-                    <p className="text-sm font-medium">${(Math.random() * 500 + 50).toFixed(2)}</p>
+                    <p className="text-sm font-medium">${(137.55 + i * 62.4).toFixed(2)}</p>
                   </div>
                 ))}
               </div>
@@ -1017,7 +1017,7 @@ function InsetLayoutDemo() {
                 {['Widget Pro', 'Gadget X', 'Tool Suite', 'Plugin Pack', 'API Access', 'Enterprise'].map((name, i) => (
                   <div key={i} className="flex items-center justify-between border-b pb-3 last:border-0">
                     <p className="text-sm font-medium">{name}</p>
-                    <p className="text-xs text-muted-foreground">{Math.floor(Math.random() * 500 + 100)} sales</p>
+                    <p className="text-xs text-muted-foreground">{520 - i * 57} sales</p>
                   </div>
                 ))}
               </div>
