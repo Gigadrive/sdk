@@ -33,6 +33,19 @@ describe('Elysia framework detection', () => {
     expect(result.config.routes).toEqual([expect.objectContaining({ path: '/*', destination: 'src/index.ts' })]);
   });
 
+  it('should resolve the entrypoint from a bun run start script', async () => {
+    const result = await detectProject({
+      '/project/package.json': JSON.stringify({
+        dependencies,
+        scripts: { start: 'bun run src/main.ts' },
+      }),
+      '/project/src/main.ts': '',
+    });
+
+    expect(result.config.entrypoints[0].path).toBe('src/main.ts');
+    expect(result.config.routes[0].destination).toBe('src/main.ts');
+  });
+
   it('should prefer Elysia over Fastify and Express', async () => {
     const result = await detectProject({
       '/project/package.json': packageJson({ ...dependencies, fastify: '^5.0.0', express: '^4.0.0' }),

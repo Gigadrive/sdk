@@ -31,6 +31,26 @@ describe('Fastify framework detection', () => {
     expect(result.config.routes).toEqual([expect.objectContaining({ path: '/*', destination: 'src/index.ts' })]);
   });
 
+  it('should resolve the entrypoint from the package.json main field', async () => {
+    const result = await detectProject({
+      '/project/package.json': JSON.stringify({ dependencies, main: 'server.js' }),
+      '/project/server.js': '',
+    });
+
+    expect(result.config.entrypoints[0].path).toBe('server.js');
+    expect(result.config.routes[0].destination).toBe('server.js');
+  });
+
+  it('should resolve an existing common candidate when the default entrypoint is missing', async () => {
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/src/app.ts': '',
+    });
+
+    expect(result.config.entrypoints[0].path).toBe('src/app.ts');
+    expect(result.config.routes[0].destination).toBe('src/app.ts');
+  });
+
   it('should prefer Fastify over Express', async () => {
     const result = await detectProject({
       '/project/package.json': packageJson({ ...dependencies, express: '^4.0.0' }),

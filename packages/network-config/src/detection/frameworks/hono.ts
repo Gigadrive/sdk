@@ -1,4 +1,5 @@
 import type { FrameworkDefinition } from '../types';
+import { resolveNodeServerEntrypoint } from './resolve-node-entrypoint';
 
 export const hono: FrameworkDefinition = {
   slug: 'hono',
@@ -16,4 +17,5 @@ export const hono: FrameworkDefinition = {
     routes: [{ source: '/*', destination: 'src/index.ts' }],
     environmentVariables: { NODE_ENV: 'production' },
   }),
+  refineDefaultConfig: resolveNodeServerEntrypoint,
 };

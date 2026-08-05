@@ -1,4 +1,5 @@
 import type { FrameworkDefinition } from '../types';
+import { resolveNodeServerEntrypoint } from './resolve-node-entrypoint';
 
 export const express: FrameworkDefinition = {
   slug: 'express',
@@ -16,4 +17,5 @@ export const express: FrameworkDefinition = {
     routes: [{ source: '/*', destination: 'index.js' }],
     environmentVariables: { NODE_ENV: 'production' },
   }),
+  refineDefaultConfig: resolveNodeServerEntrypoint,
 };
