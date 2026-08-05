@@ -1,4 +1,5 @@
 import type { FrameworkDefinition } from '../types';
+import { resolveNodeServerEntrypoint } from './resolve-node-entrypoint';
 
 export const fastify: FrameworkDefinition = {
   slug: 'fastify',
@@ -16,4 +17,5 @@ export const fastify: FrameworkDefinition = {
     routes: [{ source: '/*', destination: 'src/index.ts' }],
     environmentVariables: { NODE_ENV: 'production' },
   }),
+  refineDefaultConfig: resolveNodeServerEntrypoint,
 };

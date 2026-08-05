@@ -33,6 +33,16 @@ describe('Hono framework detection', () => {
     expect(result.config.routes).toEqual([expect.objectContaining({ path: '/*', destination: 'src/index.ts' })]);
   });
 
+  it('should resolve the entrypoint from the package.json main field', async () => {
+    const result = await detectProject({
+      '/project/package.json': JSON.stringify({ dependencies, main: 'src/server.ts' }),
+      '/project/src/server.ts': '',
+    });
+
+    expect(result.config.entrypoints[0].path).toBe('src/server.ts');
+    expect(result.config.routes[0].destination).toBe('src/server.ts');
+  });
+
   it('should prefer Hono over Fastify and Express', async () => {
     const result = await detectProject({
       '/project/package.json': packageJson({ ...dependencies, fastify: '^5.0.0', express: '^4.0.0' }),

@@ -1,4 +1,5 @@
 import type { FrameworkDefinition } from '../types';
+import { resolveNodeServerEntrypoint } from './resolve-node-entrypoint';
 
 export const elysia: FrameworkDefinition = {
   slug: 'elysia',
@@ -16,4 +17,5 @@ export const elysia: FrameworkDefinition = {
     routes: [{ source: '/*', destination: 'src/index.ts' }],
     environmentVariables: { NODE_ENV: 'production' },
   }),
+  refineDefaultConfig: resolveNodeServerEntrypoint,
 };
