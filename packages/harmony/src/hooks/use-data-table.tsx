@@ -113,9 +113,10 @@ export function useDataTable<TData, TFilters = Record<string, unknown>>({
     }
   }, [fetchData, pagination, sorting, filters]);
 
-  // Fetch data when dependencies change
+  // Fetch data when dependencies change; refetch flips the loading state synchronously by design.
   React.useEffect(() => {
     if (fetchOnMount) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void refetch();
     }
   }, [refetch, fetchOnMount]);

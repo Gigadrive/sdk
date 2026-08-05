@@ -45,20 +45,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
 }) => {
   // Optionally integrate with Sidebar state
   const sidebar = useSidebarOptional();
-  const [shouldShow, setShouldShow] = React.useState(!showWhenSidebarClosed);
-
-  React.useEffect(() => {
-    if (!sidebar) {
-      setShouldShow(!showWhenSidebarClosed);
-      return;
-    }
-
-    setShouldShow(
-      !showWhenSidebarClosed ||
-        (!sidebar.isMobile && sidebar.state === 'collapsed') ||
-        (sidebar.isMobile && !sidebar.openMobile)
-    );
-  }, [showWhenSidebarClosed, sidebar, sidebar?.state, sidebar?.isMobile, sidebar?.openMobile]);
+  const shouldShow =
+    !showWhenSidebarClosed ||
+    (sidebar != null &&
+      ((!sidebar.isMobile && sidebar.state === 'collapsed') || (sidebar.isMobile && !sidebar.openMobile)));
 
   if (!shouldShow) return null;
 

@@ -609,6 +609,8 @@ const SidebarContent = React.forwardRef<HTMLDivElement, SidebarContentProps>(
 
     React.useEffect(() => {
       if (!isDeclarative) return;
+      // Imperative overlays must not survive a route change; the extra commit is intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setImperativeStack([]);
     }, [isDeclarative, routeKey]);
 
@@ -631,7 +633,9 @@ const SidebarContent = React.forwardRef<HTMLDivElement, SidebarContentProps>(
     );
 
     const imperativeStackRef = React.useRef(imperativeStack);
-    imperativeStackRef.current = imperativeStack;
+    React.useEffect(() => {
+      imperativeStackRef.current = imperativeStack;
+    }, [imperativeStack]);
 
     const popLayer = React.useCallback(() => {
       setDirection(-1);
@@ -1059,6 +1063,7 @@ SidebarItem.displayName = 'SidebarItem';
 
 const SidebarSkeleton = React.forwardRef<HTMLDivElement, React.ComponentProps<'div'> & { showIcon?: boolean }>(
   ({ className, showIcon = false, ...props }, ref) => {
+    // eslint-disable-next-line react-hooks/purity -- skeleton width is intentionally random, stable per mount
     const width = React.useMemo(() => `${Math.floor(Math.random() * 40) + 50}%`, []);
 
     return (

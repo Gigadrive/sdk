@@ -6,6 +6,8 @@ async function CachedValue() {
   'use cache';
   cacheLife({ stale: 30, revalidate: 60, expire: 300 });
   cacheTag('canary-cache-component');
+  // The token must be unique per cached render so the canary can observe cache hits.
+  // eslint-disable-next-line react-hooks/purity
   return <output id="cache-component-token">{`${Date.now()}-${crypto.randomUUID()}`}</output>;
 }
 
