@@ -2,8 +2,8 @@
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
 import { Menu } from 'lucide-react';
+import { motion } from 'motion/react';
 import { forwardRef, useEffect, useState } from 'react';
 import { Button } from './button';
 import { Drawer, DrawerContent, DrawerTrigger } from './drawer';
