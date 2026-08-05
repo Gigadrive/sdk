@@ -1,5 +1,6 @@
 import type { NextAdapter } from 'next';
 import { access, mkdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NormalizedImagePolicy } from './image-policy';
@@ -153,6 +154,67 @@ const aggregateServerDescriptor = (outputs: NextRouteOutput[]): GigadriveNextSer
   };
 };
 
+type CollectBuildTracesModule = {
+  collectBuildTraces: (options: {
+    dir: string;
+    config: BuildCompleteContext['config'];
+    distDir: string;
+    edgeRuntimeRoutes: Record<string, never>;
+    staticPages: string[];
+    outputFileTracingRoot: string;
+  }) => Promise<void>;
+};
+
+/**
+ * Next 16.3 stopped emitting the aggregated `next-server.js.nft.json` /
+ * `next-minimal-server.js.nft.json` traces from Turbopack builds whenever an
+ * adapter is configured, yet `next build` still runs the `output: 'standalone'`
+ * writer after `onBuildComplete` — and that writer reads exactly this file, so
+ * the build dies with ENOENT. Next 16.2 and all webpack builds still emit the
+ * file, making this a no-op there. When the file is missing, regenerate both
+ * aggregate traces with Next's own `collectBuildTraces` (the module the webpack
+ * pipeline runs); without `buildTraceContext` it only writes the two aggregate
+ * trace files and leaves Turbopack's per-entry traces untouched.
+ */
+async function ensureStandaloneServerTraces(
+  projectDir: string,
+  repoRoot: string,
+  distDir: string,
+  config: BuildCompleteContext['config']
+): Promise<void> {
+  const aggregateTracePath = path.join(distDir, 'next-server.js.nft.json');
+  try {
+    await access(aggregateTracePath);
+    return;
+  } catch {
+    // Missing — Next will crash in its standalone writer unless we regenerate it.
+  }
+  let collectBuildTracesModule: CollectBuildTracesModule;
+  try {
+    const projectRequire = createRequire(path.join(projectDir, 'package.json'));
+    collectBuildTracesModule = projectRequire('next/dist/build/collect-build-traces') as CollectBuildTracesModule;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Next.js did not emit ${aggregateTracePath} and the Gigadrive adapter could not load ` +
+        `next/dist/build/collect-build-traces from the project to regenerate it: ${message}`
+    );
+  }
+  try {
+    await collectBuildTracesModule.collectBuildTraces({
+      dir: projectDir,
+      config,
+      distDir,
+      edgeRuntimeRoutes: {},
+      staticPages: [],
+      outputFileTracingRoot: (config as { outputFileTracingRoot?: string }).outputFileTracingRoot ?? repoRoot,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Regenerating the Next.js standalone server traces (${aggregateTracePath}) failed: ${message}`);
+  }
+}
+
 const normalizeImages = (config: BuildCompleteContext['config']): NormalizedImagePolicy | undefined => {
   if (config.images.unoptimized) return undefined;
   return {
@@ -284,6 +346,10 @@ const gigadriveNextAdapter: NextAdapter = {
       };
       await writeManifest(manifest);
       return;
+    }
+
+    if (config.output === 'standalone') {
+      await ensureStandaloneServerTraces(projectDir, repoRoot, distDir, config);
     }
 
     const prerenders = await Promise.all(

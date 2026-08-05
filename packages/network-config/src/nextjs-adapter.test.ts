@@ -332,4 +332,107 @@ describe('Gigadrive Next.js adapter', () => {
       })
     ).rejects.toThrow('outside the repository root');
   });
+
+  const stubCollectBuildTraces = async (projectDir: string) => {
+    const buildDir = path.join(projectDir, 'node_modules', 'next', 'dist', 'build');
+    await mkdir(buildDir, { recursive: true });
+    await writeFile(
+      path.join(projectDir, 'node_modules', 'next', 'package.json'),
+      JSON.stringify({ name: 'next', version: '16.3.0', main: 'index.js' })
+    );
+    await writeFile(
+      path.join(buildDir, 'collect-build-traces.js'),
+      `const { writeFileSync } = require('node:fs');
+const { join } = require('node:path');
+exports.collectBuildTraces = async (options) => {
+  writeFileSync(join(options.distDir, 'collect-options.json'), JSON.stringify(options));
+  writeFileSync(join(options.distDir, 'next-server.js.nft.json'), JSON.stringify({ version: 1, files: [] }));
+  writeFileSync(join(options.distDir, 'next-minimal-server.js.nft.json'), JSON.stringify({ version: 1, files: [] }));
+};
+`
+    );
+  };
+
+  it('regenerates the aggregate server trace when a Next 16.3 Turbopack build omits it', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-trace-regen-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'apps', 'web');
+    const distDir = path.join(projectDir, '.next');
+    await mkdir(distDir, { recursive: true });
+    await stubCollectBuildTraces(projectDir);
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      config: nextConfig({ output: 'standalone' }),
+      nextVersion: '16.3.0',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
+    });
+
+    const options = JSON.parse(await readFile(path.join(distDir, 'collect-options.json'), 'utf8'));
+    expect(options).toMatchObject({
+      dir: projectDir,
+      distDir,
+      edgeRuntimeRoutes: {},
+      staticPages: [],
+      // Falls back to repoRoot when the config does not carry outputFileTracingRoot.
+      outputFileTracingRoot: repoRoot,
+    });
+    expect(await readFile(path.join(distDir, 'next-server.js.nft.json'), 'utf8')).toContain('"version":1');
+    expect(await readManifest(projectDir)).toMatchObject({ version: 2, mode: 'standalone-v2' });
+  });
+
+  it('does not touch build traces when Next already emitted the aggregate file', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-trace-present-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'apps', 'web');
+    const distDir = path.join(projectDir, '.next');
+    await mkdir(distDir, { recursive: true });
+    // No stub Next module exists: regeneration would throw if it were attempted.
+    await writeFile(path.join(distDir, 'next-server.js.nft.json'), JSON.stringify({ version: 1, files: [] }));
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      config: nextConfig({ output: 'standalone', outputFileTracingRoot: repoRoot }),
+      nextVersion: '16.2.12',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
+    });
+
+    expect(await readManifest(projectDir)).toMatchObject({ version: 2, mode: 'standalone-v2' });
+  });
+
+  it('fails loudly when the aggregate trace is missing and Next cannot regenerate it', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-trace-missing-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'apps', 'web');
+    const distDir = path.join(projectDir, '.next');
+    const buildDir = path.join(projectDir, 'node_modules', 'next', 'dist', 'build');
+    await mkdir(distDir, { recursive: true });
+    await mkdir(buildDir, { recursive: true });
+    await writeFile(
+      path.join(projectDir, 'node_modules', 'next', 'package.json'),
+      JSON.stringify({ name: 'next', version: '16.3.0', main: 'index.js' })
+    );
+    await writeFile(path.join(buildDir, 'collect-build-traces.js'), `throw new Error('module removed');`);
+
+    await expect(
+      onBuildComplete({
+        projectDir,
+        repoRoot,
+        distDir,
+        config: nextConfig({ output: 'standalone' }),
+        nextVersion: '16.3.0',
+        buildId: 'build-id',
+        routing: emptyRouting,
+        outputs: emptyOutputs,
+      })
+    ).rejects.toThrow('could not load next/dist/build/collect-build-traces');
+  });
 });
