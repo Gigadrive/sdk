@@ -12,6 +12,8 @@ declare module 'vite' {
 
 export default defineConfig({
   test: {
+    // Replaces vitest.workspace.ts, which Vitest 4 no longer reads.
+    projects: ['packages/*'],
     passWithNoTests: true,
     coverage: {
       enabled: true,
