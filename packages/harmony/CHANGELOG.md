@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 4.3.1
+
+### Patch Changes
+
+- Fix Dialog and AlertDialog clipping tall content by constraining max height to the viewport and enabling vertical scrolling. Also suppress the native focus outline on dialog content (Radix focuses it on open), which appeared as a harsh black border. ([#444](https://github.com/Gigadrive/sdk/pull/444))
+
 ## 4.3.0
 
 ### Minor Changes
