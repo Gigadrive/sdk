@@ -90,6 +90,59 @@ describe('V4ConfigParser', () => {
     expect(result.commands).toEqual(['bun install']);
   });
 
+  it('normalizes managed services and deterministic File Storage bucket declarations', async () => {
+    const config: ConfigV4 = {
+      version: 4,
+      services: {
+        redis: null,
+        postgres: { postgresVersion: '17', region: 'eu-central-1' },
+        storage: {
+          buckets: {
+            uploads: null,
+            assets: { visibility: 'public' },
+            backups: {},
+          },
+        },
+      },
+    };
+
+    const result = await Effect.runPromise(
+      V4ConfigParser.parse(config, path.join(__dirname, '../v4')).pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(NodeContext.layer)
+      )
+    );
+
+    expect(result.services).toEqual([
+      { type: 'redis' },
+      { type: 'postgres', postgresVersion: '17', region: 'eu-central-1' },
+      {
+        type: 'storage',
+        buckets: [
+          { name: 'assets', visibility: 'public' },
+          { name: 'backups', visibility: 'private' },
+          { name: 'uploads', visibility: 'private' },
+        ],
+      },
+    ]);
+  });
+
+  it('preserves an explicitly empty File Storage desired state', async () => {
+    const config: ConfigV4 = {
+      version: 4,
+      services: { storage: { buckets: {} } },
+    };
+
+    const result = await Effect.runPromise(
+      V4ConfigParser.parse(config, path.join(__dirname, '../v4')).pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(NodeContext.layer)
+      )
+    );
+
+    expect(result.services).toEqual([{ type: 'storage', buckets: [] }]);
+  });
+
   it('getFunctionSettings', () => {
     const config = loadExample();
 

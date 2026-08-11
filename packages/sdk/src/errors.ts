@@ -49,6 +49,21 @@ export class AuthenticationError extends GigadriveError {
 }
 
 /**
+ * Thrown when an SDK operation requires local configuration that could not be
+ * resolved before making an API request.
+ *
+ * Storage operations use this error when neither an explicit application ID,
+ * `GigadriveClientConfig.applicationId`, nor the workload-provided
+ * `GIGADRIVE_APPLICATION_ID` environment variable is available.
+ */
+export class ConfigurationError extends GigadriveError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigurationError';
+  }
+}
+
+/**
  * Thrown when the Gigadrive API returns a non-2xx HTTP response.
  *
  * Contains the HTTP {@link status} code and an optional machine-readable
@@ -88,7 +103,7 @@ export class ApiError extends GigadriveError {
  * @example
  * ```ts
  * try {
- *   await client.applications.storage.upload({ applicationId, bucketId, key, data });
+ *   await client.storage.upload({ bucket: 'assets', key, data });
  * } catch (err) {
  *   if (err instanceof UploadError) {
  *     console.error('Upload failed:', err.message, err.cause);

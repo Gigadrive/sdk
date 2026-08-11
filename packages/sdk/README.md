@@ -64,6 +64,11 @@ variables (constructor values take precedence):
 | Refresh token                | `clientId` + `refreshToken`       | `GIGADRIVE_CLIENT_ID` + `GIGADRIVE_REFRESH_TOKEN` |
 | Authorization code + PKCE    | `clientId` + `onAuthorizationUrl` | —                                                 |
 
+Context-bound storage calls also resolve an application UUID from
+`applicationId` in the constructor or `GIGADRIVE_APPLICATION_ID`. Gigadrive
+injects the latter with workload credentials, so deployed server code normally
+needs no SDK configuration.
+
 ```ts
 // Custom fetch / base URL (e.g. for tests or non-standard runtimes)
 const client = new GigadriveClient({ bearerToken: 'eyJ...', fetch: myFetch });
@@ -92,26 +97,75 @@ The URL is routing authority, not user authentication. Applications still own
 authorization and room membership. State remains in one MicroVM's memory, URLs
 expire, and deploys do not migrate that in-memory state to a new version.
 
-## File uploads
+## File storage
+
+Bucket `name` is the canonical REST and IaC identifier. Names are immutable,
+lowercase, URL-safe, and unique within an environment. The returned bucket
+`slug` remains the global CDN/S3 identifier and should not be passed to these
+REST helpers.
+
+Declare buckets for each deployment environment under `services.storage` in
+`gigadrive.yaml`. Mapping keys are the canonical bucket names; `null` or an
+empty object uses private visibility. The deployment determines the environment
+and generates each global CDN/S3 slug.
+
+```yaml
+version: 4
+services:
+  storage:
+    buckets:
+      assets:
+        visibility: public
+      uploads: null
+```
+
+Inside a deployed workload, application and environment context are inferred:
+
+```ts
+import { GigadriveClient } from '@gigadrive/sdk';
+
+const client = new GigadriveClient();
+const { items } = await client.storage.objects.list('assets');
+```
+
+Management callers can configure the application and select an environment by
+slug or UUID:
+
+```ts
+const client = new GigadriveClient({ applicationId, clientId, clientSecret });
+const bucket = await client.storage.buckets.create({
+  name: 'assets',
+  environment: 'production',
+  visibility: 'public',
+});
+
+const { items } = await client.storage.objects.list(bucket.name, {
+  environment: 'production',
+});
+```
+
+Existing `client.applications.storage` calls, explicit `applicationId`
+arguments, and bucket UUIDs remain available as deprecated compatibility
+paths.
+
+### File uploads
 
 The high-level `upload()` computes the required SHA-256 checksum, infers the
 content type from the key, creates the upload session, and uploads the bytes
-resumably — in one call.
+with resumable transfer — in one call.
 
 ```ts
 // Node.js — upload straight from a file path (size, checksum, type inferred)
-const { url } = await client.applications.storage.upload({
-  applicationId,
-  bucketId,
+const { url } = await client.storage.upload({
+  bucket: 'reports',
   key: 'reports/q1.pdf',
   path: './q1-report.pdf',
 });
 
 // Browser — upload a File with progress and cancellation
 const controller = new AbortController();
-const { url } = await client.applications.storage.upload({
-  applicationId,
-  bucketId,
+const { url } = await client.storage.upload({
+  bucket: 'uploads',
   key: `uploads/${file.name}`,
   data: file,
   onProgress: (sent, total) => console.log(`${Math.round((sent / total) * 100)}%`),
@@ -119,9 +173,8 @@ const { url } = await client.applications.storage.upload({
 });
 
 // Wait until the object is finalized server-side, then read it back
-const { object } = await client.applications.storage.upload({
-  applicationId,
-  bucketId,
+const { object } = await client.storage.upload({
+  bucket: 'avatars',
   key: 'avatars/user-1.png',
   data: bytes,
   waitForCompletion: true,
@@ -133,29 +186,37 @@ Accepted inputs: browser `File`/`Blob`, Node `Buffer`/`Uint8Array`/`ArrayBuffer`
 a Node filesystem `path`, or a Node readable `stream` (with `contentLength` and
 `checksumSha256`).
 
-### Many files at once
+#### Many files at once
 
 ```ts
-const results = await client.applications.storage.uploadBatch(
-  files.map((f) => ({ applicationId, bucketId, key: `uploads/${f.name}`, data: f })),
+const results = await client.storage.uploadBatch(
+  files.map((f) => ({ bucket: 'uploads', key: f.name, data: f })),
   { concurrency: 6, onProgress: (done, total) => console.log(`${done}/${total}`) }
 );
 const failed = results.filter((r) => r.error);
 ```
 
-### Working with objects
+### Working with objects and trash
 
 ```ts
 // List a "folder" one level deep
-const { items, commonPrefixes } = await client.applications.storage.objects.list(applicationId, bucketId, {
+const { items, commonPrefixes } = await client.storage.objects.list('assets', {
   prefix: 'images/',
   limit: 100,
 });
 
 // Signed download URL for a private object
-const { url } = await client.applications.storage.objects.getAccessUrl(applicationId, bucketId, objectId, {
+const { url } = await client.storage.objects.getAccessUrl('assets', objectId, {
   expiresInSeconds: 3600,
 });
+
+// Delete moves an object to trash; restore or permanently purge it later
+await client.storage.objects.delete('assets', objectId);
+await client.storage.trash.restore('assets', objectId);
+await client.storage.trash.purge('assets', objectId);
+
+// Permanently purge every trashed object in the bucket
+const { purgedCount } = await client.storage.trash.empty('assets');
 ```
 
 ## AI Gateway
@@ -194,9 +255,7 @@ the `paginate` helper:
 ```ts
 import { paginate } from '@gigadrive/sdk';
 
-for await (const object of paginate((cursor) =>
-  client.applications.storage.objects.list(applicationId, bucketId, { cursor })
-)) {
+for await (const object of paginate((cursor) => client.storage.objects.list('assets', { cursor }))) {
   console.log(object.key);
 }
 ```
@@ -204,7 +263,7 @@ for await (const object of paginate((cursor) =>
 ## Errors
 
 All errors extend `GigadriveError`. Notable subclasses: `ApiError` (with `status`
-and optional `code`), `AuthenticationError`, `UploadError`, and
+and optional `code`), `AuthenticationError`, `ConfigurationError`, `UploadError`, and
 `UploadSessionExpiredError`.
 
 ```ts

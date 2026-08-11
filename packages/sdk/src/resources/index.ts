@@ -101,15 +101,32 @@ export type {
 } from './organization-ai-gateway';
 
 export { StorageBucketsResource } from './storage-buckets';
-export type { CreateStorageBucketInput, StorageBucket } from './storage-buckets';
+export type { CreateStorageBucketInput, ListStorageBucketsQuery, StorageBucket } from './storage-buckets';
+
+export type { StorageBucketReference, StorageEnvironmentOptions } from './storage-context';
 
 export { StorageObjectsResource } from './storage-objects';
-export type { ListStorageObjectsQuery, StorageObject, StorageObjectAccess, StorageObjectList } from './storage-objects';
+export type {
+  ListStorageObjectsQuery,
+  StorageObject,
+  StorageObjectAccess,
+  StorageObjectAccessOptions,
+  StorageObjectList,
+} from './storage-objects';
+
+export { StorageTrashResource } from './storage-trash';
+export type {
+  EmptyStorageTrashResult,
+  ListStorageTrashQuery,
+  StorageTrashList,
+  TrashedStorageObject,
+} from './storage-trash';
 
 export { StorageUploadSessionsResource } from './storage-upload-sessions';
 export type {
   CreateUploadSessionInput,
   CreateUploadSessionResponse,
+  ListStorageUploadSessionsQuery,
   StorageUploadSession,
   UploadByteSource,
 } from './storage-upload-sessions';

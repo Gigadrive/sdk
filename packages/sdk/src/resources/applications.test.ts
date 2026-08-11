@@ -82,6 +82,7 @@ describe('ApplicationsResource', () => {
     expect(resource.storage.buckets).toBeDefined();
     expect(resource.storage.objects).toBeDefined();
     expect(resource.storage.uploadSessions).toBeDefined();
+    expect(resource.storage.trash).toBeDefined();
     expect(resource.storage.upload).toBeInstanceOf(Function);
     expect(resource.requests).toBeDefined();
   });

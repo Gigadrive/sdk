@@ -98,15 +98,14 @@ export class ApplicationsResource extends BaseResource {
    * @example
    * ```ts
    * // Upload a file
-   * const { url } = await client.applications.storage.upload({
-   *   applicationId: 'app-id',
-   *   bucketId: 'bucket-id',
+   * const { url } = await client.storage.upload({
+   *   bucket: 'assets',
    *   key: 'images/logo.png',
    *   data: fileData,
    * });
    *
    * // List objects in a bucket
-   * const { items } = await client.applications.storage.objects.list('app-id', 'bucket-id');
+   * const { items } = await client.storage.objects.list('assets');
    * ```
    */
   readonly storage: ApplicationStorageResource;
@@ -121,10 +120,10 @@ export class ApplicationsResource extends BaseResource {
    */
   readonly requests: ApplicationRequestsResource;
 
-  constructor(...args: ConstructorParameters<typeof BaseResource>) {
-    super(...args);
+  constructor(httpClient: ConstructorParameters<typeof BaseResource>[0], defaultApplicationId?: string) {
+    super(httpClient);
     this.envVars = new ApplicationEnvVarsResource(this.httpClient);
-    this.storage = new ApplicationStorageResource(this.httpClient);
+    this.storage = new ApplicationStorageResource(this.httpClient, undefined, defaultApplicationId);
     this.requests = new ApplicationRequestsResource(this.httpClient);
   }
 

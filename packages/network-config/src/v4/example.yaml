@@ -27,3 +27,8 @@ routes:
     destination: src/index.ts
 services:
   redis: ~
+  storage:
+    buckets:
+      assets:
+        visibility: public
+      uploads: ~

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, AuthenticationError, GigadriveError, UploadError, UploadSessionExpiredError } from './errors';
+import {
+  ApiError,
+  AuthenticationError,
+  ConfigurationError,
+  GigadriveError,
+  UploadError,
+  UploadSessionExpiredError,
+} from './errors';
 
 describe('errors', () => {
   it('GigadriveError is the base SDK error', () => {
@@ -13,6 +20,12 @@ describe('errors', () => {
     const error = new AuthenticationError('nope');
     expect(error).toBeInstanceOf(GigadriveError);
     expect(error.name).toBe('AuthenticationError');
+  });
+
+  it('ConfigurationError extends GigadriveError', () => {
+    const error = new ConfigurationError('missing application context');
+    expect(error).toBeInstanceOf(GigadriveError);
+    expect(error.name).toBe('ConfigurationError');
   });
 
   it('ApiError carries status and an optional code', () => {

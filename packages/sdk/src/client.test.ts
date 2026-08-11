@@ -55,11 +55,56 @@ describe('GigadriveClient', () => {
     expect(client.applications).toBeDefined();
     expect(client.applications.envVars).toBeDefined();
     expect(client.applications.storage).toBeDefined();
+    expect(client.storage).toBe(client.applications.storage);
     expect(client.applications.storage.buckets).toBeDefined();
     expect(client.applications.storage.objects).toBeDefined();
     expect(client.applications.storage.uploadSessions).toBeDefined();
+    expect(client.applications.storage.trash).toBeDefined();
     expect(client.deployments).toBeDefined();
     expect(client.aiGateway).toBeDefined();
+  });
+
+  it('reads the default storage application from the workload environment', async () => {
+    process.env.GIGADRIVE_APPLICATION_ID = 'workload-app';
+    const client = new GigadriveClient({ bearerToken: 'token', fetch: mockFetch });
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, commonPrefixes: [] })));
+
+    await client.storage.objects.list('assets');
+
+    expect(mockFetch.mock.calls[0]?.[0]).toBe(
+      'https://api.gigadrive.network/applications/workload-app/storage/buckets/assets/objects'
+    );
+  });
+
+  it('prefers explicit client application configuration over the workload environment', async () => {
+    process.env.GIGADRIVE_APPLICATION_ID = 'workload-app';
+    const client = new GigadriveClient({
+      bearerToken: 'token',
+      applicationId: 'configured-app',
+      fetch: mockFetch,
+    });
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, commonPrefixes: [] })));
+
+    await client.storage.objects.list('assets');
+
+    expect(mockFetch.mock.calls[0]?.[0]).toBe(
+      'https://api.gigadrive.network/applications/configured-app/storage/buckets/assets/objects'
+    );
+  });
+
+  it('prefers a legacy overload application ID over configured context', async () => {
+    const client = new GigadriveClient({
+      bearerToken: 'token',
+      applicationId: 'configured-app',
+      fetch: mockFetch,
+    });
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, commonPrefixes: [] })));
+
+    await client.storage.objects.list('explicit-app', 'assets', { environment: 'production' });
+
+    expect(mockFetch.mock.calls[0]?.[0]).toBe(
+      'https://api.gigadrive.network/applications/explicit-app/storage/buckets/assets/objects?environment=production'
+    );
   });
 
   it('should expose the newer sub-resources and high-level helpers', () => {
