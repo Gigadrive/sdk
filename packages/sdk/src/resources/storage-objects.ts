@@ -1,6 +1,7 @@
 import type { Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 import {
+  encodeStorageBucketReference,
   resolveStorageApplicationId,
   type StorageBucketReference,
   type StorageEnvironmentOptions,
@@ -105,9 +106,12 @@ export class StorageObjectsResource extends BaseResource {
     );
     const bucketRef = explicitApplication ? bucketRefOrQuery : applicationIdOrBucketRef;
     const query = explicitApplication ? legacyQuery : bucketRefOrQuery;
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/objects`, {
-      query: query as Record<string, string | number | undefined> | undefined,
-    });
+    return this.httpClient.get(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/objects`,
+      {
+        query: query as Record<string, string | number | undefined> | undefined,
+      }
+    );
   }
 
   /** Gets object metadata by object UUID. */
@@ -137,9 +141,10 @@ export class StorageObjectsResource extends BaseResource {
     const bucketRef = explicitApplication ? bucketRefOrObjectId : applicationIdOrBucketRef;
     const objectId = explicitApplication ? objectIdOrOptions : bucketRefOrObjectId;
     const options = explicitApplication ? legacyOptions : objectIdOrOptions;
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/objects/${objectId}`, {
-      query: { environment: options?.environment },
-    });
+    return this.httpClient.get(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/objects/${objectId}`,
+      { query: { environment: options?.environment } }
+    );
   }
 
   /**
@@ -212,9 +217,10 @@ export class StorageObjectsResource extends BaseResource {
     const bucketRef = explicitApplication ? bucketRefOrObjectId : applicationIdOrBucketRef;
     const objectId = explicitApplication ? objectIdOrOptions : bucketRefOrObjectId;
     const options = explicitApplication ? legacyOptions : objectIdOrOptions;
-    return this.httpClient.delete(`/applications/${applicationId}/storage/buckets/${bucketRef}/objects/${objectId}`, {
-      query: { environment: options?.environment },
-    });
+    return this.httpClient.delete(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/objects/${objectId}`,
+      { query: { environment: options?.environment } }
+    );
   }
 
   /** Creates a stable public or time-limited signed object URL. */
@@ -245,7 +251,7 @@ export class StorageObjectsResource extends BaseResource {
     const objectId = explicitApplication ? objectIdOrOptions : bucketRefOrObjectId;
     const options = explicitApplication ? legacyOptions : objectIdOrOptions;
     return this.httpClient.get(
-      `/applications/${applicationId}/storage/buckets/${bucketRef}/objects/${objectId}/access-url`,
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/objects/${objectId}/access-url`,
       { query: { environment: options?.environment, expiresInSeconds: options?.expiresInSeconds } }
     );
   }

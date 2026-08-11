@@ -91,4 +91,15 @@ describe('StorageBucketsResource', () => {
 
     await expect(resource.get('assets')).rejects.toBeInstanceOf(ConfigurationError);
   });
+
+  it('encodes invalid bucket references as one path segment', async () => {
+    const http = createMockHttpClient();
+    const resource = new StorageBucketsResource(http, 'app-1');
+
+    await resource.delete('assets/objects/object-1');
+
+    expect(http.delete).toHaveBeenCalledWith('/applications/app-1/storage/buckets/assets%2Fobjects%2Fobject-1', {
+      query: { environment: undefined },
+    });
+  });
 });

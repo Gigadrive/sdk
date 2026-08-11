@@ -47,3 +47,7 @@ export const resolveStorageBucketReference = (input: {
 
   return hasBucket ? (input.bucket as string) : (input.bucketId as string);
 };
+
+/** @internal */
+export const encodeStorageBucketReference = (bucketRef: StorageBucketReference): string =>
+  encodeURIComponent(bucketRef);

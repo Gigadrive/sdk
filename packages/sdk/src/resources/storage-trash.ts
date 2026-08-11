@@ -1,6 +1,7 @@
 import type { Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 import {
+  encodeStorageBucketReference,
   resolveStorageApplicationId,
   type StorageBucketReference,
   type StorageEnvironmentOptions,
@@ -66,9 +67,10 @@ export class StorageTrashResource extends BaseResource {
     );
     const bucketRef = explicitApplication ? bucketRefOrQuery : applicationIdOrBucketRef;
     const query = explicitApplication ? legacyQuery : bucketRefOrQuery;
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/trash`, {
-      query: query as Record<string, string | number | undefined> | undefined,
-    });
+    return this.httpClient.get(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/trash`,
+      { query: query as Record<string, string | number | undefined> | undefined }
+    );
   }
 
   /** Restores a soft-deleted object to its original key. */
@@ -99,7 +101,7 @@ export class StorageTrashResource extends BaseResource {
     const objectId = explicitApplication ? objectIdOrOptions : bucketRefOrObjectId;
     const options = explicitApplication ? legacyOptions : objectIdOrOptions;
     return this.httpClient.post(
-      `/applications/${applicationId}/storage/buckets/${bucketRef}/trash/${objectId}/restore`,
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/trash/${objectId}/restore`,
       undefined,
       { query: { environment: options?.environment } }
     );
@@ -128,9 +130,10 @@ export class StorageTrashResource extends BaseResource {
     const bucketRef = explicitApplication ? bucketRefOrObjectId : applicationIdOrBucketRef;
     const objectId = explicitApplication ? objectIdOrOptions : bucketRefOrObjectId;
     const options = explicitApplication ? legacyOptions : objectIdOrOptions;
-    return this.httpClient.delete(`/applications/${applicationId}/storage/buckets/${bucketRef}/trash/${objectId}`, {
-      query: { environment: options?.environment },
-    });
+    return this.httpClient.delete(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/trash/${objectId}`,
+      { query: { environment: options?.environment } }
+    );
   }
 
   /** Permanently deletes every object in a bucket's trash. */
@@ -153,8 +156,9 @@ export class StorageTrashResource extends BaseResource {
     );
     const bucketRef = explicitApplication ? bucketRefOrOptions : applicationIdOrBucketRef;
     const options = explicitApplication ? legacyOptions : bucketRefOrOptions;
-    return this.httpClient.delete(`/applications/${applicationId}/storage/buckets/${bucketRef}/trash`, {
-      query: { environment: options?.environment },
-    });
+    return this.httpClient.delete(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/trash`,
+      { query: { environment: options?.environment } }
+    );
   }
 }

@@ -9,6 +9,7 @@ import {
 } from '../upload/transport';
 import { BaseResource } from './base-resource';
 import {
+  encodeStorageBucketReference,
   resolveStorageApplicationId,
   type StorageBucketReference,
   type StorageEnvironmentOptions,
@@ -161,9 +162,10 @@ export class StorageUploadSessionsResource extends BaseResource {
     );
     const bucketRef = explicitApplication ? bucketRefOrQuery : applicationIdOrBucketRef;
     const query = explicitApplication ? legacyQuery : bucketRefOrQuery;
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/uploads`, {
-      query: query as Record<string, string | number | undefined> | undefined,
-    });
+    return this.httpClient.get(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/uploads`,
+      { query: query as Record<string, string | number | undefined> | undefined }
+    );
   }
 
   /**
@@ -202,9 +204,11 @@ export class StorageUploadSessionsResource extends BaseResource {
     const bucketRef = explicitApplication ? bucketRefOrData : applicationIdOrBucketRef;
     const data = explicitApplication ? (dataOrOptions as CreateUploadSessionInput) : bucketRefOrData;
     const options = explicitApplication ? legacyOptions : (dataOrOptions as StorageEnvironmentOptions | undefined);
-    return this.httpClient.post(`/applications/${applicationId}/storage/buckets/${bucketRef}/uploads`, data, {
-      query: { environment: options?.environment },
-    });
+    return this.httpClient.post(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/uploads`,
+      data,
+      { query: { environment: options?.environment } }
+    );
   }
 
   /**
@@ -241,9 +245,10 @@ export class StorageUploadSessionsResource extends BaseResource {
     const bucketRef = explicitApplication ? bucketRefOrSessionId : applicationIdOrBucketRef;
     const sessionId = explicitApplication ? sessionIdOrOptions : bucketRefOrSessionId;
     const options = explicitApplication ? legacyOptions : sessionIdOrOptions;
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/uploads/${sessionId}`, {
-      query: { environment: options?.environment },
-    });
+    return this.httpClient.get(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}/uploads/${sessionId}`,
+      { query: { environment: options?.environment } }
+    );
   }
 
   /**

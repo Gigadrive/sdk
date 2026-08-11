@@ -1,6 +1,7 @@
 import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 import {
+  encodeStorageBucketReference,
   resolveStorageApplicationId,
   type StorageBucketReference,
   type StorageEnvironmentOptions,
@@ -141,9 +142,12 @@ export class StorageBucketsResource extends BaseResource {
     );
     const bucketRef = explicitApplication ? bucketRefOrOptions : applicationIdOrBucketRef;
     const options = explicitApplication ? legacyOptions : bucketRefOrOptions;
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}`, {
-      query: { environment: options?.environment },
-    });
+    return this.httpClient.get(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}`,
+      {
+        query: { environment: options?.environment },
+      }
+    );
   }
 
   /** Permanently deletes a bucket and all of its live and trashed objects. */
@@ -166,8 +170,9 @@ export class StorageBucketsResource extends BaseResource {
     );
     const bucketRef = explicitApplication ? bucketRefOrOptions : applicationIdOrBucketRef;
     const options = explicitApplication ? legacyOptions : bucketRefOrOptions;
-    return this.httpClient.delete(`/applications/${applicationId}/storage/buckets/${bucketRef}`, {
-      query: { environment: options?.environment },
-    });
+    return this.httpClient.delete(
+      `/applications/${applicationId}/storage/buckets/${encodeStorageBucketReference(bucketRef)}`,
+      { query: { environment: options?.environment } }
+    );
   }
 }
