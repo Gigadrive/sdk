@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +15,30 @@ describe('resolveUploadSource', () => {
     expect(resolved.contentType).toBe('text/plain');
     expect(resolved.checksums.sha256).toBe(HELLO_SHA256);
     expect(resolved.requiresFiniteChunkSize).toBe(false);
+    expect(Buffer.isBuffer(resolved.tusFile)).toBe(true);
+    expect(Buffer.from(resolved.tusFile as Uint8Array).toString('utf8')).toBe('hello');
+  });
+
+  it('converts ArrayBuffer data to a Node Buffer for tus-js-client', async () => {
+    const data = Uint8Array.from([1, 2, 3]).buffer;
+    const resolved = await resolveUploadSource({ key: 'data.bin', data });
+
+    expect(Buffer.isBuffer(resolved.tusFile)).toBe(true);
+    expect(Array.from(resolved.tusFile as Uint8Array)).toEqual([1, 2, 3]);
+  });
+
+  it('preserves Buffer inputs in Node', async () => {
+    const data = Buffer.from('hello');
+    const resolved = await resolveUploadSource({ key: 'hello.txt', data });
+
+    expect(resolved.tusFile).toBe(data);
+  });
+
+  it('converts Blob data to a Node Buffer for tus-js-client', async () => {
+    const resolved = await resolveUploadSource({ key: 'hello.txt', data: new Blob(['hello']) });
+
+    expect(Buffer.isBuffer(resolved.tusFile)).toBe(true);
+    expect(Buffer.from(resolved.tusFile as Uint8Array).toString('utf8')).toBe('hello');
   });
 
   it('uses a provided checksum instead of computing one', async () => {

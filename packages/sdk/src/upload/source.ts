@@ -76,12 +76,21 @@ const sizeOf = (data: UploadData): number => {
 };
 
 /** Convert in-memory data into a value tus-js-client accepts in the current runtime. */
-const toTusFile = (data: UploadData): TusFile => {
-  // Node accepts Buffer/Uint8Array directly; browsers are happiest with a Blob.
-  if (data instanceof Uint8Array) return isNode() ? data : new Blob([data]);
-  if (typeof Blob !== 'undefined' && data instanceof Blob) return data;
-  const bytes = new Uint8Array(data as ArrayBuffer);
-  return isNode() ? bytes : new Blob([bytes]);
+const toTusFile = async (data: UploadData): Promise<TusFile> => {
+  if (!isNode()) {
+    if (typeof Blob !== 'undefined' && data instanceof Blob) return data;
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+    return new Blob([bytes]);
+  }
+
+  const { Buffer } = await import('node:buffer');
+  const bytes =
+    typeof Blob !== 'undefined' && data instanceof Blob
+      ? new Uint8Array(await data.arrayBuffer())
+      : data instanceof Uint8Array
+        ? data
+        : new Uint8Array(data as ArrayBuffer);
+  return Buffer.isBuffer(data) ? data : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 };
 
 /**
@@ -122,7 +131,7 @@ export const resolveUploadSource = async (
     const size = input.contentLength ?? sizeOf(input.data);
     const sha256 = input.checksumSha256 ?? (hash ? (await computeChecksums(await toBytes(input.data))).sha256 : '');
     return {
-      tusFile: toTusFile(input.data),
+      tusFile: await toTusFile(input.data),
       size,
       contentType,
       checksums: buildChecksums(input, sha256),
