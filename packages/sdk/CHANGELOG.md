@@ -1,5 +1,11 @@
 # @gigadrive/sdk
 
+## 0.8.1
+
+### Patch Changes
+
+- Fix Node.js storage uploads from `Blob`, `Uint8Array`, and `ArrayBuffer` inputs by converting them to a `Buffer` before invoking the resumable upload transport. ([#453](https://github.com/Gigadrive/sdk/pull/453))
+
 ## 0.8.0
 
 ### Minor Changes
