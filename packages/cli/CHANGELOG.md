@@ -1,5 +1,12 @@
 # gigadrive
 
+## 2.5.36
+
+### Patch Changes
+
+- Updated dependencies [[`dbc5315`](https://github.com/Gigadrive/sdk/commit/dbc531570d16a5fb87c118d02869ac14c23fd37b)]:
+  - @gigadrive/sdk@0.8.1
+
 ## 2.5.35
 
 ### Patch Changes
