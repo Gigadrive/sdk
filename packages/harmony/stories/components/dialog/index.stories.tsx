@@ -303,3 +303,49 @@ export const FullScreen: Story = {
     },
   },
 };
+
+const ScrollableDialogDemo = () => {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">Open Tall Dialog</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Scrollable Dialog</DialogTitle>
+          <DialogDescription>
+            This dialog has more content than fits on screen. The content should scroll within the dialog instead of
+            being clipped at the top and bottom.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 py-2">
+          {Array.from({ length: 40 }, (_, index) => (
+            <p key={index} className="text-sm text-muted-foreground">
+              Scrollable row {index + 1} — long dialog content that would previously be cut off by the viewport.
+            </p>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button type="button" onClick={() => setOpen(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export const Scrollable: Story = {
+  render: () => <ScrollableDialogDemo />,
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        story:
+          'Tall dialog content that exceeds the viewport height. DialogContent constrains to the viewport and scrolls internally.',
+      },
+    },
+  },
+};

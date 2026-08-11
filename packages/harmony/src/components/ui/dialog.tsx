@@ -40,7 +40,8 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
       sm: 'max-w-lg',
       md: 'max-w-2xl',
       lg: 'max-w-4xl',
-      full: 'max-w-[90vw] h-[90vh]',
+      // overflow-hidden so flex children (e.g. flex-1 content) can scroll independently
+      full: 'max-w-[90vw] h-[90vh] overflow-hidden',
     };
 
     return (
@@ -49,7 +50,11 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
         <DialogPrimitive.Content
           ref={ref}
           className={cn(
-            'fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg',
+            // Cap height to the viewport and scroll internally so tall content is not clipped
+            // by the centered fixed positioning (top-50% + -translate-y-50%).
+            // outline-none: Radix focuses Content on open; without this, browsers draw a native
+            // focus ring that reads as a harsh black border in light mode.
+            'fixed left-[50%] top-[50%] z-50 grid w-full max-h-[calc(100dvh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto border bg-background p-6 shadow-xl outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg',
             sizeClasses[size],
             centerText && 'text-center',
             size === 'full' && 'flex flex-col',
