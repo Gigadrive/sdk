@@ -248,7 +248,8 @@
     },
     "services": {
       "type": "object",
-      "description": "Optionally, specify additional services like databases to deploy.",
+      "description": "Managed services to provision for the deployment environment.",
+      "additionalProperties": false,
       "properties": {
         "redis": {
           "oneOf": [
@@ -362,6 +363,39 @@
               }
             }
           ]
+        },
+        "storage": {
+          "type": "object",
+          "required": ["buckets"],
+          "additionalProperties": false,
+          "description": "File Storage buckets to provision in the deployment environment. The environment and global delivery/S3 slug are assigned by the platform.",
+          "properties": {
+            "buckets": {
+              "type": "object",
+              "description": "Buckets keyed by immutable environment-scoped name. Use null or an empty object for the default private visibility.",
+              "propertyNames": {
+                "minLength": 3,
+                "maxLength": 63,
+                "pattern": "^(?![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+              },
+              "additionalProperties": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "visibility": {
+                        "type": "string",
+                        "enum": ["public", "private"],
+                        "description": "Bucket access policy. Defaults to private when omitted. Public buckets can serve objects through their CDN hostname."
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
         }
       }
     }

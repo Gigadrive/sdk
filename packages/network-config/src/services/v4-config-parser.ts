@@ -9,6 +9,7 @@ import {
   type NormalizedConfigEntrypoint,
   type NormalizedConfigRoute,
   type NormalizedConfigRouteHandler,
+  type NormalizedConfigServiceDefinition,
   type NormalizedImagePolicy,
 } from '../normalized-config';
 import { AVAILABLE_REGIONS, type Region } from '../regions';
@@ -58,6 +59,39 @@ const normalizeImagePolicy = (images: ConfigV4['images']): NormalizedImagePolicy
     maximumResponseBody: images.maximumResponseBody ?? 50 * 1024 * 1024,
     variants: images.variants ?? {},
   };
+};
+
+/**
+ * Converts keyed v4 service declarations into the stable normalized list used
+ * by deployment provisioning.
+ *
+ * Storage bucket names are preserved exactly after schema validation and
+ * sorted to keep deployment plans deterministic. Bucket visibility defaults
+ * to private, matching the File Storage API creation contract.
+ */
+const normalizeServices = (services: ConfigV4['services']): NormalizedConfigServiceDefinition[] | undefined => {
+  if (services == null) return undefined;
+
+  const normalized: NormalizedConfigServiceDefinition[] = [];
+
+  if (services.redis !== undefined) {
+    normalized.push({ type: 'redis', ...(services.redis ?? {}) });
+  }
+
+  if (services.postgres !== undefined) {
+    normalized.push({ type: 'postgres', ...(services.postgres ?? {}) });
+  }
+
+  if (services.storage !== undefined) {
+    normalized.push({
+      type: 'storage',
+      buckets: Object.entries(services.storage.buckets)
+        .map(([name, bucket]) => ({ name, visibility: bucket?.visibility ?? 'private' }))
+        .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)),
+    });
+  }
+
+  return normalized.length > 0 ? normalized : undefined;
 };
 
 const normalizeRouteDestination = (destination: string): string => {
@@ -318,6 +352,7 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         environmentVariables: config.env ?? {},
         commands: config.build_commands ?? [],
         images: normalizeImagePolicy(config.images),
+        services: normalizeServices(config.services),
         entrypoints,
         errors: [],
         warnings: [],

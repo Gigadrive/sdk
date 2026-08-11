@@ -2,7 +2,6 @@ import type {
   NeonAWSRegion,
   NormalizedConfigRouteMatchRequirements,
   NormalizedConfigRouteMethod,
-  NormalizedConfigServiceType,
   NormalizedImagePolicy,
   UpstashAWSRegion,
 } from '../normalized-config';
@@ -104,16 +103,8 @@ export interface ConfigV4 extends Config {
    */
   env?: Record<string, string>;
 
-  /**
-   * Optionally, specify additional services like databases to deploy.
-   */
-  services?: {
-    /**
-     * Left side is the type of service, right side is the service configuration.
-     * Allowed types: `redis`, `postgres`.
-     */
-    [type in NormalizedConfigServiceType]?: ConfigV4Service | null;
-  };
+  /** Declares managed services to provision for the deployment environment. */
+  services?: ConfigV4Services;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -159,6 +150,44 @@ export interface ConfigV4ServicePostgres extends ConfigV4Service {
    * The region to deploy the Postgres instance to.
    */
   region?: NeonAWSRegion;
+}
+
+/** Managed services accepted under the v4 `services` key. */
+export interface ConfigV4Services {
+  /** Managed Redis configuration. `null` selects provider defaults. */
+  redis?: ConfigV4ServiceRedis | null;
+  /** Managed Postgres configuration. `null` selects provider defaults. */
+  postgres?: ConfigV4ServicePostgres | null;
+  /** Declarative File Storage buckets for the deployment environment. */
+  storage?: ConfigV4ServiceStorage;
+}
+
+/** Declarative File Storage configuration for one deployment environment. */
+export interface ConfigV4ServiceStorage extends ConfigV4Service {
+  /**
+   * Buckets keyed by their immutable environment-scoped name.
+   *
+   * Use `null` or an empty object to accept the default private visibility.
+   * Names are validated exactly and are never normalized. The environment and
+   * global CDN/S3 slug are intentionally not configurable here.
+   *
+   * @example
+   * ```yaml
+   * services:
+   *   storage:
+   *     buckets:
+   *       assets:
+   *         visibility: public
+   *       uploads: null
+   * ```
+   */
+  buckets: Record<string, ConfigV4StorageBucket | null>;
+}
+
+/** Optional settings for a declaratively provisioned File Storage bucket. */
+export interface ConfigV4StorageBucket {
+  /** Access policy applied when the bucket is first provisioned. Defaults to `private`. */
+  visibility?: 'public' | 'private';
 }
 
 export interface ConfigV4FunctionSettings {

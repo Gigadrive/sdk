@@ -8,3 +8,4 @@ export * from './parse-config';
 export * from './regions';
 export * from './runtime';
 export * from './services';
+export * from './v4';

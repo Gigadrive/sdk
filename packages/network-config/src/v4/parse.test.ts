@@ -10,6 +10,7 @@ import { AVAILABLE_REGIONS } from '../regions';
 import { NetworkConfigLive } from '../services';
 import { getFunctionSettings } from '../services/v4-config-parser';
 import type { ConfigV4 } from '../v4';
+import { schema } from './schema';
 
 /**
  * Thin compat helper: reads a YAML/JSON file using the real filesystem
@@ -25,7 +26,19 @@ async function readFixture(filePath: string): Promise<Record<string, unknown>> {
   return parseYaml(content) as Record<string, unknown>;
 }
 
+const createSchemaValidator = () => {
+  const schemaFile = fs.readFileSync(path.join(__dirname, 'schema.json'), 'utf8');
+  const ajv = new Ajv({ allErrors: true });
+  addFormats(ajv);
+  return ajv.compile(JSON.parse(schemaFile));
+};
+
 describe('parse config v4', function () {
+  test('keeps the published JSON schema aligned with the TypeScript source', function () {
+    const schemaFile = fs.readFileSync(path.join(__dirname, 'schema.json'), 'utf8');
+    expect(JSON.parse(schemaFile)).toEqual(schema);
+  });
+
   test('check if example matches schema', async function () {
     const exampleFile = path.join(__dirname, 'example.yaml');
     const config = await readFixture(exampleFile);
@@ -69,6 +82,12 @@ describe('parse config v4', function () {
       ]),
       services: {
         redis: null,
+        storage: {
+          buckets: {
+            assets: { visibility: 'public' },
+            uploads: null,
+          },
+        },
       },
     });
   });
@@ -84,7 +103,72 @@ describe('parse config v4', function () {
     expect(config).toMatchObject({
       regions: AVAILABLE_REGIONS,
       commands: ['bun install'],
+      services: [
+        { type: 'redis' },
+        {
+          type: 'storage',
+          buckets: [
+            { name: 'assets', visibility: 'public' },
+            { name: 'uploads', visibility: 'private' },
+          ],
+        },
+      ],
     });
+  });
+
+  it('accepts valid File Storage bucket declarations', function () {
+    const validate = createSchemaValidator();
+
+    expect(
+      validate({
+        version: 4,
+        services: {
+          storage: {
+            buckets: {
+              assets: null,
+              'public-assets': { visibility: 'public' },
+              uploads: {},
+            },
+          },
+        },
+      })
+    ).toBe(true);
+  });
+
+  it.each([
+    'ab',
+    'a'.repeat(64),
+    'User-Uploads',
+    'user uploads',
+    '-uploads',
+    'uploads-',
+    '0197b2f4-5e70-7f3b-9d5c-555555555555',
+  ])('rejects invalid File Storage bucket name %s', function (name) {
+    const validate = createSchemaValidator();
+
+    expect(
+      validate({
+        version: 4,
+        services: { storage: { buckets: { [name]: null } } },
+      })
+    ).toBe(false);
+  });
+
+  it('rejects unknown bucket settings and visibility values', function () {
+    const validate = createSchemaValidator();
+
+    expect(
+      validate({
+        version: 4,
+        services: { storage: { buckets: { assets: { visibility: 'authenticated' } } } },
+      })
+    ).toBe(false);
+    expect(
+      validate({
+        version: 4,
+        services: { storage: { buckets: { assets: { slug: 'global-assets' } } } },
+      })
+    ).toBe(false);
   });
 
   it('accepts invocation durations up to eight hours and rejects larger values', function () {

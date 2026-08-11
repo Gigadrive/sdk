@@ -104,6 +104,21 @@ lowercase, URL-safe, and unique within an environment. The returned bucket
 `slug` remains the global CDN/S3 identifier and should not be passed to these
 REST helpers.
 
+Declare buckets for each deployment environment under `services.storage` in
+`gigadrive.yaml`. Mapping keys are the canonical bucket names; `null` or an
+empty object uses private visibility. The deployment determines the environment
+and generates each global CDN/S3 slug.
+
+```yaml
+version: 4
+services:
+  storage:
+    buckets:
+      assets:
+        visibility: public
+      uploads: null
+```
+
 Inside a deployed workload, application and environment context are inferred:
 
 ```ts
