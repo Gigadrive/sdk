@@ -152,7 +152,7 @@ paths.
 
 The high-level `upload()` computes the required SHA-256 checksum, infers the
 content type from the key, creates the upload session, and uploads the bytes
-resumably — in one call.
+with resumable transfer — in one call.
 
 ```ts
 // Node.js — upload straight from a file path (size, checksum, type inferred)
