@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfigurationError } from '../errors';
 import type { HttpClient } from '../http-client';
@@ -40,6 +41,7 @@ describe('ApplicationStorageResource.upload', () => {
       { query: { environment: 'production' } }
     );
     expect(transport).toHaveBeenCalledTimes(1);
+    expect(Buffer.isBuffer(transport.mock.calls[0][0].data)).toBe(true);
     expect(transport.mock.calls[0][0].uploadUrl).toBe('https://upload.example/abc');
     expect(transport.mock.calls[0][0].headers).toMatchObject({ 'X-Upload-Token': 'signed-abc' });
     expect(result.url).toBe('https://cdn.example/hello.txt');
