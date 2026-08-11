@@ -10,23 +10,36 @@ const createMockHttpClient = (): HttpClient =>
   }) as unknown as HttpClient;
 
 describe('StorageUploadSessionsResource', () => {
-  it('lists sessions with pagination', async () => {
+  it('lists sessions by bucket name and environment', async () => {
     const http = createMockHttpClient();
-    const resource = new StorageUploadSessionsResource(http);
+    const resource = new StorageUploadSessionsResource(http, undefined, 'app-1');
 
-    await resource.list('app-1', 'bucket-1', { perPage: 50 });
-    expect(http.get).toHaveBeenCalledWith('/applications/app-1/storage/buckets/bucket-1/uploads', {
-      query: { perPage: 50 },
+    await resource.list('assets', { environment: 'production', perPage: 50 });
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/storage/buckets/assets/uploads', {
+      query: { environment: 'production', perPage: 50 },
     });
   });
 
-  it('creates a session with the required checksum', async () => {
+  it('creates a session with the required checksum and environment', async () => {
     const http = createMockHttpClient();
-    const resource = new StorageUploadSessionsResource(http);
+    const resource = new StorageUploadSessionsResource(http, undefined, 'app-1');
     const data = { key: 'k', contentLength: 3, checksumSha256: 'a'.repeat(64) };
 
-    await resource.create('app-1', 'bucket-1', data);
-    expect(http.post).toHaveBeenCalledWith('/applications/app-1/storage/buckets/bucket-1/uploads', data);
+    await resource.create('assets', data, { environment: 'production' });
+    expect(http.post).toHaveBeenCalledWith('/applications/app-1/storage/buckets/assets/uploads', data, {
+      query: { environment: 'production' },
+    });
+  });
+
+  it('gets a session while preserving explicit application and UUID fallback', async () => {
+    const http = createMockHttpClient();
+    const resource = new StorageUploadSessionsResource(http);
+    const bucketId = '0197b2f4-5e70-7f3b-9d5c-555555555555';
+
+    await resource.get('app-1', bucketId, 'session-1', { environment: 'preview' });
+    expect(http.get).toHaveBeenCalledWith(`/applications/app-1/storage/buckets/${bucketId}/uploads/session-1`, {
+      query: { environment: 'preview' },
+    });
   });
 
   it('uploads bytes to a signed URL through the injected transport', async () => {

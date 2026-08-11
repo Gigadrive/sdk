@@ -1,29 +1,34 @@
 import type { Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
+import {
+  resolveStorageApplicationId,
+  type StorageBucketReference,
+  type StorageEnvironmentOptions,
+} from './storage-context';
 
-/** A file (object) stored in a storage bucket. */
+/** A file stored in a storage bucket. */
 export interface StorageObject {
-  /** Unique identifier (UUID). */
+  /** Unique object identifier (UUID). */
   id: string;
-  /** The bucket this object belongs to. */
+  /** Internal UUID of the bucket containing this object. */
   bucketId: string;
   /** The application this object belongs to. */
   applicationId: string;
   /** The upload session that created this object, or `null` for imported objects. */
   uploadSessionId: string | null;
-  /** The object key (path) within the bucket (e.g. `"images/photo.jpg"`). */
+  /** The object key within the bucket, such as `"images/photo.jpg"`. */
   key: string;
-  /** MIME content type (e.g. `"image/jpeg"`), or `null` if not set. */
+  /** MIME content type, or `null` when none was recorded. */
   contentType: string | null;
   /** File size in bytes. */
   contentLength: number;
-  /** SHA-1 checksum of the file contents, if available. */
+  /** SHA-1 checksum, if available. */
   checksumSha1: string | null;
-  /** SHA-256 checksum of the file contents, if available. */
+  /** SHA-256 checksum, if available. */
   checksumSha256: string | null;
-  /** MD5 checksum of the file contents, if available. */
+  /** MD5 checksum, if available. */
   checksumMd5: string | null;
-  /** ISO 8601 timestamp of when the upload was finalized. */
+  /** ISO 8601 timestamp of upload finalization. */
   uploadedAt: string;
   /** ISO 8601 creation timestamp. */
   createdAt: string;
@@ -31,115 +36,152 @@ export interface StorageObject {
   updatedAt: string;
 }
 
-/**
- * Access URL details for a storage object. For public buckets, the URL is a
- * stable CDN URL. For private buckets, the URL is time-limited and signed.
- */
+/** Access URL details for a public or private storage object. */
 export interface StorageObjectAccess {
-  /** `"public"` for stable CDN URLs, `"signed"` for time-limited signed URLs. */
+  /** `"public"` for stable CDN URLs or `"signed"` for expiring URLs. */
   accessType: 'public' | 'signed';
-  /** The URL to access the object. */
+  /** URL used to read the object. */
   url: string;
-  /** ISO 8601 expiry timestamp for signed URLs. `null` for public URLs. */
+  /** ISO 8601 expiry for signed URLs, or `null` for public URLs. */
   expiresAt: string | null;
 }
 
 /** Query parameters for listing objects in a bucket. */
-export interface ListStorageObjectsQuery {
+export interface ListStorageObjectsQuery extends StorageEnvironmentOptions {
   /** Only return objects whose key starts with this prefix. */
   prefix?: string;
-  /** Group keys by this delimiter into `commonPrefixes` (virtual folders). Defaults to `"/"`. */
+  /** Group keys by this delimiter into virtual folders. Defaults to `"/"`. */
   delimiter?: string;
-  /** Opaque cursor from a previous response's `nextCursor`. */
+  /** Opaque cursor from a previous response. */
   cursor?: string;
-  /** Maximum number of objects to return (1–1000, default 200). */
+  /** Maximum objects to return, from 1 through 1000. */
   limit?: number;
 }
 
-/** A page of storage objects, including any common (folder) prefixes. */
+/** Options for creating an object access URL. */
+export interface StorageObjectAccessOptions extends StorageEnvironmentOptions {
+  /** Signed URL lifetime in seconds, from 60 through 86,400. */
+  expiresInSeconds?: number;
+}
+
+/** A page of storage objects, including any common virtual-folder prefixes. */
 export interface StorageObjectList extends Paginated<StorageObject> {
-  /** Virtual "folder" prefixes at the current level when a delimiter is used. */
   commonPrefixes: string[];
 }
 
 /**
- * Read and delete objects in storage buckets, and generate access URLs.
- * Accessed via `client.applications.storage.objects`.
+ * Reads and soft-deletes objects and creates access URLs.
  *
- * Objects are addressed by their object ID (UUID). If you only have the object
- * key, use {@link getByKey} to resolve it, or read the `id` from a listing.
- *
- * To upload objects, use `client.applications.storage.upload()`.
- *
- * @example
- * ```ts
- * // List all objects in a bucket
- * const { items } = await client.applications.storage.objects.list('app-id', 'bucket-id');
- * for (const obj of items) {
- *   console.log(`${obj.key} (${obj.contentLength} bytes)`);
- * }
- *
- * // Get a signed download URL for a private object
- * const { url } = await client.applications.storage.objects.getAccessUrl('app-id', 'bucket-id', 'object-id');
- * ```
+ * The context-bound overloads use the application configured on the client.
+ * Explicit application overloads remain available for management tools and
+ * compatibility. Bucket references should be canonical names; UUIDs remain a
+ * deprecated server-side fallback.
  */
 export class StorageObjectsResource extends BaseResource {
-  /**
-   * List objects in a storage bucket, optionally filtered by key prefix and
-   * grouped into virtual folders by a delimiter.
-   *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
-   * @param query - Optional prefix/delimiter/cursor/limit parameters.
-   * @returns A page of objects plus any common (folder) prefixes and a `nextCursor`.
-   *
-   * @example
-   * ```ts
-   * // List the "images/" folder, one level deep
-   * const { items, commonPrefixes, nextCursor } = await client.applications.storage.objects.list(
-   *   'app-id', 'bucket-id', { prefix: 'images/', limit: 100 },
-   * );
-   * ```
-   */
-  async list(applicationId: string, bucketId: string, query?: ListStorageObjectsQuery): Promise<StorageObjectList> {
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketId}/objects`, {
+  constructor(
+    httpClient: ConstructorParameters<typeof BaseResource>[0],
+    private readonly defaultApplicationId?: string
+  ) {
+    super(httpClient);
+  }
+
+  /** Lists objects in a bucket. */
+  async list(bucketRef: StorageBucketReference, query?: ListStorageObjectsQuery): Promise<StorageObjectList>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async list(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    query?: ListStorageObjectsQuery
+  ): Promise<StorageObjectList>;
+  async list(
+    applicationIdOrBucketRef: string,
+    bucketRefOrQuery?: string | ListStorageObjectsQuery,
+    legacyQuery?: ListStorageObjectsQuery
+  ): Promise<StorageObjectList> {
+    const explicitApplication = typeof bucketRefOrQuery === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrQuery : applicationIdOrBucketRef;
+    const query = explicitApplication ? legacyQuery : bucketRefOrQuery;
+    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/objects`, {
       query: query as Record<string, string | number | undefined> | undefined,
     });
   }
 
-  /**
-   * Get metadata for a specific object by its object ID.
-   *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
-   * @param objectId - The object ID (UUID) — not the object key. Use {@link getByKey} to resolve a key.
-   * @returns The object metadata.
-   *
-   * @example
-   * ```ts
-   * const obj = await client.applications.storage.objects.get('app-id', 'bucket-id', 'object-id');
-   * console.log(`${obj.key}: ${obj.contentLength} bytes, type: ${obj.contentType}`);
-   * ```
-   */
-  async get(applicationId: string, bucketId: string, objectId: string): Promise<StorageObject> {
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketId}/objects/${objectId}`);
+  /** Gets object metadata by object UUID. */
+  async get(
+    bucketRef: StorageBucketReference,
+    objectId: string,
+    options?: StorageEnvironmentOptions
+  ): Promise<StorageObject>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async get(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    objectId: string,
+    options?: StorageEnvironmentOptions
+  ): Promise<StorageObject>;
+  async get(
+    applicationIdOrBucketRef: string,
+    bucketRefOrObjectId: string,
+    objectIdOrOptions?: string | StorageEnvironmentOptions,
+    legacyOptions?: StorageEnvironmentOptions
+  ): Promise<StorageObject> {
+    const explicitApplication = typeof objectIdOrOptions === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrObjectId : applicationIdOrBucketRef;
+    const objectId = explicitApplication ? objectIdOrOptions : bucketRefOrObjectId;
+    const options = explicitApplication ? legacyOptions : objectIdOrOptions;
+    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/objects/${objectId}`, {
+      query: { environment: options?.environment },
+    });
   }
 
   /**
-   * Resolve an object by its key (path) instead of its ID. Convenience over
-   * {@link list} — lists with the key as the prefix and returns the exact match,
-   * paging through results until found, or `null` if no object with that key
-   * exists. (The API has no get-by-key endpoint.)
+   * Resolves an object by exact key by paging a prefix listing.
    *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
-   * @param key - The object key/path (e.g. `"images/photo.jpg"`).
-   * @returns The matching object, or `null` if not found.
+   * The API has no get-by-key endpoint. This helper preserves the same
+   * application, bucket, and environment across every page.
    */
-  async getByKey(applicationId: string, bucketId: string, key: string): Promise<StorageObject | null> {
+  async getByKey(
+    bucketRef: StorageBucketReference,
+    key: string,
+    options?: StorageEnvironmentOptions
+  ): Promise<StorageObject | null>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async getByKey(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    key: string,
+    options?: StorageEnvironmentOptions
+  ): Promise<StorageObject | null>;
+  async getByKey(
+    applicationIdOrBucketRef: string,
+    bucketRefOrKey: string,
+    keyOrOptions?: string | StorageEnvironmentOptions,
+    legacyOptions?: StorageEnvironmentOptions
+  ): Promise<StorageObject | null> {
+    const explicitApplication = typeof keyOrOptions === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrKey : applicationIdOrBucketRef;
+    const key = explicitApplication ? keyOrOptions : bucketRefOrKey;
+    const options = explicitApplication ? legacyOptions : keyOrOptions;
+
     let cursor: string | undefined;
     do {
-      const page = await this.list(applicationId, bucketId, { prefix: key, delimiter: '', cursor });
+      const page = await this.list(applicationId, bucketRef, {
+        environment: options?.environment,
+        prefix: key,
+        cursor,
+      });
       const match = page.items.find((object) => object.key === key);
       if (match) return match;
       cursor = page.nextCursor;
@@ -147,53 +189,64 @@ export class StorageObjectsResource extends BaseResource {
     return null;
   }
 
-  /**
-   * Permanently delete an object from a storage bucket.
-   *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
-   * @param objectId - The object ID (UUID) — not the object key.
-   *
-   * @example
-   * ```ts
-   * await client.applications.storage.objects.delete('app-id', 'bucket-id', 'object-id');
-   * ```
-   */
-  async delete(applicationId: string, bucketId: string, objectId: string): Promise<void> {
-    return this.httpClient.delete(`/applications/${applicationId}/storage/buckets/${bucketId}/objects/${objectId}`);
+  /** Moves a live object into the bucket trash. */
+  async delete(bucketRef: StorageBucketReference, objectId: string, options?: StorageEnvironmentOptions): Promise<void>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async delete(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    objectId: string,
+    options?: StorageEnvironmentOptions
+  ): Promise<void>;
+  async delete(
+    applicationIdOrBucketRef: string,
+    bucketRefOrObjectId: string,
+    objectIdOrOptions?: string | StorageEnvironmentOptions,
+    legacyOptions?: StorageEnvironmentOptions
+  ): Promise<void> {
+    const explicitApplication = typeof objectIdOrOptions === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrObjectId : applicationIdOrBucketRef;
+    const objectId = explicitApplication ? objectIdOrOptions : bucketRefOrObjectId;
+    const options = explicitApplication ? legacyOptions : objectIdOrOptions;
+    return this.httpClient.delete(`/applications/${applicationId}/storage/buckets/${bucketRef}/objects/${objectId}`, {
+      query: { environment: options?.environment },
+    });
   }
 
-  /**
-   * Get an access URL for a storage object. For objects in public buckets,
-   * returns a stable CDN URL. For private buckets, returns a time-limited
-   * signed URL.
-   *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
-   * @param objectId - The object ID (UUID) — not the object key.
-   * @param options - Optional `expiresInSeconds` for signed URLs (60–86400).
-   * @returns The access URL and its type/expiry.
-   *
-   * @example
-   * ```ts
-   * const access = await client.applications.storage.objects.getAccessUrl('app-id', 'bucket-id', 'object-id', {
-   *   expiresInSeconds: 3600,
-   * });
-   * if (access.accessType === 'signed') {
-   *   console.log(`Signed URL expires at ${access.expiresAt}`);
-   * }
-   * console.log(`Download: ${access.url}`);
-   * ```
-   */
+  /** Creates a stable public or time-limited signed object URL. */
+  async getAccessUrl(
+    bucketRef: StorageBucketReference,
+    objectId: string,
+    options?: StorageObjectAccessOptions
+  ): Promise<StorageObjectAccess>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
   async getAccessUrl(
     applicationId: string,
-    bucketId: string,
+    bucketRef: StorageBucketReference,
     objectId: string,
-    options?: { expiresInSeconds?: number }
+    options?: StorageObjectAccessOptions
+  ): Promise<StorageObjectAccess>;
+  async getAccessUrl(
+    applicationIdOrBucketRef: string,
+    bucketRefOrObjectId: string,
+    objectIdOrOptions?: string | StorageObjectAccessOptions,
+    legacyOptions?: StorageObjectAccessOptions
   ): Promise<StorageObjectAccess> {
+    const explicitApplication = typeof objectIdOrOptions === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrObjectId : applicationIdOrBucketRef;
+    const objectId = explicitApplication ? objectIdOrOptions : bucketRefOrObjectId;
+    const options = explicitApplication ? legacyOptions : objectIdOrOptions;
     return this.httpClient.get(
-      `/applications/${applicationId}/storage/buckets/${bucketId}/objects/${objectId}/access-url`,
-      { query: { expiresInSeconds: options?.expiresInSeconds } }
+      `/applications/${applicationId}/storage/buckets/${bucketRef}/objects/${objectId}/access-url`,
+      { query: { environment: options?.environment, expiresInSeconds: options?.expiresInSeconds } }
     );
   }
 }

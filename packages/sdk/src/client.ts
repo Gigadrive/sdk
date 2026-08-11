@@ -3,6 +3,7 @@ import { TokenManager } from './auth/token-manager';
 import { HttpClient } from './http-client';
 import { AiGatewayResource } from './resources/ai-gateway';
 import { ApiKeysResource } from './resources/api-keys';
+import type { ApplicationStorageResource } from './resources/application-storage';
 import { ApplicationsResource } from './resources/applications';
 import { DeploymentsResource } from './resources/deployments';
 import { ImageOptimizationResource } from './resources/image-optimization';
@@ -19,6 +20,15 @@ const DEFAULT_BASE_URL = 'https://api.gigadrive.network';
  * resolution chain.
  */
 export interface GigadriveClientConfig {
+  /**
+   * Default application UUID for context-bound storage calls.
+   *
+   * Falls back to `GIGADRIVE_APPLICATION_ID`, which the platform injects into
+   * deployed workloads. Explicit application IDs supplied to compatibility
+   * overloads take precedence over this value.
+   */
+  applicationId?: string;
+
   /**
    * OAuth2 client ID (the API key ID from the Gigadrive dashboard).
    * Used for both client-credentials and refresh-token flows.
@@ -165,6 +175,15 @@ export class GigadriveClient {
   readonly organizations: OrganizationsResource;
   /** Application management (list, environment variables, storage). */
   readonly applications: ApplicationsResource;
+  /**
+   * Context-bound file storage operations.
+   *
+   * Deployed workloads receive their application context through
+   * `GIGADRIVE_APPLICATION_ID`; management clients can set
+   * {@link GigadriveClientConfig.applicationId}. This is the same resource as
+   * {@link applications}.storage.
+   */
+  readonly storage: ApplicationStorageResource;
   /** Deployment lifecycle (create, upload, status, logs). */
   readonly deployments: DeploymentsResource;
   /** AI Gateway — OpenAI-compatible chat completions and model listing. */
@@ -178,6 +197,7 @@ export class GigadriveClient {
 
   constructor(config: GigadriveClientConfig = {}) {
     const baseUrl = config.baseUrl ?? readEnv('GIGADRIVE_API_BASE_URL') ?? DEFAULT_BASE_URL;
+    const applicationId = config.applicationId ?? readEnv('GIGADRIVE_APPLICATION_ID');
     // Bind the default fetch to globalThis so it can be invoked as a method on
     // the HTTP client without throwing "Illegal invocation" in some runtimes.
     const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
@@ -187,7 +207,8 @@ export class GigadriveClient {
     const httpClient = new HttpClient(baseUrl, tokenManager, fetchFn);
 
     this.organizations = new OrganizationsResource(httpClient);
-    this.applications = new ApplicationsResource(httpClient);
+    this.applications = new ApplicationsResource(httpClient, applicationId);
+    this.storage = this.applications.storage;
     this.deployments = new DeploymentsResource(httpClient);
     this.aiGateway = new AiGatewayResource(httpClient);
     this.apiKeys = new ApiKeysResource(httpClient);

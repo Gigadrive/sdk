@@ -9,7 +9,14 @@ import {
   type UploadUrlStorage,
 } from '../upload/transport';
 import { StorageBucketsResource } from './storage-buckets';
+import {
+  resolveStorageApplicationId,
+  resolveStorageBucketReference,
+  type StorageBucketReference,
+  type StorageEnvironmentOptions,
+} from './storage-context';
 import { StorageObjectsResource, type StorageObject } from './storage-objects';
+import { StorageTrashResource } from './storage-trash';
 import { StorageUploadSessionsResource, type StorageUploadSession } from './storage-upload-sessions';
 
 // ---------------------------------------------------------------------------
@@ -17,19 +24,27 @@ import { StorageUploadSessionsResource, type StorageUploadSession } from './stor
 // ---------------------------------------------------------------------------
 
 /** Options controlling whether and how to wait for an upload to finalize server-side. */
-export interface WaitForCompletionOptions {
+export interface WaitForCompletionOptions extends StorageEnvironmentOptions {
   /** Maximum time to wait in milliseconds. Default: 60000. */
   timeoutMs?: number;
   /** How often to poll the session state, in milliseconds. Default: 1000. */
   pollIntervalMs?: number;
 }
 
-/** Input for the high-level {@link ApplicationStorageResource.upload | upload()} method. */
-export interface UploadFileInput {
-  /** The application ID (UUID). */
-  applicationId: string;
-  /** The target bucket ID (UUID). */
-  bucketId: string;
+interface UploadFileOptions {
+  /**
+   * Explicit application UUID. Omit this when the client was configured with
+   * `applicationId` or is running with `GIGADRIVE_APPLICATION_ID`.
+   * @deprecated Configure `GigadriveClientConfig.applicationId` or use workload context.
+   */
+  applicationId?: string;
+  /**
+   * Environment slug or UUID. Workloads normally omit this because the API
+   * infers and enforces the deployment environment from their credential. If
+   * completion options also specify an environment, this top-level value takes
+   * precedence for the entire upload lifecycle.
+   */
+  environment?: string;
   /** The object key/path in the bucket (e.g. `"images/logo.png"`). */
   key: string;
   /** In-memory data (browser `File`/`Blob`, Node `Buffer`, `Uint8Array`, `ArrayBuffer`). */
@@ -63,6 +78,24 @@ export interface UploadFileInput {
   /** Wait until the object is finalized server-side before resolving. Pass options to tune polling. */
   waitForCompletion?: boolean | WaitForCompletionOptions;
 }
+
+/** Input for the high-level {@link ApplicationStorageResource.upload | upload()} method. */
+export type UploadFileInput = UploadFileOptions &
+  (
+    | {
+        /** Canonical environment-scoped bucket name, or a deprecated UUID fallback. */
+        bucket: StorageBucketReference;
+        bucketId?: never;
+      }
+    | {
+        bucket?: never;
+        /**
+         * Internal bucket UUID.
+         * @deprecated Use `bucket` with the canonical environment-scoped name.
+         */
+        bucketId: string;
+      }
+  );
 
 /** Result of a successful upload. */
 export interface UploadFileResult {
@@ -103,23 +136,22 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
  * object listing/access, low-level upload sessions, and the high-level
  * {@link upload} / {@link uploadBatch} helpers.
  *
- * Accessed via `client.applications.storage`.
+ * Accessed canonically via `client.storage`. `client.applications.storage`
+ * references the same resource for compatibility.
  *
  * @example
  * ```ts
  * // High-level upload (Node.js, from a path — checksum/size/content-type inferred)
- * const { url } = await client.applications.storage.upload({
- *   applicationId: 'app-id',
- *   bucketId: 'bucket-id',
+ * const { url } = await client.storage.upload({
+ *   bucket: 'photos',
  *   key: 'photos/cat.jpg',
  *   path: './cat.jpg',
  * });
  *
  * // Browser upload from a file input, with progress and abort
  * const controller = new AbortController();
- * const { url } = await client.applications.storage.upload({
- *   applicationId: 'app-id',
- *   bucketId: 'bucket-id',
+ * const { url } = await client.storage.upload({
+ *   bucket: 'uploads',
  *   key: `uploads/${file.name}`,
  *   data: file,
  *   onProgress: (sent, total) => console.log(`${Math.round((sent / total) * 100)}%`),
@@ -134,14 +166,21 @@ export class ApplicationStorageResource {
   readonly objects: StorageObjectsResource;
   /** Low-level upload sessions and direct-to-URL byte uploads. */
   readonly uploadSessions: StorageUploadSessionsResource;
+  /** Lists, restores, and permanently purges soft-deleted objects. */
+  readonly trash: StorageTrashResource;
 
   private readonly transport: UploadTransport;
 
-  constructor(httpClient: HttpClient, transport: UploadTransport = tusUploadTransport) {
+  constructor(
+    httpClient: HttpClient,
+    transport: UploadTransport = tusUploadTransport,
+    private readonly defaultApplicationId?: string
+  ) {
     this.transport = transport;
-    this.buckets = new StorageBucketsResource(httpClient);
-    this.objects = new StorageObjectsResource(httpClient);
-    this.uploadSessions = new StorageUploadSessionsResource(httpClient, transport);
+    this.buckets = new StorageBucketsResource(httpClient, defaultApplicationId);
+    this.objects = new StorageObjectsResource(httpClient, defaultApplicationId);
+    this.uploadSessions = new StorageUploadSessionsResource(httpClient, transport, defaultApplicationId);
+    this.trash = new StorageTrashResource(httpClient, defaultApplicationId);
   }
 
   /**
@@ -161,14 +200,18 @@ export class ApplicationStorageResource {
    *
    * @example
    * ```ts
-   * const { session, url, object } = await client.applications.storage.upload({
-   *   applicationId, bucketId, key: 'reports/q1.pdf', path: './q1.pdf',
+   * const { session, url, object } = await client.storage.upload({
+   *   bucket: 'reports', key: 'q1.pdf', path: './q1.pdf',
    *   waitForCompletion: true,
    * });
    * console.log(object?.contentLength, 'bytes available at', url);
    * ```
    */
   async upload(input: UploadFileInput): Promise<UploadFileResult> {
+    const applicationId = resolveStorageApplicationId(this.defaultApplicationId, input.applicationId);
+    const bucketRef = resolveStorageBucketReference(input);
+    const completionOptions = typeof input.waitForCompletion === 'object' ? input.waitForCompletion : undefined;
+    const environment = input.environment ?? completionOptions?.environment;
     const resolved = await resolveUploadSource({
       key: input.key,
       data: input.data,
@@ -181,14 +224,19 @@ export class ApplicationStorageResource {
       checksumMd5: input.checksumMd5,
     });
 
-    const { session, upload } = await this.uploadSessions.create(input.applicationId, input.bucketId, {
-      key: input.key,
-      contentLength: resolved.size,
-      checksumSha256: resolved.checksums.sha256,
-      contentType: resolved.contentType,
-      checksumSha1: resolved.checksums.sha1,
-      checksumMd5: resolved.checksums.md5,
-    });
+    const { session, upload } = await this.uploadSessions.create(
+      applicationId,
+      bucketRef,
+      {
+        key: input.key,
+        contentLength: resolved.size,
+        checksumSha256: resolved.checksums.sha256,
+        contentType: resolved.contentType,
+        checksumSha1: resolved.checksums.sha1,
+        checksumMd5: resolved.checksums.md5,
+      },
+      { environment }
+    );
 
     await runResolvedUpload(
       this.transport,
@@ -207,9 +255,12 @@ export class ApplicationStorageResource {
     ).catch(toUploadError);
 
     if (input.waitForCompletion) {
-      const options = typeof input.waitForCompletion === 'object' ? input.waitForCompletion : undefined;
-      const completed = await this.waitForCompletion(input.applicationId, input.bucketId, session.id, options);
-      const object = (await this.objects.getByKey(input.applicationId, input.bucketId, input.key)) ?? undefined;
+      const options = completionOptions ?? {};
+      const completed = await this.waitForCompletion(applicationId, bucketRef, session.id, {
+        ...options,
+        environment,
+      });
+      const object = (await this.objects.getByKey(applicationId, bucketRef, input.key, { environment })) ?? undefined;
       return { session: completed, url: upload.publicObjectUrl, object };
     }
 
@@ -227,8 +278,8 @@ export class ApplicationStorageResource {
    *
    * @example
    * ```ts
-   * const results = await client.applications.storage.uploadBatch(
-   *   files.map((f) => ({ applicationId, bucketId, key: `uploads/${f.name}`, data: f })),
+   * const results = await client.storage.uploadBatch(
+   *   files.map((f) => ({ bucket: 'uploads', key: f.name, data: f })),
    *   { concurrency: 6, onProgress: (done, total) => console.log(`${done}/${total}`) },
    * );
    * const failed = results.filter((r) => r.error);
@@ -261,25 +312,46 @@ export class ApplicationStorageResource {
   /**
    * Poll an upload session until the object is finalized server-side.
    *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
+   * @param bucketRef - Canonical bucket name or deprecated UUID fallback.
    * @param sessionId - The upload session ID (UUID).
    * @param options - Timeout and polling interval.
    * @returns The completed session.
    * @throws {@link UploadError} if the session fails, expires, or the timeout elapses.
    */
   async waitForCompletion(
-    applicationId: string,
-    bucketId: string,
+    bucketRef: StorageBucketReference,
     sessionId: string,
     options?: WaitForCompletionOptions
+  ): Promise<StorageUploadSession>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async waitForCompletion(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    sessionId: string,
+    options?: WaitForCompletionOptions
+  ): Promise<StorageUploadSession>;
+  async waitForCompletion(
+    applicationIdOrBucketRef: string,
+    bucketRefOrSessionId: string,
+    sessionIdOrOptions?: string | WaitForCompletionOptions,
+    legacyOptions?: WaitForCompletionOptions
   ): Promise<StorageUploadSession> {
+    const explicitApplication = typeof sessionIdOrOptions === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrSessionId : applicationIdOrBucketRef;
+    const sessionId = explicitApplication ? sessionIdOrOptions : bucketRefOrSessionId;
+    const options = explicitApplication ? legacyOptions : sessionIdOrOptions;
     const timeoutMs = options?.timeoutMs ?? 60_000;
     const pollIntervalMs = options?.pollIntervalMs ?? 1000;
     const deadline = Date.now() + timeoutMs;
 
     for (;;) {
-      const session = await this.uploadSessions.get(applicationId, bucketId, sessionId);
+      const session = await this.uploadSessions.get(applicationId, bucketRef, sessionId, {
+        environment: options?.environment,
+      });
       if (session.state === 'completed') return session;
       if (session.state === 'failed' || session.state === 'expired') {
         throw new UploadError(`Upload session ${session.state}.`);

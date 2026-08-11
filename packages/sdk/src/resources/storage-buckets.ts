@@ -1,19 +1,27 @@
 import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
+import {
+  resolveStorageApplicationId,
+  type StorageBucketReference,
+  type StorageEnvironmentOptions,
+} from './storage-context';
 
-/** A storage bucket belonging to an application. Buckets hold objects (files). */
+/** A storage bucket belonging to one application environment. */
 export interface StorageBucket {
-  /** Unique identifier (UUID). */
+  /**
+   * Internal bucket UUID. New REST calls should use {@link name} instead.
+   * @deprecated Use the environment-scoped bucket `name` for API addressing.
+   */
   id: string;
   /** The application this bucket belongs to. */
   applicationId: string;
-  /** Human-readable bucket name. */
+  /** Canonical immutable API/IaC identifier, unique within {@link environmentId}. */
   name: string;
-  /** Globally unique, hostname-safe label used to build the bucket's serving hostname. */
+  /** Global CDN/S3 identifier. This is not the bucket reference used by REST methods. */
   slug: string;
-  /** `"public"` buckets serve objects through the CDN hostname; `"private"` buckets require signed access URLs. */
+  /** `"public"` buckets use stable CDN URLs; `"private"` buckets require signed access URLs. */
   visibility: 'public' | 'private';
-  /** The hostname clients use to read public objects or signed private-object URLs. */
+  /** Hostname used to serve public objects or signed private-object URLs. */
   cdnHostname: string;
   /** The application environment this bucket is scoped to. */
   environmentId: string;
@@ -23,105 +31,143 @@ export interface StorageBucket {
   updatedAt: string;
 }
 
-/** Input for creating a new storage bucket. */
-export interface CreateStorageBucketInput {
-  /** Human-readable name for the bucket. */
+interface CreateStorageBucketBase {
+  /**
+   * Immutable lowercase URL-safe identifier. The API accepts 3–63 ASCII
+   * letters, numbers, and internal hyphens and does not normalize the value.
+   */
   name: string;
-  /** The application environment to scope this bucket to. */
-  environmentId: string;
-  /** Optional hostname-safe slug used in the generated serving hostname. Auto-generated when omitted. */
-  slug?: string;
   /** Bucket visibility. Defaults to `"private"`. */
   visibility?: 'public' | 'private';
+  /**
+   * Explicit global delivery/S3 slug.
+   * @deprecated Omit this field and let the API generate the global slug.
+   */
+  slug?: string;
 }
 
+/** Input for creating an environment-scoped storage bucket. */
+export type CreateStorageBucketInput = CreateStorageBucketBase &
+  (
+    | {
+        /** Canonical environment slug or UUID. */
+        environment: string;
+        /**
+         * Deprecated compatibility selector. When both fields are supplied,
+         * they must resolve to the same environment.
+         * @deprecated Use {@link environment}.
+         */
+        environmentId?: string;
+      }
+    | {
+        environment?: undefined;
+        /**
+         * Application environment UUID.
+         * @deprecated Use `environment` with an environment slug or UUID.
+         */
+        environmentId: string;
+      }
+  );
+
+/** Query parameters for listing storage buckets. */
+export interface ListStorageBucketsQuery extends ListQuery, StorageEnvironmentOptions {}
+
 /**
- * Manage storage buckets for an application.
- * Accessed via `client.applications.storage.buckets`.
+ * Manages storage buckets for an application.
  *
- * @example
- * ```ts
- * // Create a public bucket
- * const bucket = await client.applications.storage.buckets.create('app-id', {
- *   name: 'User Uploads',
- *   environmentId: 'env-id',
- *   visibility: 'public',
- * });
- *
- * // List all buckets
- * const { items } = await client.applications.storage.buckets.list('app-id');
- * ```
+ * Methods accept an application ID as their first argument for compatibility.
+ * When the client has an application context, callers can omit it and address
+ * buckets directly by their environment-scoped names.
  */
 export class StorageBucketsResource extends BaseResource {
-  /**
-   * List all storage buckets for an application.
-   *
-   * @param applicationId - The application ID (UUID).
-   * @param query - Optional pagination parameters.
-   * @returns A paginated list of storage buckets.
-   *
-   * @example
-   * ```ts
-   * const { items, total } = await client.applications.storage.buckets.list('app-id');
-   * console.log(`${total} buckets found`);
-   * ```
-   */
-  async list(applicationId: string, query?: ListQuery): Promise<Paginated<StorageBucket>> {
+  constructor(
+    httpClient: ConstructorParameters<typeof BaseResource>[0],
+    private readonly defaultApplicationId?: string
+  ) {
+    super(httpClient);
+  }
+
+  /** Lists buckets, optionally restricted to an environment slug or UUID. */
+  async list(query?: ListStorageBucketsQuery): Promise<Paginated<StorageBucket>>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async list(applicationId: string, query?: ListStorageBucketsQuery): Promise<Paginated<StorageBucket>>;
+  async list(
+    applicationIdOrQuery?: string | ListStorageBucketsQuery,
+    legacyQuery?: ListStorageBucketsQuery
+  ): Promise<Paginated<StorageBucket>> {
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      typeof applicationIdOrQuery === 'string' ? applicationIdOrQuery : undefined
+    );
+    const query = typeof applicationIdOrQuery === 'string' ? legacyQuery : applicationIdOrQuery;
     return this.httpClient.get(`/applications/${applicationId}/storage/buckets`, {
       query: query as Record<string, string | number | undefined> | undefined,
     });
   }
 
-  /**
-   * Create a new storage bucket.
-   *
-   * @param applicationId - The application ID (UUID).
-   * @param data - Bucket name, environment, and optional slug/visibility.
-   * @returns The newly created bucket.
-   *
-   * @example
-   * ```ts
-   * const bucket = await client.applications.storage.buckets.create('app-id', {
-   *   name: 'Assets',
-   *   environmentId: 'env-id',
-   *   visibility: 'public',
-   * });
-   * console.log(`Bucket CDN: https://${bucket.cdnHostname}`);
-   * ```
-   */
-  async create(applicationId: string, data: CreateStorageBucketInput): Promise<StorageBucket> {
+  /** Creates a bucket with an immutable environment-scoped name. */
+  async create(data: CreateStorageBucketInput): Promise<StorageBucket>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async create(applicationId: string, data: CreateStorageBucketInput): Promise<StorageBucket>;
+  async create(
+    applicationIdOrData: string | CreateStorageBucketInput,
+    legacyData?: CreateStorageBucketInput
+  ): Promise<StorageBucket> {
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      typeof applicationIdOrData === 'string' ? applicationIdOrData : undefined
+    );
+    const data = typeof applicationIdOrData === 'string' ? legacyData! : applicationIdOrData;
     return this.httpClient.post(`/applications/${applicationId}/storage/buckets`, data);
   }
 
-  /**
-   * Get a storage bucket by ID.
-   *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
-   * @returns The bucket details.
-   *
-   * @example
-   * ```ts
-   * const bucket = await client.applications.storage.buckets.get('app-id', 'bucket-id');
-   * console.log(`${bucket.name} (${bucket.visibility})`);
-   * ```
-   */
-  async get(applicationId: string, bucketId: string): Promise<StorageBucket> {
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketId}`);
+  /** Gets a bucket by canonical environment-scoped name or deprecated UUID. */
+  async get(bucketRef: StorageBucketReference, options?: StorageEnvironmentOptions): Promise<StorageBucket>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async get(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    options?: StorageEnvironmentOptions
+  ): Promise<StorageBucket>;
+  async get(
+    applicationIdOrBucketRef: string,
+    bucketRefOrOptions?: string | StorageEnvironmentOptions,
+    legacyOptions?: StorageEnvironmentOptions
+  ): Promise<StorageBucket> {
+    const explicitApplication = typeof bucketRefOrOptions === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrOptions : applicationIdOrBucketRef;
+    const options = explicitApplication ? legacyOptions : bucketRefOrOptions;
+    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}`, {
+      query: { environment: options?.environment },
+    });
   }
 
-  /**
-   * Permanently delete a storage bucket and all its objects.
-   *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
-   *
-   * @example
-   * ```ts
-   * await client.applications.storage.buckets.delete('app-id', 'bucket-id');
-   * ```
-   */
-  async delete(applicationId: string, bucketId: string): Promise<void> {
-    return this.httpClient.delete(`/applications/${applicationId}/storage/buckets/${bucketId}`);
+  /** Permanently deletes a bucket and all of its live and trashed objects. */
+  async delete(bucketRef: StorageBucketReference, options?: StorageEnvironmentOptions): Promise<void>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async delete(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    options?: StorageEnvironmentOptions
+  ): Promise<void>;
+  async delete(
+    applicationIdOrBucketRef: string,
+    bucketRefOrOptions?: string | StorageEnvironmentOptions,
+    legacyOptions?: StorageEnvironmentOptions
+  ): Promise<void> {
+    const explicitApplication = typeof bucketRefOrOptions === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrOptions : applicationIdOrBucketRef;
+    const options = explicitApplication ? legacyOptions : bucketRefOrOptions;
+    return this.httpClient.delete(`/applications/${applicationId}/storage/buckets/${bucketRef}`, {
+      query: { environment: options?.environment },
+    });
   }
 }

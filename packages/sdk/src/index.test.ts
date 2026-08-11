@@ -7,6 +7,7 @@ describe('public exports', () => {
     expect(typeof sdk.GigadriveError).toBe('function');
     expect(typeof sdk.ApiError).toBe('function');
     expect(typeof sdk.AuthenticationError).toBe('function');
+    expect(typeof sdk.ConfigurationError).toBe('function');
     expect(typeof sdk.UploadError).toBe('function');
     expect(typeof sdk.UploadSessionExpiredError).toBe('function');
   });
@@ -31,6 +32,7 @@ describe('public exports', () => {
       'AiGatewayResource',
       'StorageBucketsResource',
       'StorageObjectsResource',
+      'StorageTrashResource',
       'StorageUploadSessionsResource',
     ] as const;
     for (const name of classes) {

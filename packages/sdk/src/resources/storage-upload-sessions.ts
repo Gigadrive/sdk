@@ -8,6 +8,11 @@ import {
   type UploadTransport,
 } from '../upload/transport';
 import { BaseResource } from './base-resource';
+import {
+  resolveStorageApplicationId,
+  type StorageBucketReference,
+  type StorageEnvironmentOptions,
+} from './storage-context';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,6 +76,9 @@ export interface CreateUploadSessionInput {
   checksumMd5?: string;
 }
 
+/** Query parameters for listing upload sessions in a bucket. */
+export interface ListStorageUploadSessionsQuery extends ListQuery, StorageEnvironmentOptions {}
+
 /**
  * Response from creating an upload session. Contains both the session metadata
  * and the resumable upload instructions (signed URL + headers).
@@ -109,17 +117,17 @@ export interface UploadByteSource {
 
 /**
  * Manage upload sessions and upload bytes to a signed upload URL using the
- * resumable upload protocol. Accessed via
- * `client.applications.storage.uploadSessions`.
+ * resumable upload protocol. Accessed via `client.storage.uploadSessions`.
  *
- * For most use cases, prefer the high-level `client.applications.storage.upload()`
+ * For most use cases, prefer the high-level `client.storage.upload()`
  * which creates the session, computes the required checksum, uploads the bytes,
  * and returns the public URL.
  */
 export class StorageUploadSessionsResource extends BaseResource {
   constructor(
     httpClient: ConstructorParameters<typeof BaseResource>[0],
-    private readonly transport: UploadTransport = tusUploadTransport
+    private readonly transport: UploadTransport = tusUploadTransport,
+    private readonly defaultApplicationId?: string
   ) {
     super(httpClient);
   }
@@ -127,13 +135,33 @@ export class StorageUploadSessionsResource extends BaseResource {
   /**
    * List upload sessions for a bucket.
    *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
+   * @param bucketRef - Canonical bucket name or deprecated UUID fallback.
    * @param query - Optional pagination parameters.
    * @returns A paginated list of upload sessions.
    */
-  async list(applicationId: string, bucketId: string, query?: ListQuery): Promise<Paginated<StorageUploadSession>> {
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketId}/uploads`, {
+  async list(
+    bucketRef: StorageBucketReference,
+    query?: ListStorageUploadSessionsQuery
+  ): Promise<Paginated<StorageUploadSession>>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async list(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    query?: ListStorageUploadSessionsQuery
+  ): Promise<Paginated<StorageUploadSession>>;
+  async list(
+    applicationIdOrBucketRef: string,
+    bucketRefOrQuery?: string | ListStorageUploadSessionsQuery,
+    legacyQuery?: ListStorageUploadSessionsQuery
+  ): Promise<Paginated<StorageUploadSession>> {
+    const explicitApplication = typeof bucketRefOrQuery === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrQuery : applicationIdOrBucketRef;
+    const query = explicitApplication ? legacyQuery : bucketRefOrQuery;
+    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/uploads`, {
       query: query as Record<string, string | number | undefined> | undefined,
     });
   }
@@ -141,33 +169,81 @@ export class StorageUploadSessionsResource extends BaseResource {
   /**
    * Create an upload session. Returns the session metadata and a signed upload
    * URL for sending file data. This is the low-level method — for most use
-   * cases prefer `client.applications.storage.upload()` which also computes the
+   * cases prefer `client.storage.upload()` which also computes the
    * required SHA-256 checksum for you.
    *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
+   * @param bucketRef - Canonical bucket name or deprecated UUID fallback.
    * @param data - Object key, content length, SHA-256 checksum, and optional content type / extra checksums.
    * @returns The session and resumable upload instructions (URL, method, headers).
    */
   async create(
+    bucketRef: StorageBucketReference,
+    data: CreateUploadSessionInput,
+    options?: StorageEnvironmentOptions
+  ): Promise<CreateUploadSessionResponse>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async create(
     applicationId: string,
-    bucketId: string,
-    data: CreateUploadSessionInput
+    bucketRef: StorageBucketReference,
+    data: CreateUploadSessionInput,
+    options?: StorageEnvironmentOptions
+  ): Promise<CreateUploadSessionResponse>;
+  async create(
+    applicationIdOrBucketRef: string,
+    bucketRefOrData: string | CreateUploadSessionInput,
+    dataOrOptions?: CreateUploadSessionInput | StorageEnvironmentOptions,
+    legacyOptions?: StorageEnvironmentOptions
   ): Promise<CreateUploadSessionResponse> {
-    return this.httpClient.post(`/applications/${applicationId}/storage/buckets/${bucketId}/uploads`, data);
+    const explicitApplication = typeof bucketRefOrData === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrData : applicationIdOrBucketRef;
+    const data = explicitApplication ? (dataOrOptions as CreateUploadSessionInput) : bucketRefOrData;
+    const options = explicitApplication ? legacyOptions : (dataOrOptions as StorageEnvironmentOptions | undefined);
+    return this.httpClient.post(`/applications/${applicationId}/storage/buckets/${bucketRef}/uploads`, data, {
+      query: { environment: options?.environment },
+    });
   }
 
   /**
    * Get an upload session by ID. Use this to track server-side processing after
    * an upload (poll until `state === 'completed'`).
    *
-   * @param applicationId - The application ID (UUID).
-   * @param bucketId - The bucket ID (UUID).
+   * @param bucketRef - Canonical bucket name or deprecated UUID fallback.
    * @param sessionId - The upload session ID (UUID).
    * @returns The current session state.
    */
-  async get(applicationId: string, bucketId: string, sessionId: string): Promise<StorageUploadSession> {
-    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketId}/uploads/${sessionId}`);
+  async get(
+    bucketRef: StorageBucketReference,
+    sessionId: string,
+    options?: StorageEnvironmentOptions
+  ): Promise<StorageUploadSession>;
+  /** @deprecated Prefer the context-bound overload through `client.storage`. */
+  async get(
+    applicationId: string,
+    bucketRef: StorageBucketReference,
+    sessionId: string,
+    options?: StorageEnvironmentOptions
+  ): Promise<StorageUploadSession>;
+  async get(
+    applicationIdOrBucketRef: string,
+    bucketRefOrSessionId: string,
+    sessionIdOrOptions?: string | StorageEnvironmentOptions,
+    legacyOptions?: StorageEnvironmentOptions
+  ): Promise<StorageUploadSession> {
+    const explicitApplication = typeof sessionIdOrOptions === 'string';
+    const applicationId = resolveStorageApplicationId(
+      this.defaultApplicationId,
+      explicitApplication ? applicationIdOrBucketRef : undefined
+    );
+    const bucketRef = explicitApplication ? bucketRefOrSessionId : applicationIdOrBucketRef;
+    const sessionId = explicitApplication ? sessionIdOrOptions : bucketRefOrSessionId;
+    const options = explicitApplication ? legacyOptions : sessionIdOrOptions;
+    return this.httpClient.get(`/applications/${applicationId}/storage/buckets/${bucketRef}/uploads/${sessionId}`, {
+      query: { environment: options?.environment },
+    });
   }
 
   /**
