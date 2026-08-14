@@ -30,7 +30,7 @@ export interface TusUploadParams {
   uploadUrl: string;
   /** Total upload size in bytes. */
   uploadSize: number;
-  /** Headers to send with each request (must include `Tus-Resumable`). */
+  /** Headers issued with the upload session. */
   headers: Record<string, string>;
   /** Maximum chunk size in bytes. Required for streamed inputs. */
   chunkSize?: number;
@@ -77,10 +77,17 @@ export const tusUploadTransport: UploadTransport = (params) =>
       fn();
     };
 
+    const headers = Object.fromEntries(
+      Object.entries(params.headers).filter(([name]) => name.toLowerCase() !== 'tus-resumable')
+    );
+
     const upload = new tus.Upload(params.data as tus.Upload['file'], {
       uploadUrl: params.uploadUrl,
       uploadSize: params.uploadSize,
-      headers: params.headers,
+      // tus-js-client sets Tus-Resumable itself. In browsers, forwarding the
+      // session's copy makes XMLHttpRequest combine both values and produces
+      // an invalid `1.0.0, 1.0.0` protocol header.
+      headers,
       chunkSize: params.chunkSize ?? Infinity,
       retryDelays: params.retryDelays === undefined ? DEFAULT_RETRY_DELAYS : params.retryDelays,
       storeFingerprintForResuming: params.resume ?? false,
