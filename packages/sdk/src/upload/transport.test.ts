@@ -1,4 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
+
+const tusMocks = vi.hoisted(() => ({
+  options: [] as Array<Record<string, unknown>>,
+}));
+
+vi.mock('tus-js-client', () => ({
+  Upload: class {
+    constructor(_data: unknown, options: Record<string, unknown>) {
+      tusMocks.options.push(options);
+    }
+
+    start() {
+      (tusMocks.options.at(-1)?.onSuccess as () => void)();
+    }
+
+    abort() {
+      return Promise.resolve();
+    }
+  },
+}));
+
 import { UploadError, UploadSessionExpiredError } from '../errors';
 import type { ResolvedUploadSource } from './source';
 import {
@@ -82,6 +103,21 @@ describe('runResolvedUpload', () => {
 });
 
 describe('tusUploadTransport', () => {
+  it('lets tus-js-client own the protocol header', async () => {
+    await tusUploadTransport({
+      data: new Uint8Array([1]),
+      uploadUrl: 'https://up',
+      uploadSize: 1,
+      headers: {
+        'Tus-Resumable': '1.0.0',
+        'tUs-ReSuMaBlE': '1.0.0',
+        Authorization: 'Bearer scoped',
+      },
+    });
+
+    expect(tusMocks.options.at(-1)?.headers).toEqual({ Authorization: 'Bearer scoped' });
+  });
+
   it('rejects immediately when the signal is already aborted', async () => {
     const controller = new AbortController();
     controller.abort();
