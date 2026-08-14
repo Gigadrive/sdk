@@ -1,5 +1,11 @@
 # @gigadrive/sdk
 
+## 0.8.2
+
+### Patch Changes
+
+- Avoid duplicating the TUS protocol header when uploading through `tus-js-client` in browsers. ([#460](https://github.com/Gigadrive/sdk/pull/460))
+
 ## 0.8.1
 
 ### Patch Changes
