@@ -2,8 +2,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { parseStaticAssetManifest } from './asset-manifest';
 import gigadriveNextAdapter from './nextjs-adapter';
-import { parseGigadriveNextBuildManifest, type GigadriveNextBuildManifestV2Standalone } from './nextjs-manifest';
+import {
+  parseGigadriveNextBuildManifest,
+  parseGigadriveNextPrerenderManifest,
+  type GigadriveNextBuildManifestV2Standalone,
+} from './nextjs-manifest';
 
 const temporaryDirectories: string[] = [];
 
@@ -80,6 +85,14 @@ const onBuildComplete = async (context: Record<string, unknown>): Promise<void> 
 
 const readManifest = async (projectDir: string) =>
   parseGigadriveNextBuildManifest(await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8'));
+
+const readAssetManifest = async (projectDir: string) =>
+  parseStaticAssetManifest(await readFile(path.join(projectDir, '.gigadrive', 'assets', 'nextjs.json'), 'utf8'));
+
+const readPrerenderManifest = async (projectDir: string) =>
+  parseGigadriveNextPrerenderManifest(
+    await readFile(path.join(projectDir, '.gigadrive', 'nextjs-prerenders.json'), 'utf8')
+  );
 
 afterEach(async () => {
   delete process.env.GIGADRIVE_DEPLOYMENT_ID;
@@ -188,8 +201,14 @@ describe('Gigadrive Next.js adapter', () => {
     const projectDir = path.join(repoRoot, 'apps', 'web');
     const distDir = path.join(projectDir, '.next');
     const fallbackPath = path.join(distDir, 'server', 'app', 'isr.html');
+    const staticPagePath = path.join(distDir, 'server', 'pages', 'about.html');
+    const staticChunkPath = path.join(distDir, 'static', 'chunks', 'app.js');
     await mkdir(path.dirname(fallbackPath), { recursive: true });
+    await mkdir(path.dirname(staticPagePath), { recursive: true });
+    await mkdir(path.dirname(staticChunkPath), { recursive: true });
     await writeFile(fallbackPath, '<html>isr</html>');
+    await writeFile(staticPagePath, '<html>about</html>');
+    await writeFile(staticChunkPath, 'chunk');
 
     const routeOutput = (id: string, config: Record<string, unknown>) => ({
       id,
@@ -231,7 +250,22 @@ describe('Gigadrive Next.js adapter', () => {
             config: { renderingMode: 'PARTIALLY_STATIC', allowQuery: ['q'] },
           },
         ],
-        staticFiles: [],
+        staticFiles: [
+          {
+            id: 'about',
+            type: 'STATIC_FILE',
+            pathname: '/about',
+            filePath: staticPagePath,
+            immutableHash: undefined,
+          },
+          {
+            id: 'static/chunks/app.js',
+            type: 'STATIC_FILE',
+            pathname: '/_next/static/chunks/app.js',
+            filePath: staticChunkPath,
+            immutableHash: 'hash',
+          },
+        ],
       },
     });
 
@@ -248,11 +282,18 @@ describe('Gigadrive Next.js adapter', () => {
       config: { basePath: '', trailingSlash: false, cacheComponents: false, images: { qualities: [75] } },
       routing: { shouldNormalizeNextData: true, rsc: { header: 'rsc' } },
       outputs: {
+        prerenders: [],
+        prerenderManifest: '.gigadrive/nextjs-prerenders.json',
+        assetManifest: '.gigadrive/assets/nextjs.json',
+        entryPagePaths: [],
         staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
       },
     });
-    expect(manifest.outputs.prerenders).toHaveLength(1);
-    expect(manifest.outputs.prerenders[0]).toMatchObject({
+    expect(manifest.outputs.prerenders).toEqual([]);
+
+    const prerenderManifest = await readPrerenderManifest(projectDir);
+    expect(prerenderManifest?.prerenders).toHaveLength(1);
+    expect(prerenderManifest?.prerenders[0]).toMatchObject({
       id: 'isr',
       pathname: '/isr',
       fallback: {
@@ -263,10 +304,59 @@ describe('Gigadrive Next.js adapter', () => {
       },
       config: { renderingMode: 'PARTIALLY_STATIC', allowQuery: ['q'] },
     });
+
+    expect(await readAssetManifest(projectDir)).toEqual({
+      version: 1,
+      assets: [
+        { source: '.next/server/pages/about.html', path: '/about' },
+        { source: '.next/server/app/isr.html', path: '/isr' },
+      ],
+    });
     // No per-route entrypoints or wrappers exist in the single-server model.
     expect((manifest as unknown as Record<string, unknown>).entrypoints).toBeUndefined();
     expect((manifest as unknown as Record<string, unknown>).outputEntrypoints).toBeUndefined();
     await expect(readFile(path.join(projectDir, '.gigadrive', 'nextjs', 'entrypoints'))).rejects.toThrow();
+  });
+
+  it('keeps high-cardinality outputs in sidecars', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-sidecars-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const prerenderDirectory = path.join(distDir, 'server', 'app', 'docs');
+    await mkdir(prerenderDirectory, { recursive: true });
+
+    const prerenders = await Promise.all(
+      Array.from({ length: 75 }, async (_, index) => {
+        const filePath = path.join(prerenderDirectory, `${index}.html`);
+        await writeFile(filePath, `<html>${index}</html>`);
+        return {
+          id: `docs-${index}`,
+          type: 'PRERENDER',
+          pathname: `/docs/${index}`,
+          parentOutputId: 'docs',
+          groupId: index,
+          fallback: { filePath, initialRevalidate: false },
+          config: {},
+        };
+      })
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: { ...emptyOutputs, prerenders },
+    });
+
+    const manifest = (await readManifest(projectDir)) as GigadriveNextBuildManifestV2Standalone;
+    expect(manifest.outputs.prerenders).toEqual([]);
+    expect(manifest.outputs.entryPagePaths).toHaveLength(50);
+    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(75);
+    expect((await readAssetManifest(projectDir))?.assets).toHaveLength(75);
   });
 
   it('writes a minimal export manifest for static export on the managed runtime', async () => {

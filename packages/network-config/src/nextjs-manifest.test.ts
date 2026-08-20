@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseGigadriveNextBuildManifest } from './nextjs-manifest';
+import { parseGigadriveNextBuildManifest, parseGigadriveNextPrerenderManifest } from './nextjs-manifest';
 
 const imagePolicy = {
   localPatterns: [{ pathname: '/images/**' }],
@@ -85,6 +85,19 @@ describe('parseGigadriveNextBuildManifest', () => {
     expect(parse(manifest)).toEqual(manifest);
   });
 
+  it('accepts sidecar references in a standalone-v2 manifest', () => {
+    const manifest = standaloneV2({
+      outputs: {
+        prerenders: [],
+        prerenderManifest: '.gigadrive/nextjs-prerenders.json',
+        assetManifest: '.gigadrive/assets/nextjs.json',
+        entryPagePaths: ['/', '/docs'],
+        staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
+      },
+    });
+    expect(parse(manifest)).toEqual(manifest);
+  });
+
   it('accepts a minimal export manifest', () => {
     const manifest = {
       version: 2,
@@ -137,6 +150,20 @@ describe('parseGigadriveNextBuildManifest', () => {
     expect(parse(manifest)).toBeUndefined();
   });
 
+  it('rejects unsafe sidecar paths', () => {
+    expect(
+      parse(
+        standaloneV2({
+          outputs: {
+            prerenders: [],
+            assetManifest: '../assets.json',
+            staticAssets: [],
+          },
+        })
+      )
+    ).toBeUndefined();
+  });
+
   it('rejects a standalone-v2 manifest missing the server descriptor', () => {
     const { server: _server, ...withoutServer } = standaloneV2();
     expect(parse(withoutServer)).toBeUndefined();
@@ -165,5 +192,19 @@ describe('parseGigadriveNextBuildManifest', () => {
     expect(
       parse({ version: 3, distDir: '.next', repoRootToProject: '.', nextVersion: '17.0.0', buildId: 'x' })
     ).toBeUndefined();
+  });
+});
+
+describe('parseGigadriveNextPrerenderManifest', () => {
+  it('accepts validated prerender entries', () => {
+    const prerenders = standaloneV2().outputs.prerenders;
+    const manifest = { version: 1, prerenders };
+    expect(parseGigadriveNextPrerenderManifest(JSON.stringify(manifest))).toEqual(manifest);
+  });
+
+  it('rejects unsafe fallback paths', () => {
+    const prerenders = standaloneV2().outputs.prerenders;
+    prerenders[0].fallback.filePath = '../outside.html';
+    expect(parseGigadriveNextPrerenderManifest(JSON.stringify({ version: 1, prerenders }))).toBeUndefined();
   });
 });

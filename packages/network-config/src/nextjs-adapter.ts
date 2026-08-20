@@ -3,11 +3,13 @@ import { access, mkdir, realpath, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { StaticAssetManifestEntry, StaticAssetManifestV1 } from './asset-manifest';
 import type { NormalizedImagePolicy } from './image-policy';
 import type {
   GigadriveNextBuildManifestV1,
   GigadriveNextBuildManifestV2Export,
   GigadriveNextBuildManifestV2Standalone,
+  GigadriveNextPrerenderManifestV1,
   GigadriveNextPrerenderOutput,
   GigadriveNextServerDescriptor,
   GigadriveNextStaticAssetPrefix,
@@ -22,8 +24,12 @@ type NextRouteOutput =
   | BuildCompleteContext['outputs']['appRoutes'][number]
   | NonNullable<BuildCompleteContext['outputs']['middleware']>;
 type NextPrerenderOutput = BuildCompleteContext['outputs']['prerenders'][number];
+type NextStaticFileOutput = BuildCompleteContext['outputs']['staticFiles'][number];
 
 const PRODUCTION_BUILD_PHASE = 'phase-production-build';
+const MAXIMUM_ENTRY_PAGE_PATHS = 50;
+const NEXT_ASSET_MANIFEST_PATH = '.gigadrive/assets/nextjs.json';
+const NEXT_PRERENDER_MANIFEST_PATH = '.gigadrive/nextjs-prerenders.json';
 const runtimeDirectory = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 const runtimeModulePath = (environmentName: string, fileName: string): string =>
@@ -78,26 +84,107 @@ const toPortableRelativePath = (from: string, to: string, allowCurrentDirectory 
   return normalized;
 };
 
-async function resolveReadablePath(repoRoot: string, filePath: string) {
+async function resolveReadablePath(repoRoot: string, filePath: string, resolvedRoot?: string) {
   const absolutePath = path.resolve(path.isAbsolute(filePath) ? filePath : path.join(repoRoot, filePath));
   const portablePath = toPortableRelativePath(repoRoot, absolutePath);
   await access(absolutePath);
   // Validate the symlink-resolved location as well; the call throws when the
   // real path escapes the repository root.
   const resolvedPath = await realpath(absolutePath);
-  void toPortableRelativePath(repoRoot, resolvedPath);
+  void toPortableRelativePath(resolvedRoot ?? (await realpath(repoRoot)), resolvedPath);
   const fileStat = await stat(absolutePath);
   return { portablePath, fileStat };
 }
 
-async function requireReadableFile(repoRoot: string, filePath: string): Promise<string> {
-  const { portablePath, fileStat } = await resolveReadablePath(repoRoot, filePath);
+async function requireReadableFile(repoRoot: string, filePath: string, resolvedRoot?: string): Promise<string> {
+  const { portablePath, fileStat } = await resolveReadablePath(repoRoot, filePath, resolvedRoot);
   if (!fileStat.isFile()) throw new Error(`Next.js adapter output is not a readable file: ${filePath}`);
   return portablePath;
 }
 
+async function mapInBatches<Input, Output>(
+  values: Input[],
+  mapper: (value: Input) => Promise<Output>,
+  batchSize = 64
+): Promise<Output[]> {
+  const results: Output[] = [];
+  for (let index = 0; index < values.length; index += batchSize) {
+    results.push(...(await Promise.all(values.slice(index, index + batchSize).map((value) => mapper(value)))));
+  }
+  return results;
+}
+
+const isInsideDirectory = (directory: string, filePath: string): boolean => {
+  const relativePath = path.relative(path.resolve(directory), path.resolve(filePath));
+  return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+};
+
+const serializeStaticFileAsset = async (
+  projectDir: string,
+  resolvedProjectDir: string,
+  output: NextStaticFileOutput
+): Promise<StaticAssetManifestEntry> => ({
+  source: await requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
+  path: output.pathname,
+  ...(output.immutableHash ? { immutable: true } : {}),
+});
+
+const serializePrerenderAsset = (
+  projectDir: string,
+  repoRoot: string,
+  output: GigadriveNextPrerenderOutput
+): StaticAssetManifestEntry | undefined => {
+  if (!output.fallback?.filePath) return undefined;
+  return {
+    source: toPortableRelativePath(projectDir, path.join(repoRoot, output.fallback.filePath)),
+    path: output.pathname,
+    ...(output.fallback.initialStatus !== undefined ? { status: output.fallback.initialStatus } : {}),
+    ...(output.fallback.initialHeaders ? { headers: output.fallback.initialHeaders } : {}),
+  };
+};
+
+async function serializeAssetManifest(
+  projectDir: string,
+  resolvedProjectDir: string,
+  repoRoot: string,
+  distDir: string,
+  staticFiles: NextStaticFileOutput[],
+  prerenders: GigadriveNextPrerenderOutput[]
+): Promise<StaticAssetManifestV1> {
+  const staticDirectory = path.join(distDir, 'static');
+  const staticEntries = await mapInBatches(
+    staticFiles.filter(
+      // The complete immutable subtree is already represented by a prefix.
+      (output) => !isInsideDirectory(staticDirectory, output.filePath)
+    ),
+    (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, output)
+  );
+  const entries = [
+    ...staticEntries,
+    ...prerenders.map((output) => serializePrerenderAsset(projectDir, repoRoot, output)),
+  ];
+  const assetsByPath = new Map<string, StaticAssetManifestEntry>();
+  for (const entry of entries) {
+    if (entry) assetsByPath.set(entry.path, entry);
+  }
+  return { version: 1, assets: [...assetsByPath.values()] };
+}
+
+const getEntryPagePaths = (prerenders: GigadriveNextPrerenderOutput[]): string[] =>
+  [
+    ...new Set(
+      prerenders
+        .filter((output) => !output.fallback?.postponedState)
+        .map((output) => output.pathname)
+        .filter((pathname) => pathname.startsWith('/') && !pathname.includes('['))
+    ),
+  ]
+    .sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))
+    .slice(0, MAXIMUM_ENTRY_PAGE_PATHS);
+
 const serializePrerenderOutput = async (
   repoRoot: string,
+  resolvedRepoRoot: string,
   output: NextPrerenderOutput
 ): Promise<GigadriveNextPrerenderOutput> => {
   const { bypassFor, ...prerenderConfig } = output.config;
@@ -113,7 +200,7 @@ const serializePrerenderOutput = async (
       ? {
           fallback: {
             ...(output.fallback.filePath
-              ? { filePath: await requireReadableFile(repoRoot, output.fallback.filePath) }
+              ? { filePath: await requireReadableFile(repoRoot, output.fallback.filePath, resolvedRepoRoot) }
               : {}),
             ...(output.fallback.initialStatus !== undefined ? { initialStatus: output.fallback.initialStatus } : {}),
             ...(output.fallback.initialHeaders ? { initialHeaders: output.fallback.initialHeaders } : {}),
@@ -352,9 +439,24 @@ const gigadriveNextAdapter: NextAdapter = {
       await ensureStandaloneServerTraces(projectDir, repoRoot, distDir, config);
     }
 
-    const prerenders = await Promise.all(
-      outputs.prerenders.map((output) => serializePrerenderOutput(repoRoot, output))
+    const [resolvedRepoRoot, resolvedProjectDir] = await Promise.all([realpath(repoRoot), realpath(projectDir)]);
+    const prerenders = await mapInBatches(outputs.prerenders, (output) =>
+      serializePrerenderOutput(repoRoot, resolvedRepoRoot, output)
     );
+    const assetManifest = await serializeAssetManifest(
+      projectDir,
+      resolvedProjectDir,
+      repoRoot,
+      distDir,
+      outputs.staticFiles,
+      prerenders
+    );
+    const prerenderManifest: GigadriveNextPrerenderManifestV1 = { version: 1, prerenders };
+    await mkdir(path.join(metadataDirectory, 'assets'), { recursive: true });
+    await Promise.all([
+      writeFile(path.join(projectDir, NEXT_ASSET_MANIFEST_PATH), `${JSON.stringify(assetManifest)}\n`, 'utf8'),
+      writeFile(path.join(projectDir, NEXT_PRERENDER_MANIFEST_PATH), `${JSON.stringify(prerenderManifest)}\n`, 'utf8'),
+    ]);
     const server = aggregateServerDescriptor([
       ...outputs.pages,
       ...outputs.pagesApi,
@@ -394,7 +496,13 @@ const gigadriveNextAdapter: NextAdapter = {
         shouldNormalizeNextData: routing.shouldNormalizeNextData,
         rsc: toJsonValue(routing.rsc),
       },
-      outputs: { prerenders, staticAssets },
+      outputs: {
+        prerenders: [],
+        prerenderManifest: NEXT_PRERENDER_MANIFEST_PATH,
+        assetManifest: NEXT_ASSET_MANIFEST_PATH,
+        entryPagePaths: getEntryPagePaths(prerenders),
+        staticAssets,
+      },
     };
     await writeManifest(manifest);
   },

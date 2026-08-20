@@ -29,6 +29,12 @@ export interface GigadriveNextPrerenderOutput {
   };
 }
 
+/** Portable sidecar containing high-cardinality Next.js prerender metadata. */
+export interface GigadriveNextPrerenderManifestV1 {
+  version: 1;
+  prerenders: GigadriveNextPrerenderOutput[];
+}
+
 /**
  * A directory subtree published under a single URL prefix, registered as one
  * descriptor instead of enumerating every file. Used to collapse `.next/static`
@@ -94,7 +100,17 @@ export interface GigadriveNextBuildManifestV2Standalone {
     rsc: JsonValue;
   };
   outputs: {
+    /**
+     * Inline prerenders emitted by older adapter versions. New manifests keep
+     * this empty and use `prerenderManifest` to avoid expanding deployment config.
+     */
     prerenders: GigadriveNextPrerenderOutput[];
+    /** Project-relative path to the full prerender metadata sidecar. */
+    prerenderManifest?: string;
+    /** Project-relative path to the generic static asset manifest. */
+    assetManifest?: string;
+    /** Bounded set of concrete paths suitable for cache warming. */
+    entryPagePaths?: string[];
     staticAssets: GigadriveNextStaticAssetPrefix[];
   };
 }
@@ -154,6 +170,9 @@ const isStaticAssetPrefix = (value: unknown): value is GigadriveNextStaticAssetP
   isPortableRelativePath(value.sourceDir) &&
   isPortableRelativePath(value.urlPrefix) &&
   typeof value.immutable === 'boolean';
+
+const isPathnameArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((pathname) => typeof pathname === 'string' && pathname.startsWith('/'));
 
 const isServerDescriptor = (value: unknown): value is GigadriveNextServerDescriptor =>
   isRecord(value) &&
@@ -230,6 +249,9 @@ export const parseGigadriveNextBuildManifest = (content: string): GigadriveNextB
           !isRecord(value.outputs) ||
           !Array.isArray(value.outputs.prerenders) ||
           !value.outputs.prerenders.every(isPrerenderOutput) ||
+          (value.outputs.prerenderManifest !== undefined && !isPortableRelativePath(value.outputs.prerenderManifest)) ||
+          (value.outputs.assetManifest !== undefined && !isPortableRelativePath(value.outputs.assetManifest)) ||
+          (value.outputs.entryPagePaths !== undefined && !isPathnameArray(value.outputs.entryPagePaths)) ||
           !Array.isArray(value.outputs.staticAssets) ||
           !value.outputs.staticAssets.every(isStaticAssetPrefix)
         ) {
@@ -243,6 +265,24 @@ export const parseGigadriveNextBuildManifest = (content: string): GigadriveNextB
     }
 
     return undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** Parses and validates a portable Next.js prerender sidecar. */
+export const parseGigadriveNextPrerenderManifest = (content: string): GigadriveNextPrerenderManifestV1 | undefined => {
+  try {
+    const value: unknown = JSON.parse(content);
+    if (
+      !isRecord(value) ||
+      value.version !== 1 ||
+      !Array.isArray(value.prerenders) ||
+      !value.prerenders.every(isPrerenderOutput)
+    ) {
+      return undefined;
+    }
+    return value as unknown as GigadriveNextPrerenderManifestV1;
   } catch {
     return undefined;
   }

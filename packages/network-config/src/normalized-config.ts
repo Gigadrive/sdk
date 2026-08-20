@@ -72,6 +72,15 @@ export interface NormalizedConfig {
     }>;
 
     /**
+     * Project-relative manifests containing logical static asset entries. A
+     * manifest keeps high-cardinality path mappings out of this configuration.
+     */
+    manifests?: Array<{
+      /** Project-relative path to a {@link StaticAssetManifest}. */
+      source: string;
+    }>;
+
+    /**
      * Whether routes for the assets should be generated during deployment.
      */
     dynamicRoutes?: boolean;

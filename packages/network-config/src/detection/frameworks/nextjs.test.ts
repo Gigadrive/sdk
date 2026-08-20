@@ -62,17 +62,10 @@ const standaloneV2Manifest = (overrides: Record<string, unknown> = {}) =>
       rsc: {},
     },
     outputs: {
-      prerenders: [
-        {
-          id: 'isr',
-          type: 'PRERENDER',
-          pathname: '/isr',
-          parentOutputId: 'app',
-          groupId: 1,
-          fallback: { filePath: '.next/server/app/isr.html', initialRevalidate: 5 },
-          config: { renderingMode: 'PARTIALLY_STATIC' },
-        },
-      ],
+      prerenders: [],
+      prerenderManifest: '.gigadrive/nextjs-prerenders.json',
+      assetManifest: '.gigadrive/assets/nextjs.json',
+      entryPagePaths: ['/isr'],
       staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
     },
     ...overrides,
@@ -218,12 +211,11 @@ describe('Next.js framework detection', () => {
     expect(result.config.assets).toMatchObject({
       paths: ['public/gigadrive-mark.svg'],
       prefixes: [{ source: '.next/static', destination: '_next/static', immutable: true, populateCache: true }],
+      manifests: [{ source: '.gigadrive/assets/nextjs.json' }],
       overrides: { 'public/gigadrive-mark.svg': { path: 'gigadrive-mark.svg' } },
       populateCache: true,
     });
-    // Prerender shells are served by the standalone server from its own bundle,
-    // so they are never uploaded as assets (they numbered in the tens of
-    // thousands on large content sites).
+    // Manifest-backed assets are not expanded into per-file config entries.
     expect(result.config.assets?.paths).not.toContain('.next/server/app/isr.html');
     expect(Object.keys(result.config.assets?.overrides ?? {})).not.toContain('.next/server/app/isr.html');
     expect(result.config.framework).toMatchObject({
@@ -233,10 +225,13 @@ describe('Next.js framework detection', () => {
       buildId: 'build-id',
       routing: { shouldNormalizeNextData: true },
       outputs: {
+        prerenderManifest: '.gigadrive/nextjs-prerenders.json',
+        assetManifest: '.gigadrive/assets/nextjs.json',
+        entryPagePaths: ['/isr'],
         staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
       },
     });
-    // The full prerender table is not forwarded; only a bounded warming sample.
+    // The full prerender table remains in its sidecar; only a bounded warming sample is inline.
     expect(result.config.framework?.outputs.prerenders).toEqual([]);
     expect(result.config.framework?.entryPagePaths).toEqual(['/isr']);
     expect(result.config.images).toMatchObject({

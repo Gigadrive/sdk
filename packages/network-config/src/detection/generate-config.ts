@@ -86,12 +86,13 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
     ...defaults.normalizedConfig,
   };
 
-  if (defaults.assetsDir || defaults.assetPaths || defaults.assetPrefixes) {
+  if (defaults.assetsDir || defaults.assetPaths || defaults.assetPrefixes || defaults.assetManifests) {
     config.assets = {
       paths: defaults.assetPaths ? [...defaults.assetPaths] : [],
       prefixToStrip: defaults.assetsPrefixToStrip ?? (defaults.assetsDir ? defaults.assetsDir + '/' : ''),
       overrides: defaults.assetOverrides ? { ...defaults.assetOverrides } : undefined,
       prefixes: defaults.assetPrefixes ? defaults.assetPrefixes.map((prefix) => ({ ...prefix })) : undefined,
+      manifests: defaults.assetManifests ? defaults.assetManifests.map((manifest) => ({ ...manifest })) : undefined,
       dynamicRoutes: true,
       populateCache: defaults.populateAssetCache ?? false,
     };

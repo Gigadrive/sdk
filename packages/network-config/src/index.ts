@@ -1,3 +1,4 @@
+export * from './asset-manifest';
 export * from './detection';
 export * from './errors';
 export * from './filter-functions-from-assets';

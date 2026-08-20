@@ -146,6 +146,17 @@ describe('mergeWithFrameworkDefaults', () => {
     expect(result.assets).toEqual(userAssets);
   });
 
+  it('should use user assets when user has a manifest-backed collection', async () => {
+    const userAssets = { manifests: [{ source: '.gigadrive/assets/custom.json' }] };
+    const frameworkAssets = { paths: [], prefixToStrip: 'dist/' };
+
+    const user = makeConfig({ assets: userAssets });
+    const framework = makeConfig({ assets: frameworkAssets });
+
+    const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, framework));
+    expect(result.assets).toEqual(userAssets);
+  });
+
   it('should use framework assets when user has no asset paths', async () => {
     const frameworkAssets = { paths: [], prefixToStrip: 'dist/', dynamicRoutes: true, populateCache: true };
 
