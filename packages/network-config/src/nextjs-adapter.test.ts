@@ -223,7 +223,10 @@ describe('Gigadrive Next.js adapter', () => {
     await writeFile(faviconPath, 'icon');
     await writeFile(
       faviconMetaPath,
-      JSON.stringify({ headers: { 'content-type': 'image/x-icon', 'cache-control': 'public, max-age=0' } })
+      JSON.stringify({
+        status: 404,
+        headers: { 'content-type': 'image/x-icon', 'cache-control': 'public, max-age=0' },
+      })
     );
     await writeFile(staticPagePath, '<html>home</html>');
     await writeFile(staticChunkPath, 'chunk');
@@ -388,6 +391,7 @@ describe('Gigadrive Next.js adapter', () => {
         {
           source: '.next/server/app/favicon.ico.body',
           path: '/favicon.ico',
+          status: 404,
           headers: { 'content-type': 'image/x-icon', 'cache-control': 'public, max-age=0' },
         },
       ],

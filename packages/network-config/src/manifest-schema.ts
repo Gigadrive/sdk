@@ -2,6 +2,7 @@ import { Option, Schema } from 'effect';
 
 const HTTP_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const HTTP_HEADER_VALUE = /^[\t\x20-\x7e\x80-\xff]*$/;
+const URL_CONTROL_CHARACTER = /[\x00-\x1f\x7f]/;
 
 const isPortableRelativePath = (value: string, allowCurrentDirectory = false): boolean => {
   const normalized = value.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '');
@@ -21,7 +22,14 @@ export const RepositoryRelativePathSchema = Schema.String.pipe(
 );
 
 export const UrlPathnameSchema = Schema.String.pipe(
-  Schema.filter((value) => value.startsWith('/') && !value.includes('?') && !value.includes('#'))
+  Schema.filter(
+    (value) =>
+      value.startsWith('/') &&
+      !value.includes('?') &&
+      !value.includes('#') &&
+      !URL_CONTROL_CHARACTER.test(value) &&
+      !value.split('/').includes('..')
+  )
 );
 
 export const HttpHeaderValueSchema = Schema.String.pipe(Schema.pattern(HTTP_HEADER_VALUE));

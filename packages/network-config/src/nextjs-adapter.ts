@@ -34,7 +34,10 @@ const NEXT_ASSET_MANIFEST_PATH = '.gigadrive/assets/nextjs.json';
 const NEXT_PRERENDER_MANIFEST_PATH = '.gigadrive/nextjs-prerenders.json';
 const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 const DEFAULT_RSC_CONTENT_TYPE = 'text/x-component';
-const NextStaticFileMetaSchema = Schema.Struct({ headers: HttpHeadersSchema });
+const NextStaticFileMetaSchema = Schema.Struct({
+  status: Schema.optional(Schema.Int.pipe(Schema.between(100, 599))),
+  headers: HttpHeadersSchema,
+});
 const runtimeDirectory = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 const runtimeModulePath = (environmentName: string, fileName: string): string =>
@@ -134,12 +137,12 @@ const normalizeStaticFilePathname = (pathname: string, basePath: string): string
 const hasContentType = (headers: StaticAssetHeaders): boolean =>
   Object.keys(headers).some((name) => name.toLowerCase() === 'content-type');
 
-async function getStaticFileHeaders(
+async function getStaticFileResponseMetadata(
   projectDir: string,
   resolvedProjectDir: string,
   output: NextStaticFileOutput,
   rscContentType: string
-): Promise<StaticAssetHeaders | undefined> {
+): Promise<Pick<StaticAssetManifestEntry, 'status' | 'headers'>> {
   if (output.filePath.endsWith('.body')) {
     const metaPath = `${output.filePath.slice(0, -'.body'.length)}.meta`;
     await requireReadableFile(projectDir, metaPath, resolvedProjectDir);
@@ -147,11 +150,14 @@ async function getStaticFileHeaders(
     if (!meta || !hasContentType(meta.headers)) {
       throw new Error(`Next.js static metadata is missing valid response headers: ${metaPath}`);
     }
-    return meta.headers;
+    return {
+      ...(meta.status !== undefined ? { status: meta.status } : {}),
+      headers: meta.headers,
+    };
   }
-  if (output.filePath.endsWith('.html')) return { 'content-type': HTML_CONTENT_TYPE };
-  if (output.pathname.endsWith('.rsc')) return { 'content-type': rscContentType };
-  return undefined;
+  if (output.filePath.endsWith('.html')) return { headers: { 'content-type': HTML_CONTENT_TYPE } };
+  if (output.pathname.endsWith('.rsc')) return { headers: { 'content-type': rscContentType } };
+  return {};
 }
 
 const serializeStaticFileAsset = async (
@@ -161,14 +167,14 @@ const serializeStaticFileAsset = async (
   rscContentType: string,
   output: NextStaticFileOutput
 ): Promise<StaticAssetManifestEntry> => {
-  const [source, headers] = await Promise.all([
+  const [source, responseMetadata] = await Promise.all([
     requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
-    getStaticFileHeaders(projectDir, resolvedProjectDir, output, rscContentType),
+    getStaticFileResponseMetadata(projectDir, resolvedProjectDir, output, rscContentType),
   ]);
   return {
     source,
     path: normalizeStaticFilePathname(output.pathname, basePath),
-    ...(headers ? { headers } : {}),
+    ...responseMetadata,
     ...(output.immutableHash ? { immutable: true } : {}),
   };
 };
