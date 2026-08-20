@@ -121,14 +121,19 @@ const isInsideDirectory = (directory: string, filePath: string): boolean => {
 
 const isDynamicRoutePathname = (pathname: string): boolean => pathname.includes('[');
 
+// Next reports the Pages Router root as `<basePath>/index`, while its public URL
+// is the base path itself (or `/` when no base path is configured).
+const normalizeStaticFilePathname = (pathname: string, basePath: string): string =>
+  pathname === `${basePath}/index` ? basePath || '/' : pathname;
+
 const serializeStaticFileAsset = async (
   projectDir: string,
   resolvedProjectDir: string,
+  basePath: string,
   output: NextStaticFileOutput
 ): Promise<StaticAssetManifestEntry> => ({
   source: await requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
-  // Pages Router normalizes its root page to `/index`; it is still served at `/`.
-  path: output.pathname === '/index' ? '/' : output.pathname,
+  path: normalizeStaticFilePathname(output.pathname, basePath),
   ...(output.immutableHash ? { immutable: true } : {}),
 });
 
@@ -137,18 +142,22 @@ const serializePrerenderAsset = (
   repoRoot: string,
   output: GigadriveNextPrerenderOutput
 ): StaticAssetManifestEntry | undefined => {
+  const { fallback } = output;
+  // Only `false` is permanently static; numbers (and Next's default of 1) are ISR.
+  const isPermanentlyStatic = fallback?.initialRevalidate === false;
   if (
-    !output.fallback?.filePath ||
-    output.fallback.postponedState !== undefined ||
+    !fallback?.filePath ||
+    !isPermanentlyStatic ||
+    fallback.postponedState !== undefined ||
     isDynamicRoutePathname(output.pathname)
   ) {
     return undefined;
   }
   return {
-    source: toPortableRelativePath(projectDir, path.join(repoRoot, output.fallback.filePath)),
+    source: toPortableRelativePath(projectDir, path.join(repoRoot, fallback.filePath)),
     path: output.pathname,
-    ...(output.fallback.initialStatus !== undefined ? { status: output.fallback.initialStatus } : {}),
-    ...(output.fallback.initialHeaders ? { headers: output.fallback.initialHeaders } : {}),
+    ...(fallback.initialStatus !== undefined ? { status: fallback.initialStatus } : {}),
+    ...(fallback.initialHeaders ? { headers: fallback.initialHeaders } : {}),
   };
 };
 
@@ -157,6 +166,7 @@ async function serializeAssetManifest(
   resolvedProjectDir: string,
   repoRoot: string,
   distDir: string,
+  basePath: string,
   staticFiles: NextStaticFileOutput[],
   prerenders: GigadriveNextPrerenderOutput[]
 ): Promise<StaticAssetManifestV1> {
@@ -166,7 +176,7 @@ async function serializeAssetManifest(
       // The complete immutable subtree is already represented by a prefix.
       (output) => !isInsideDirectory(staticDirectory, output.filePath) && !isDynamicRoutePathname(output.pathname)
     ),
-    (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, output)
+    (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, basePath, output)
   );
   const entries = [
     ...staticEntries,
@@ -457,6 +467,7 @@ const gigadriveNextAdapter: NextAdapter = {
       resolvedProjectDir,
       repoRoot,
       distDir,
+      config.basePath,
       outputs.staticFiles,
       prerenders
     );

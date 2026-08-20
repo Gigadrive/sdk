@@ -201,6 +201,7 @@ describe('Gigadrive Next.js adapter', () => {
     const projectDir = path.join(repoRoot, 'apps', 'web');
     const distDir = path.join(projectDir, '.next');
     const fallbackPath = path.join(distDir, 'server', 'app', 'isr.html');
+    const isrFallbackPath = path.join(distDir, 'server', 'app', 'isr-plain.html');
     const dynamicFallbackPath = path.join(distDir, 'server', 'pages', 'blog', '[slug].html');
     const dynamicRscPath = path.join(distDir, 'server', 'app', 'blog', '[slug].rsc');
     const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
@@ -211,6 +212,7 @@ describe('Gigadrive Next.js adapter', () => {
     await mkdir(path.dirname(staticPagePath), { recursive: true });
     await mkdir(path.dirname(staticChunkPath), { recursive: true });
     await writeFile(fallbackPath, '<html>isr</html>');
+    await writeFile(isrFallbackPath, '<html>isr plain</html>');
     await writeFile(dynamicFallbackPath, '<html>fallback</html>');
     await writeFile(dynamicRscPath, 'fallback-rsc');
     await writeFile(staticPagePath, '<html>home</html>');
@@ -264,6 +266,15 @@ describe('Gigadrive Next.js adapter', () => {
             fallback: { filePath: dynamicFallbackPath, initialRevalidate: 5 },
             config: { allowQuery: ['slug'] },
           },
+          {
+            id: 'isr-plain',
+            type: 'PRERENDER',
+            pathname: '/isr-plain',
+            parentOutputId: 'blog',
+            groupId: 3,
+            fallback: { filePath: isrFallbackPath, initialRevalidate: 60 },
+            config: {},
+          },
         ],
         staticFiles: [
           {
@@ -307,14 +318,14 @@ describe('Gigadrive Next.js adapter', () => {
         prerenders: [],
         prerenderManifest: '.gigadrive/nextjs-prerenders.json',
         assetManifest: '.gigadrive/assets/nextjs.json',
-        entryPagePaths: [],
+        entryPagePaths: ['/isr-plain'],
         staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
       },
     });
     expect(manifest.outputs.prerenders).toEqual([]);
 
     const prerenderManifest = await readPrerenderManifest(projectDir);
-    expect(prerenderManifest?.prerenders).toHaveLength(2);
+    expect(prerenderManifest?.prerenders).toHaveLength(3);
     expect(prerenderManifest?.prerenders[0]).toMatchObject({
       id: 'isr',
       pathname: '/isr',
@@ -331,6 +342,11 @@ describe('Gigadrive Next.js adapter', () => {
       pathname: '/blog/[slug]',
       fallback: { filePath: 'apps/web/.next/server/pages/blog/[slug].html' },
     });
+    expect(prerenderManifest?.prerenders[2]).toMatchObject({
+      id: 'isr-plain',
+      pathname: '/isr-plain',
+      fallback: { filePath: 'apps/web/.next/server/app/isr-plain.html', initialRevalidate: 60 },
+    });
 
     expect(await readAssetManifest(projectDir)).toEqual({
       version: 1,
@@ -340,6 +356,42 @@ describe('Gigadrive Next.js adapter', () => {
     expect((manifest as unknown as Record<string, unknown>).entrypoints).toBeUndefined();
     expect((manifest as unknown as Record<string, unknown>).outputEntrypoints).toBeUndefined();
     await expect(readFile(path.join(projectDir, '.gigadrive', 'nextjs', 'entrypoints'))).rejects.toThrow();
+  });
+
+  it('maps the Pages Router root static file to a configured base path', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-base-path-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
+    await mkdir(path.dirname(staticPagePath), { recursive: true });
+    await writeFile(staticPagePath, '<html>home</html>');
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig({ basePath: '/docs' }),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: {
+        ...emptyOutputs,
+        staticFiles: [
+          {
+            id: 'index',
+            type: 'STATIC_FILE',
+            pathname: '/docs/index',
+            filePath: staticPagePath,
+            immutableHash: undefined,
+          },
+        ],
+      },
+    });
+
+    expect(await readAssetManifest(projectDir)).toEqual({
+      version: 1,
+      assets: [{ source: '.next/server/pages/index.html', path: '/docs' }],
+    });
   });
 
   it('keeps high-cardinality outputs in sidecars', async () => {
