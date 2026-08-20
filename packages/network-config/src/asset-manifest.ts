@@ -1,10 +1,7 @@
 import { Schema } from 'effect';
-import { decodeJson, PortableRelativePathSchema, UrlPathnameSchema } from './manifest-schema';
+import { decodeJson, HttpHeadersSchema, PortableRelativePathSchema, UrlPathnameSchema } from './manifest-schema';
 
-const StringArraySchema = Schema.mutable(Schema.Array(Schema.String));
-export const StaticAssetHeadersSchema = Schema.mutable(
-  Schema.Record({ key: Schema.String, value: Schema.Union(Schema.String, StringArraySchema) })
-);
+export const StaticAssetHeadersSchema = HttpHeadersSchema;
 export type StaticAssetHeaders = Schema.Schema.Type<typeof StaticAssetHeadersSchema>;
 
 /** One logical static asset whose source is relative to the project root. */

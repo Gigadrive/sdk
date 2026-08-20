@@ -207,4 +207,19 @@ describe('parseGigadriveNextPrerenderManifest', () => {
     prerenders[0].fallback.filePath = '../outside.html';
     expect(parseGigadriveNextPrerenderManifest(JSON.stringify({ version: 1, prerenders }))).toBeUndefined();
   });
+
+  it.each([
+    { pathname: 'relative' },
+    { fallback: { initialStatus: '200' } },
+    { fallback: { initialStatus: 99 } },
+    { fallback: { initialHeaders: { 'invalid header': 'value' } } },
+    { fallback: { initialHeaders: { valid: 'value\r\nx-injected: true' } } },
+    { pprChain: { headers: { valid: 'value\n' } } },
+    { config: { allowHeader: [42] } },
+  ])('rejects invalid prerender metadata %#', (override) => {
+    const prerender = { ...standaloneV2().outputs.prerenders[0], ...override };
+    expect(
+      parseGigadriveNextPrerenderManifest(JSON.stringify({ version: 1, prerenders: [prerender] }))
+    ).toBeUndefined();
+  });
 });

@@ -26,6 +26,10 @@ describe('parseStaticAssetManifest', () => {
     { source: 'public/file.txt', path: '/file?query=true' },
     { source: 'public/file.txt', path: '/file', status: 99 },
     { source: 'public/file.txt', path: '/file', headers: { invalid: 42 } },
+    { source: 'public/file.txt', path: '/file', headers: { 'invalid header': 'value' } },
+    { source: 'public/file.txt', path: '/file', headers: { 'x-test\r\nx-injected': 'value' } },
+    { source: 'public/file.txt', path: '/file', headers: { valid: 'value\r\nx-injected: true' } },
+    { source: 'public/file.txt', path: '/file', headers: { valid: ['value', 'value\n'] } },
   ])('rejects an invalid asset entry %#', (asset) => {
     expect(parseStaticAssetManifest(JSON.stringify({ version: 1, assets: [asset] }))).toBeUndefined();
   });

@@ -2,6 +2,8 @@ import { Schema } from 'effect';
 import type { NormalizedImagePolicy } from './image-policy';
 import {
   decodeJson,
+  HttpHeadersSchema,
+  HttpSingleValueHeadersSchema,
   PortableRelativePathSchema,
   RepositoryRelativePathSchema,
   UrlPathnameSchema,
@@ -12,9 +14,6 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | { [key:
 
 const StringArraySchema = Schema.mutable(Schema.Array(Schema.String));
 const StringRecordSchema = Schema.mutable(Schema.Record({ key: Schema.String, value: Schema.String }));
-const HeaderRecordSchema = Schema.mutable(
-  Schema.Record({ key: Schema.String, value: Schema.Union(Schema.String, StringArraySchema) })
-);
 
 const JsonValueSchema: Schema.Schema<JsonValue> = Schema.suspend(() =>
   Schema.Union(
@@ -74,17 +73,17 @@ export const GigadriveNextPrerenderOutputSchema = Schema.mutable(
   Schema.Struct({
     id: Schema.String,
     type: Schema.Literal('PRERENDER'),
-    pathname: Schema.String,
+    pathname: UrlPathnameSchema,
     parentOutputId: Schema.String,
     groupId: Schema.Number,
-    pprChain: Schema.optional(Schema.mutable(Schema.Struct({ headers: StringRecordSchema }))),
+    pprChain: Schema.optional(Schema.mutable(Schema.Struct({ headers: HttpSingleValueHeadersSchema }))),
     parentFallbackMode: Schema.optional(JsonValueSchema),
     fallback: Schema.optional(
       Schema.mutable(
         Schema.Struct({
           filePath: Schema.optional(PortableRelativePathSchema),
-          initialStatus: Schema.optional(Schema.Number),
-          initialHeaders: Schema.optional(HeaderRecordSchema),
+          initialStatus: Schema.optional(Schema.Int.pipe(Schema.between(100, 599))),
+          initialHeaders: Schema.optional(HttpHeadersSchema),
           initialExpiration: Schema.optional(Schema.Number),
           initialRevalidate: Schema.optional(Schema.Union(Schema.Number, Schema.Literal(false))),
           postponedState: Schema.optional(Schema.String),
