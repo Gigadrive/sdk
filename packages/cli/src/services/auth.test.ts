@@ -7,6 +7,8 @@ import { AuthService } from './auth';
 import { AuthStorageService } from './auth-storage';
 import { OAuthConfigService } from './oauth-config';
 
+vi.mock('open', () => ({ default: vi.fn(() => Promise.resolve()) }));
+
 // ---------------------------------------------------------------------------
 // AuthService tests — inferUserName + getAccessToken
 //
@@ -218,10 +220,9 @@ describe('AuthService.getAccessToken', () => {
 // ---------------------------------------------------------------------------
 // login — Device Authorization Grant (RFC 8628)
 //
-// process.stdin.isTTY is undefined under vitest, so login runs the headless
-// path (no browser open, no keypress listener). We mock global fetch to drive
-// the device-authorization request and the token poll, using interval=0 so the
-// poll loop does not wait between attempts.
+// Browser opening is mocked above because stdin can still be a TTY when Vitest
+// runs from an interactive terminal. We mock global fetch to drive the device-
+// authorization request and token poll, using interval=0 to avoid waiting.
 // ---------------------------------------------------------------------------
 
 const jsonResponse = (status: number, body: unknown): Response =>

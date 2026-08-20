@@ -1,289 +1,226 @@
+import { Schema } from 'effect';
 import type { NormalizedImagePolicy } from './image-policy';
+import {
+  decodeJson,
+  PortableRelativePathSchema,
+  RepositoryRelativePathSchema,
+  UrlPathnameSchema,
+} from './manifest-schema';
 
 /** JSON values accepted in the portable Next.js adapter manifest. */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
-export interface GigadriveNextPrerenderOutput {
-  id: string;
-  type: 'PRERENDER';
-  pathname: string;
-  parentOutputId: string;
-  groupId: number;
-  pprChain?: { headers: Record<string, string> };
-  parentFallbackMode?: JsonValue;
-  fallback?: {
-    filePath?: string;
-    initialStatus?: number;
-    initialHeaders?: Record<string, string | string[]>;
-    initialExpiration?: number;
-    initialRevalidate?: number | false;
-    postponedState?: string;
-  };
-  config: {
-    allowQuery?: string[];
-    allowHeader?: string[];
-    bypassFor?: JsonValue[];
-    renderingMode?: string;
-    partialFallback?: boolean;
-    bypassToken?: string;
-  };
-}
+const StringArraySchema = Schema.mutable(Schema.Array(Schema.String));
+const StringRecordSchema = Schema.mutable(Schema.Record({ key: Schema.String, value: Schema.String }));
+const HeaderRecordSchema = Schema.mutable(
+  Schema.Record({ key: Schema.String, value: Schema.Union(Schema.String, StringArraySchema) })
+);
+
+const JsonValueSchema: Schema.Schema<JsonValue> = Schema.suspend(() =>
+  Schema.Union(
+    Schema.Null,
+    Schema.Boolean,
+    Schema.Number,
+    Schema.String,
+    Schema.mutable(Schema.Array(JsonValueSchema)),
+    Schema.mutable(Schema.Record({ key: Schema.String, value: JsonValueSchema }))
+  )
+);
+
+const ImageLocalPatternSchema = Schema.mutable(
+  Schema.Struct({
+    pathname: Schema.optional(Schema.String),
+    search: Schema.optional(Schema.String),
+  })
+);
+const ImageRemotePatternSchema = Schema.mutable(
+  Schema.Struct({
+    protocol: Schema.optional(Schema.Literal('http', 'https')),
+    hostname: Schema.String,
+    port: Schema.optional(Schema.String),
+    pathname: Schema.optional(Schema.String),
+    search: Schema.optional(Schema.String),
+  })
+);
+const ImageVariantSchema = Schema.mutable(
+  Schema.Struct({
+    width: Schema.optional(Schema.Number),
+    height: Schema.optional(Schema.Number),
+    quality: Schema.optional(Schema.Number),
+    format: Schema.optional(Schema.Literal('image/avif', 'image/webp', 'image/jpeg', 'image/png')),
+    fit: Schema.optional(Schema.Literal('contain', 'cover', 'fill', 'inside', 'outside')),
+  })
+);
+const PositiveIntSchema = Schema.Int.pipe(Schema.greaterThan(0));
+const ImagePolicySchema: Schema.Schema<NormalizedImagePolicy> = Schema.mutable(
+  Schema.Struct({
+    localPatterns: Schema.mutable(Schema.Array(ImageLocalPatternSchema)),
+    remotePatterns: Schema.mutable(Schema.Array(ImageRemotePatternSchema)),
+    widths: Schema.mutable(Schema.Array(PositiveIntSchema)),
+    heights: Schema.mutable(Schema.Array(PositiveIntSchema)),
+    qualities: Schema.mutable(Schema.Array(Schema.Number.pipe(Schema.between(1, 100)))),
+    formats: Schema.mutable(Schema.Array(Schema.Literal('image/avif', 'image/webp', 'image/jpeg', 'image/png'))),
+    minimumCacheTTL: Schema.Number,
+    dangerouslyAllowSVG: Schema.Boolean,
+    contentSecurityPolicy: Schema.String,
+    contentDispositionType: Schema.Literal('inline', 'attachment'),
+    maximumRedirects: Schema.Number,
+    maximumResponseBody: Schema.Number,
+    variants: Schema.mutable(Schema.Record({ key: Schema.String, value: ImageVariantSchema })),
+  })
+);
+
+export const GigadriveNextPrerenderOutputSchema = Schema.mutable(
+  Schema.Struct({
+    id: Schema.String,
+    type: Schema.Literal('PRERENDER'),
+    pathname: Schema.String,
+    parentOutputId: Schema.String,
+    groupId: Schema.Number,
+    pprChain: Schema.optional(Schema.mutable(Schema.Struct({ headers: StringRecordSchema }))),
+    parentFallbackMode: Schema.optional(JsonValueSchema),
+    fallback: Schema.optional(
+      Schema.mutable(
+        Schema.Struct({
+          filePath: Schema.optional(PortableRelativePathSchema),
+          initialStatus: Schema.optional(Schema.Number),
+          initialHeaders: Schema.optional(HeaderRecordSchema),
+          initialExpiration: Schema.optional(Schema.Number),
+          initialRevalidate: Schema.optional(Schema.Union(Schema.Number, Schema.Literal(false))),
+          postponedState: Schema.optional(Schema.String),
+        })
+      )
+    ),
+    config: Schema.mutable(
+      Schema.Struct({
+        allowQuery: Schema.optional(StringArraySchema),
+        allowHeader: Schema.optional(StringArraySchema),
+        bypassFor: Schema.optional(Schema.mutable(Schema.Array(JsonValueSchema))),
+        renderingMode: Schema.optional(Schema.String),
+        partialFallback: Schema.optional(Schema.Boolean),
+        bypassToken: Schema.optional(Schema.String),
+      })
+    ),
+  })
+);
+export type GigadriveNextPrerenderOutput = Schema.Schema.Type<typeof GigadriveNextPrerenderOutputSchema>;
+
+/** A directory subtree published under one URL prefix. */
+export const GigadriveNextStaticAssetPrefixSchema = Schema.mutable(
+  Schema.Struct({
+    sourceDir: PortableRelativePathSchema,
+    urlPrefix: PortableRelativePathSchema,
+    immutable: Schema.Boolean,
+  })
+);
+export type GigadriveNextStaticAssetPrefix = Schema.Schema.Type<typeof GigadriveNextStaticAssetPrefixSchema>;
+
+/** Aggregated runtime configuration for the standalone server. */
+export const GigadriveNextServerDescriptorSchema = Schema.mutable(
+  Schema.Struct({
+    maxDuration: Schema.optional(Schema.Number),
+    preferredRegion: Schema.optional(Schema.Union(Schema.String, StringArraySchema)),
+    env: Schema.optional(StringRecordSchema),
+  })
+);
+export type GigadriveNextServerDescriptor = Schema.Schema.Type<typeof GigadriveNextServerDescriptorSchema>;
+
+const PrerenderArraySchema = Schema.mutable(Schema.Array(GigadriveNextPrerenderOutputSchema));
+const StaticAssetArraySchema = Schema.mutable(Schema.Array(GigadriveNextStaticAssetPrefixSchema));
+const JsonValueArraySchema = Schema.mutable(Schema.Array(JsonValueSchema));
+
+export const GigadriveNextBuildManifestV1Schema = Schema.mutable(
+  Schema.Struct({
+    version: Schema.Literal(1),
+    output: Schema.Literal('standalone', 'export'),
+    distDir: PortableRelativePathSchema,
+    repoRootToProject: RepositoryRelativePathSchema,
+    nextVersion: Schema.String,
+    buildId: Schema.String,
+  })
+);
+export type GigadriveNextBuildManifestV1 = Schema.Schema.Type<typeof GigadriveNextBuildManifestV1Schema>;
+
+/** Minimal plan for static-export builds. */
+export const GigadriveNextBuildManifestV2ExportSchema = Schema.mutable(
+  Schema.Struct({
+    version: Schema.Literal(2),
+    mode: Schema.Literal('export'),
+    distDir: PortableRelativePathSchema,
+    repoRootToProject: RepositoryRelativePathSchema,
+    nextVersion: Schema.String,
+    buildId: Schema.String,
+  })
+);
+export type GigadriveNextBuildManifestV2Export = Schema.Schema.Type<typeof GigadriveNextBuildManifestV2ExportSchema>;
+
+/** Portable runtime plan for a standalone Next.js server. */
+export const GigadriveNextBuildManifestV2StandaloneSchema = Schema.mutable(
+  Schema.Struct({
+    version: Schema.Literal(2),
+    mode: Schema.Literal('standalone-v2'),
+    distDir: PortableRelativePathSchema,
+    repoRootToProject: RepositoryRelativePathSchema,
+    nextVersion: Schema.String,
+    buildId: Schema.String,
+    server: GigadriveNextServerDescriptorSchema,
+    config: Schema.mutable(
+      Schema.Struct({
+        basePath: Schema.String,
+        trailingSlash: Schema.Boolean,
+        cacheComponents: Schema.Boolean,
+        i18n: Schema.optional(JsonValueSchema),
+        images: Schema.optional(ImagePolicySchema),
+      })
+    ),
+    routing: Schema.mutable(
+      Schema.Struct({
+        beforeMiddleware: JsonValueArraySchema,
+        beforeFiles: JsonValueArraySchema,
+        afterFiles: JsonValueArraySchema,
+        dynamicRoutes: JsonValueArraySchema,
+        onMatch: JsonValueArraySchema,
+        fallback: JsonValueArraySchema,
+        shouldNormalizeNextData: Schema.Boolean,
+        rsc: JsonValueSchema,
+      })
+    ),
+    outputs: Schema.mutable(
+      Schema.Struct({
+        prerenders: PrerenderArraySchema,
+        prerenderManifest: Schema.optional(PortableRelativePathSchema),
+        assetManifest: Schema.optional(PortableRelativePathSchema),
+        entryPagePaths: Schema.optional(Schema.mutable(Schema.Array(UrlPathnameSchema))),
+        staticAssets: StaticAssetArraySchema,
+      })
+    ),
+  })
+);
+export type GigadriveNextBuildManifestV2Standalone = Schema.Schema.Type<
+  typeof GigadriveNextBuildManifestV2StandaloneSchema
+>;
+
+export const GigadriveNextBuildManifestSchema = Schema.Union(
+  GigadriveNextBuildManifestV1Schema,
+  GigadriveNextBuildManifestV2ExportSchema,
+  GigadriveNextBuildManifestV2StandaloneSchema
+);
+export type GigadriveNextBuildManifestV2 = GigadriveNextBuildManifestV2Standalone | GigadriveNextBuildManifestV2Export;
+export type GigadriveNextBuildManifest = Schema.Schema.Type<typeof GigadriveNextBuildManifestSchema>;
 
 /** Portable sidecar containing high-cardinality Next.js prerender metadata. */
-export interface GigadriveNextPrerenderManifestV1 {
-  version: 1;
-  prerenders: GigadriveNextPrerenderOutput[];
-}
-
-/**
- * A directory subtree published under a single URL prefix, registered as one
- * descriptor instead of enumerating every file. Used to collapse `.next/static`
- * (thousands of content-hashed chunks) into a single edge-served prefix.
- */
-export interface GigadriveNextStaticAssetPrefix {
-  /** Project-relative source directory (e.g. `.next/static`). */
-  sourceDir: string;
-  /** Public URL prefix the subtree is served under (e.g. `_next/static`). */
-  urlPrefix: string;
-  /** Entries are content-hashed and safe to serve with immutable cache-control. */
-  immutable: boolean;
-}
-
-export interface GigadriveNextBuildManifestV1 {
-  version: 1;
-  output: 'standalone' | 'export';
-  distDir: string;
-  repoRootToProject: string;
-  nextVersion: string;
-  buildId: string;
-}
-
-/** Aggregated runtime configuration collapsed onto the single standalone server. */
-export interface GigadriveNextServerDescriptor {
-  maxDuration?: number;
-  preferredRegion?: string | string[];
-  env?: Record<string, string>;
-}
-
-/**
- * Portable runtime plan for the single standalone Next.js server (Next >= 16.2).
- *
- * The whole deployment runs as one `next start` standalone server, so the plan
- * carries only what the platform needs to route around it: prerender/ISR/PPR
- * seeds, the `.next/static` prefix, and the routing/image configuration. It
- * deliberately omits per-route outputs and entrypoints — the server owns
- * routing, middleware, edge routes, and PPR resume in-process.
- */
-export interface GigadriveNextBuildManifestV2Standalone {
-  version: 2;
-  mode: 'standalone-v2';
-  distDir: string;
-  repoRootToProject: string;
-  nextVersion: string;
-  buildId: string;
-  server: GigadriveNextServerDescriptor;
-  config: {
-    basePath: string;
-    trailingSlash: boolean;
-    cacheComponents: boolean;
-    i18n?: JsonValue;
-    images?: NormalizedImagePolicy;
-  };
-  routing: {
-    beforeMiddleware: JsonValue[];
-    beforeFiles: JsonValue[];
-    afterFiles: JsonValue[];
-    dynamicRoutes: JsonValue[];
-    onMatch: JsonValue[];
-    fallback: JsonValue[];
-    shouldNormalizeNextData: boolean;
-    rsc: JsonValue;
-  };
-  outputs: {
-    /**
-     * Inline prerenders emitted by older adapter versions. New manifests keep
-     * this empty and use `prerenderManifest` to avoid expanding deployment config.
-     */
-    prerenders: GigadriveNextPrerenderOutput[];
-    /** Project-relative path to the full prerender metadata sidecar. */
-    prerenderManifest?: string;
-    /** Project-relative path to the generic static asset manifest. */
-    assetManifest?: string;
-    /** Bounded set of concrete paths suitable for cache warming. */
-    entryPagePaths?: string[];
-    staticAssets: GigadriveNextStaticAssetPrefix[];
-  };
-}
-
-/** Minimal plan for static-export builds (Next >= 16.2). */
-export interface GigadriveNextBuildManifestV2Export {
-  version: 2;
-  mode: 'export';
-  distDir: string;
-  repoRootToProject: string;
-  nextVersion: string;
-  buildId: string;
-}
-
-export type GigadriveNextBuildManifestV2 = GigadriveNextBuildManifestV2Standalone | GigadriveNextBuildManifestV2Export;
-
-export type GigadriveNextBuildManifest = GigadriveNextBuildManifestV1 | GigadriveNextBuildManifestV2;
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
-
-const isPortableRelativePath = (value: unknown, allowCurrentDirectory = false): value is string => {
-  if (typeof value !== 'string') return false;
-  const normalized = value.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '');
-  return (
-    (allowCurrentDirectory || (normalized !== '' && normalized !== '.')) &&
-    !normalized.startsWith('/') &&
-    !/^[A-Za-z]:/.test(normalized) &&
-    !normalized.includes(':') &&
-    !normalized.split('/').some((segment) => segment === '..')
-  );
-};
-
-const isStringRecord = (value: unknown): value is Record<string, string> =>
-  isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
-
-const isJsonValue = (value: unknown): value is JsonValue => {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (Array.isArray(value)) return value.every(isJsonValue);
-  return isRecord(value) && Object.values(value).every(isJsonValue);
-};
-
-const isPrerenderOutput = (value: unknown): value is GigadriveNextPrerenderOutput =>
-  isRecord(value) &&
-  value.type === 'PRERENDER' &&
-  typeof value.id === 'string' &&
-  typeof value.pathname === 'string' &&
-  typeof value.parentOutputId === 'string' &&
-  typeof value.groupId === 'number' &&
-  isRecord(value.config) &&
-  (value.fallback === undefined ||
-    (isRecord(value.fallback) &&
-      (value.fallback.filePath === undefined || isPortableRelativePath(value.fallback.filePath))));
-
-const isStaticAssetPrefix = (value: unknown): value is GigadriveNextStaticAssetPrefix =>
-  isRecord(value) &&
-  isPortableRelativePath(value.sourceDir) &&
-  isPortableRelativePath(value.urlPrefix) &&
-  typeof value.immutable === 'boolean';
-
-const isPathnameArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((pathname) => typeof pathname === 'string' && pathname.startsWith('/'));
-
-const isServerDescriptor = (value: unknown): value is GigadriveNextServerDescriptor =>
-  isRecord(value) &&
-  (value.maxDuration === undefined || typeof value.maxDuration === 'number') &&
-  (value.preferredRegion === undefined ||
-    typeof value.preferredRegion === 'string' ||
-    (Array.isArray(value.preferredRegion) && value.preferredRegion.every((region) => typeof region === 'string'))) &&
-  (value.env === undefined || isStringRecord(value.env));
-
-const isImagePolicy = (value: unknown): value is NormalizedImagePolicy =>
-  isRecord(value) &&
-  Array.isArray(value.localPatterns) &&
-  Array.isArray(value.remotePatterns) &&
-  value.remotePatterns.every((pattern) => isRecord(pattern) && typeof pattern.hostname === 'string') &&
-  Array.isArray(value.widths) &&
-  value.widths.every((item) => typeof item === 'number' && Number.isInteger(item) && item > 0) &&
-  Array.isArray(value.heights) &&
-  value.heights.every((item) => typeof item === 'number' && Number.isInteger(item) && item > 0) &&
-  Array.isArray(value.qualities) &&
-  value.qualities.every((item) => typeof item === 'number' && item >= 1 && item <= 100) &&
-  Array.isArray(value.formats) &&
-  value.formats.every((item) => ['image/avif', 'image/webp', 'image/jpeg', 'image/png'].includes(String(item))) &&
-  typeof value.minimumCacheTTL === 'number' &&
-  typeof value.dangerouslyAllowSVG === 'boolean' &&
-  typeof value.contentSecurityPolicy === 'string' &&
-  (value.contentDispositionType === 'inline' || value.contentDispositionType === 'attachment') &&
-  typeof value.maximumRedirects === 'number' &&
-  typeof value.maximumResponseBody === 'number' &&
-  isRecord(value.variants);
+export const GigadriveNextPrerenderManifestV1Schema = Schema.mutable(
+  Schema.Struct({
+    version: Schema.Literal(1),
+    prerenders: PrerenderArraySchema,
+  })
+);
+export type GigadriveNextPrerenderManifestV1 = Schema.Schema.Type<typeof GigadriveNextPrerenderManifestV1Schema>;
 
 /** Parses and structurally validates adapter metadata before deployment code consumes it. */
-export const parseGigadriveNextBuildManifest = (content: string): GigadriveNextBuildManifest | undefined => {
-  try {
-    const value: unknown = JSON.parse(content);
-    if (!isRecord(value)) return undefined;
-
-    if (value.version === 1) {
-      if (
-        (value.output !== 'standalone' && value.output !== 'export') ||
-        !isPortableRelativePath(value.distDir) ||
-        !isPortableRelativePath(value.repoRootToProject, true) ||
-        typeof value.nextVersion !== 'string' ||
-        typeof value.buildId !== 'string'
-      ) {
-        return undefined;
-      }
-      return value as unknown as GigadriveNextBuildManifestV1;
-    }
-
-    if (value.version === 2) {
-      if (
-        !isPortableRelativePath(value.distDir) ||
-        !isPortableRelativePath(value.repoRootToProject, true) ||
-        typeof value.nextVersion !== 'string' ||
-        typeof value.buildId !== 'string'
-      ) {
-        return undefined;
-      }
-
-      if (value.mode === 'export') {
-        return value as unknown as GigadriveNextBuildManifestV2Export;
-      }
-
-      if (value.mode === 'standalone-v2') {
-        if (
-          !isServerDescriptor(value.server) ||
-          !isRecord(value.config) ||
-          typeof value.config.basePath !== 'string' ||
-          typeof value.config.trailingSlash !== 'boolean' ||
-          typeof value.config.cacheComponents !== 'boolean' ||
-          (value.config.images !== undefined && !isImagePolicy(value.config.images)) ||
-          !isRecord(value.routing) ||
-          !isJsonValue(value.routing) ||
-          !isRecord(value.outputs) ||
-          !Array.isArray(value.outputs.prerenders) ||
-          !value.outputs.prerenders.every(isPrerenderOutput) ||
-          (value.outputs.prerenderManifest !== undefined && !isPortableRelativePath(value.outputs.prerenderManifest)) ||
-          (value.outputs.assetManifest !== undefined && !isPortableRelativePath(value.outputs.assetManifest)) ||
-          (value.outputs.entryPagePaths !== undefined && !isPathnameArray(value.outputs.entryPagePaths)) ||
-          !Array.isArray(value.outputs.staticAssets) ||
-          !value.outputs.staticAssets.every(isStaticAssetPrefix)
-        ) {
-          return undefined;
-        }
-        return value as unknown as GigadriveNextBuildManifestV2Standalone;
-      }
-
-      // Legacy `mode: 'adapter-v2'` (per-route split) is no longer produced or consumed.
-      return undefined;
-    }
-
-    return undefined;
-  } catch {
-    return undefined;
-  }
-};
+export const parseGigadriveNextBuildManifest = (content: string): GigadriveNextBuildManifest | undefined =>
+  decodeJson(GigadriveNextBuildManifestSchema, content);
 
 /** Parses and validates a portable Next.js prerender sidecar. */
-export const parseGigadriveNextPrerenderManifest = (content: string): GigadriveNextPrerenderManifestV1 | undefined => {
-  try {
-    const value: unknown = JSON.parse(content);
-    if (
-      !isRecord(value) ||
-      value.version !== 1 ||
-      !Array.isArray(value.prerenders) ||
-      !value.prerenders.every(isPrerenderOutput)
-    ) {
-      return undefined;
-    }
-    return value as unknown as GigadriveNextPrerenderManifestV1;
-  } catch {
-    return undefined;
-  }
-};
+export const parseGigadriveNextPrerenderManifest = (content: string): GigadriveNextPrerenderManifestV1 | undefined =>
+  decodeJson(GigadriveNextPrerenderManifestV1Schema, content);
