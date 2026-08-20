@@ -204,17 +204,27 @@ describe('Gigadrive Next.js adapter', () => {
     const isrFallbackPath = path.join(distDir, 'server', 'app', 'isr-plain.html');
     const dynamicFallbackPath = path.join(distDir, 'server', 'pages', 'blog', '[slug].html');
     const dynamicRscPath = path.join(distDir, 'server', 'app', 'blog', '[slug].rsc');
+    const rscFallbackPath = path.join(distDir, 'server', 'rsc-fallback.json');
+    const faviconPath = path.join(distDir, 'server', 'app', 'favicon.ico.body');
+    const faviconMetaPath = path.join(distDir, 'server', 'app', 'favicon.ico.meta');
     const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
     const staticChunkPath = path.join(distDir, 'static', 'chunks', 'app.js');
     await mkdir(path.dirname(fallbackPath), { recursive: true });
     await mkdir(path.dirname(dynamicFallbackPath), { recursive: true });
     await mkdir(path.dirname(dynamicRscPath), { recursive: true });
+    await mkdir(path.dirname(faviconPath), { recursive: true });
     await mkdir(path.dirname(staticPagePath), { recursive: true });
     await mkdir(path.dirname(staticChunkPath), { recursive: true });
     await writeFile(fallbackPath, '<html>isr</html>');
     await writeFile(isrFallbackPath, '<html>isr plain</html>');
     await writeFile(dynamicFallbackPath, '<html>fallback</html>');
     await writeFile(dynamicRscPath, 'fallback-rsc');
+    await writeFile(rscFallbackPath, '{}');
+    await writeFile(faviconPath, 'icon');
+    await writeFile(
+      faviconMetaPath,
+      JSON.stringify({ headers: { 'content-type': 'image/x-icon', 'cache-control': 'public, max-age=0' } })
+    );
     await writeFile(staticPagePath, '<html>home</html>');
     await writeFile(staticChunkPath, 'chunk');
 
@@ -298,6 +308,20 @@ describe('Gigadrive Next.js adapter', () => {
             filePath: dynamicRscPath,
             immutableHash: undefined,
           },
+          {
+            id: 'index.rsc',
+            type: 'STATIC_FILE',
+            pathname: '/index.rsc',
+            filePath: rscFallbackPath,
+            immutableHash: undefined,
+          },
+          {
+            id: 'favicon.ico',
+            type: 'STATIC_FILE',
+            pathname: '/favicon.ico',
+            filePath: faviconPath,
+            immutableHash: undefined,
+          },
         ],
       },
     });
@@ -350,7 +374,23 @@ describe('Gigadrive Next.js adapter', () => {
 
     expect(await readAssetManifest(projectDir)).toEqual({
       version: 1,
-      assets: [{ source: '.next/server/pages/index.html', path: '/' }],
+      assets: [
+        {
+          source: '.next/server/pages/index.html',
+          path: '/',
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+        {
+          source: '.next/server/rsc-fallback.json',
+          path: '/index.rsc',
+          headers: { 'content-type': 'text/x-component' },
+        },
+        {
+          source: '.next/server/app/favicon.ico.body',
+          path: '/favicon.ico',
+          headers: { 'content-type': 'image/x-icon', 'cache-control': 'public, max-age=0' },
+        },
+      ],
     });
     // No per-route entrypoints or wrappers exist in the single-server model.
     expect((manifest as unknown as Record<string, unknown>).entrypoints).toBeUndefined();
@@ -390,7 +430,13 @@ describe('Gigadrive Next.js adapter', () => {
 
     expect(await readAssetManifest(projectDir)).toEqual({
       version: 1,
-      assets: [{ source: '.next/server/pages/index.html', path: '/docs' }],
+      assets: [
+        {
+          source: '.next/server/pages/index.html',
+          path: '/docs',
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+      ],
     });
   });
 

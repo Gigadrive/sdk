@@ -1,10 +1,12 @@
+import { Schema } from 'effect';
 import type { NextAdapter } from 'next';
-import { access, mkdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { StaticAssetManifestEntry, StaticAssetManifestV1 } from './asset-manifest';
+import type { StaticAssetHeaders, StaticAssetManifestEntry, StaticAssetManifestV1 } from './asset-manifest';
 import type { NormalizedImagePolicy } from './image-policy';
+import { decodeJson, HttpHeadersSchema } from './manifest-schema';
 import { MAXIMUM_ENTRY_PAGE_PATHS } from './nextjs-constants';
 import type {
   GigadriveNextBuildManifestV1,
@@ -30,6 +32,9 @@ type NextStaticFileOutput = BuildCompleteContext['outputs']['staticFiles'][numbe
 const PRODUCTION_BUILD_PHASE = 'phase-production-build';
 const NEXT_ASSET_MANIFEST_PATH = '.gigadrive/assets/nextjs.json';
 const NEXT_PRERENDER_MANIFEST_PATH = '.gigadrive/nextjs-prerenders.json';
+const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
+const DEFAULT_RSC_CONTENT_TYPE = 'text/x-component';
+const NextStaticFileMetaSchema = Schema.Struct({ headers: HttpHeadersSchema });
 const runtimeDirectory = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 const runtimeModulePath = (environmentName: string, fileName: string): string =>
@@ -126,16 +131,47 @@ const isDynamicRoutePathname = (pathname: string): boolean => pathname.includes(
 const normalizeStaticFilePathname = (pathname: string, basePath: string): string =>
   pathname === `${basePath}/index` ? basePath || '/' : pathname;
 
+const hasContentType = (headers: StaticAssetHeaders): boolean =>
+  Object.keys(headers).some((name) => name.toLowerCase() === 'content-type');
+
+async function getStaticFileHeaders(
+  projectDir: string,
+  resolvedProjectDir: string,
+  output: NextStaticFileOutput,
+  rscContentType: string
+): Promise<StaticAssetHeaders | undefined> {
+  if (output.filePath.endsWith('.body')) {
+    const metaPath = `${output.filePath.slice(0, -'.body'.length)}.meta`;
+    await requireReadableFile(projectDir, metaPath, resolvedProjectDir);
+    const meta = decodeJson(NextStaticFileMetaSchema, await readFile(metaPath, 'utf8'));
+    if (!meta || !hasContentType(meta.headers)) {
+      throw new Error(`Next.js static metadata is missing valid response headers: ${metaPath}`);
+    }
+    return meta.headers;
+  }
+  if (output.filePath.endsWith('.html')) return { 'content-type': HTML_CONTENT_TYPE };
+  if (output.pathname.endsWith('.rsc')) return { 'content-type': rscContentType };
+  return undefined;
+}
+
 const serializeStaticFileAsset = async (
   projectDir: string,
   resolvedProjectDir: string,
   basePath: string,
+  rscContentType: string,
   output: NextStaticFileOutput
-): Promise<StaticAssetManifestEntry> => ({
-  source: await requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
-  path: normalizeStaticFilePathname(output.pathname, basePath),
-  ...(output.immutableHash ? { immutable: true } : {}),
-});
+): Promise<StaticAssetManifestEntry> => {
+  const [source, headers] = await Promise.all([
+    requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
+    getStaticFileHeaders(projectDir, resolvedProjectDir, output, rscContentType),
+  ]);
+  return {
+    source,
+    path: normalizeStaticFilePathname(output.pathname, basePath),
+    ...(headers ? { headers } : {}),
+    ...(output.immutableHash ? { immutable: true } : {}),
+  };
+};
 
 const serializePrerenderAsset = (
   projectDir: string,
@@ -167,6 +203,7 @@ async function serializeAssetManifest(
   repoRoot: string,
   distDir: string,
   basePath: string,
+  rscContentType: string,
   staticFiles: NextStaticFileOutput[],
   prerenders: GigadriveNextPrerenderOutput[]
 ): Promise<StaticAssetManifestV1> {
@@ -176,7 +213,7 @@ async function serializeAssetManifest(
       // The complete immutable subtree is already represented by a prefix.
       (output) => !isInsideDirectory(staticDirectory, output.filePath) && !isDynamicRoutePathname(output.pathname)
     ),
-    (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, basePath, output)
+    (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, basePath, rscContentType, output)
   );
   const entries = [
     ...staticEntries,
@@ -468,6 +505,7 @@ const gigadriveNextAdapter: NextAdapter = {
       repoRoot,
       distDir,
       config.basePath,
+      routing.rsc.contentTypeHeader ?? DEFAULT_RSC_CONTENT_TYPE,
       outputs.staticFiles,
       prerenders
     );
