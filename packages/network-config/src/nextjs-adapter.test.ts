@@ -225,7 +225,12 @@ describe('Gigadrive Next.js adapter', () => {
       faviconMetaPath,
       JSON.stringify({
         status: 404,
-        headers: { 'content-type': 'image/x-icon', 'cache-control': 'public, max-age=0' },
+        headers: {
+          'content-type': 'image/x-icon',
+          'cache-control': 'public, max-age=0',
+          'x-next-cache-tags': 'favicon,metadata',
+          'X-Nextjs-Prerender': '1',
+        },
       })
     );
     await writeFile(staticPagePath, '<html>home</html>');
@@ -461,7 +466,21 @@ describe('Gigadrive Next.js adapter', () => {
           pathname: `/docs/${index}`,
           parentOutputId: 'docs',
           groupId: index,
-          fallback: { filePath, initialRevalidate: false },
+          fallback: {
+            filePath,
+            initialRevalidate: false,
+            ...(index === 0
+              ? {
+                  initialStatus: 203,
+                  initialHeaders: {
+                    'content-type': 'text/html; charset=utf-8',
+                    'x-public': 'kept',
+                    'X-Next-Cache-Tags': 'docs,docs:0',
+                    'x-nextjs-prerender': '1',
+                  },
+                }
+              : {}),
+          },
           config: {},
         };
       })
@@ -482,7 +501,14 @@ describe('Gigadrive Next.js adapter', () => {
     expect(manifest.outputs.prerenders).toEqual([]);
     expect(manifest.outputs.entryPagePaths).toHaveLength(50);
     expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(75);
-    expect((await readAssetManifest(projectDir))?.assets).toHaveLength(75);
+    const assets = (await readAssetManifest(projectDir))?.assets;
+    expect(assets).toHaveLength(75);
+    expect(assets?.[0]).toEqual({
+      source: '.next/server/app/docs/0.html',
+      path: '/docs/0',
+      status: 203,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'x-public': 'kept' },
+    });
   });
 
   it('writes a minimal export manifest for static export on the managed runtime', async () => {

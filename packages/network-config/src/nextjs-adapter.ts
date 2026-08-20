@@ -34,6 +34,7 @@ const NEXT_ASSET_MANIFEST_PATH = '.gigadrive/assets/nextjs.json';
 const NEXT_PRERENDER_MANIFEST_PATH = '.gigadrive/nextjs-prerenders.json';
 const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 const DEFAULT_RSC_CONTENT_TYPE = 'text/x-component';
+const INTERNAL_STATIC_RESPONSE_HEADERS = new Set(['x-next-cache-tags', 'x-nextjs-prerender']);
 const NextStaticFileMetaSchema = Schema.Struct({
   status: Schema.optional(Schema.Int.pipe(Schema.between(100, 599))),
   headers: HttpHeadersSchema,
@@ -137,6 +138,13 @@ const normalizeStaticFilePathname = (pathname: string, basePath: string): string
 const hasContentType = (headers: StaticAssetHeaders): boolean =>
   Object.keys(headers).some((name) => name.toLowerCase() === 'content-type');
 
+const getPublicStaticResponseHeaders = (headers: StaticAssetHeaders): StaticAssetHeaders | undefined => {
+  const publicHeaders = Object.fromEntries(
+    Object.entries(headers).filter(([name]) => !INTERNAL_STATIC_RESPONSE_HEADERS.has(name.toLowerCase()))
+  );
+  return Object.keys(publicHeaders).length > 0 ? publicHeaders : undefined;
+};
+
 async function getStaticFileResponseMetadata(
   projectDir: string,
   resolvedProjectDir: string,
@@ -147,12 +155,13 @@ async function getStaticFileResponseMetadata(
     const metaPath = `${output.filePath.slice(0, -'.body'.length)}.meta`;
     await requireReadableFile(projectDir, metaPath, resolvedProjectDir);
     const meta = decodeJson(NextStaticFileMetaSchema, await readFile(metaPath, 'utf8'));
-    if (!meta || !hasContentType(meta.headers)) {
+    const headers = meta ? getPublicStaticResponseHeaders(meta.headers) : undefined;
+    if (!meta || !headers || !hasContentType(headers)) {
       throw new Error(`Next.js static metadata is missing valid response headers: ${metaPath}`);
     }
     return {
       ...(meta.status !== undefined ? { status: meta.status } : {}),
-      headers: meta.headers,
+      headers,
     };
   }
   if (output.filePath.endsWith('.html')) return { headers: { 'content-type': HTML_CONTENT_TYPE } };
@@ -195,11 +204,12 @@ const serializePrerenderAsset = (
   ) {
     return undefined;
   }
+  const headers = fallback.initialHeaders ? getPublicStaticResponseHeaders(fallback.initialHeaders) : undefined;
   return {
     source: toPortableRelativePath(projectDir, path.join(repoRoot, fallback.filePath)),
     path: output.pathname,
     ...(fallback.initialStatus !== undefined ? { status: fallback.initialStatus } : {}),
-    ...(fallback.initialHeaders ? { headers: fallback.initialHeaders } : {}),
+    ...(headers ? { headers } : {}),
   };
 };
 
