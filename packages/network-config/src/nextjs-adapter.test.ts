@@ -201,12 +201,18 @@ describe('Gigadrive Next.js adapter', () => {
     const projectDir = path.join(repoRoot, 'apps', 'web');
     const distDir = path.join(projectDir, '.next');
     const fallbackPath = path.join(distDir, 'server', 'app', 'isr.html');
+    const dynamicFallbackPath = path.join(distDir, 'server', 'pages', 'blog', '[slug].html');
+    const dynamicRscPath = path.join(distDir, 'server', 'app', 'blog', '[slug].rsc');
     const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
     const staticChunkPath = path.join(distDir, 'static', 'chunks', 'app.js');
     await mkdir(path.dirname(fallbackPath), { recursive: true });
+    await mkdir(path.dirname(dynamicFallbackPath), { recursive: true });
+    await mkdir(path.dirname(dynamicRscPath), { recursive: true });
     await mkdir(path.dirname(staticPagePath), { recursive: true });
     await mkdir(path.dirname(staticChunkPath), { recursive: true });
     await writeFile(fallbackPath, '<html>isr</html>');
+    await writeFile(dynamicFallbackPath, '<html>fallback</html>');
+    await writeFile(dynamicRscPath, 'fallback-rsc');
     await writeFile(staticPagePath, '<html>home</html>');
     await writeFile(staticChunkPath, 'chunk');
 
@@ -249,6 +255,15 @@ describe('Gigadrive Next.js adapter', () => {
             },
             config: { renderingMode: 'PARTIALLY_STATIC', allowQuery: ['q'] },
           },
+          {
+            id: 'blog/[slug]',
+            type: 'PRERENDER',
+            pathname: '/blog/[slug]',
+            parentOutputId: 'blog',
+            groupId: 2,
+            fallback: { filePath: dynamicFallbackPath, initialRevalidate: 5 },
+            config: { allowQuery: ['slug'] },
+          },
         ],
         staticFiles: [
           {
@@ -264,6 +279,13 @@ describe('Gigadrive Next.js adapter', () => {
             pathname: '/_next/static/chunks/app.js',
             filePath: staticChunkPath,
             immutableHash: 'hash',
+          },
+          {
+            id: 'blog/[slug].rsc',
+            type: 'STATIC_FILE',
+            pathname: '/blog/[slug].rsc',
+            filePath: dynamicRscPath,
+            immutableHash: undefined,
           },
         ],
       },
@@ -292,7 +314,7 @@ describe('Gigadrive Next.js adapter', () => {
     expect(manifest.outputs.prerenders).toEqual([]);
 
     const prerenderManifest = await readPrerenderManifest(projectDir);
-    expect(prerenderManifest?.prerenders).toHaveLength(1);
+    expect(prerenderManifest?.prerenders).toHaveLength(2);
     expect(prerenderManifest?.prerenders[0]).toMatchObject({
       id: 'isr',
       pathname: '/isr',
@@ -303,6 +325,11 @@ describe('Gigadrive Next.js adapter', () => {
         postponedState: 'postponed',
       },
       config: { renderingMode: 'PARTIALLY_STATIC', allowQuery: ['q'] },
+    });
+    expect(prerenderManifest?.prerenders[1]).toMatchObject({
+      id: 'blog/[slug]',
+      pathname: '/blog/[slug]',
+      fallback: { filePath: 'apps/web/.next/server/pages/blog/[slug].html' },
     });
 
     expect(await readAssetManifest(projectDir)).toEqual({

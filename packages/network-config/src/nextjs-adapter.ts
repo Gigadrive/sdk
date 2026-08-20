@@ -119,6 +119,8 @@ const isInsideDirectory = (directory: string, filePath: string): boolean => {
   return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
 };
 
+const isDynamicRoutePathname = (pathname: string): boolean => pathname.includes('[');
+
 const serializeStaticFileAsset = async (
   projectDir: string,
   resolvedProjectDir: string,
@@ -135,7 +137,13 @@ const serializePrerenderAsset = (
   repoRoot: string,
   output: GigadriveNextPrerenderOutput
 ): StaticAssetManifestEntry | undefined => {
-  if (!output.fallback?.filePath || output.fallback.postponedState !== undefined) return undefined;
+  if (
+    !output.fallback?.filePath ||
+    output.fallback.postponedState !== undefined ||
+    isDynamicRoutePathname(output.pathname)
+  ) {
+    return undefined;
+  }
   return {
     source: toPortableRelativePath(projectDir, path.join(repoRoot, output.fallback.filePath)),
     path: output.pathname,
@@ -156,7 +164,7 @@ async function serializeAssetManifest(
   const staticEntries = await mapInBatches(
     staticFiles.filter(
       // The complete immutable subtree is already represented by a prefix.
-      (output) => !isInsideDirectory(staticDirectory, output.filePath)
+      (output) => !isInsideDirectory(staticDirectory, output.filePath) && !isDynamicRoutePathname(output.pathname)
     ),
     (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, output)
   );
@@ -177,7 +185,7 @@ const getEntryPagePaths = (prerenders: GigadriveNextPrerenderOutput[]): string[]
       prerenders
         .filter((output) => output.fallback?.postponedState === undefined)
         .map((output) => output.pathname)
-        .filter((pathname) => pathname.startsWith('/') && !pathname.includes('['))
+        .filter((pathname) => pathname.startsWith('/') && !isDynamicRoutePathname(pathname))
     ),
   ]
     .sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))
