@@ -1,7 +1,7 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect, Layer, Logger, LogLevel, Option } from 'effect';
 import * as os from 'node:os';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OAuthClientConfig, StoredAuthData } from '../domain';
 import { AuthService } from './auth';
 import { AuthStorageService } from './auth-storage';
@@ -220,9 +220,9 @@ describe('AuthService.getAccessToken', () => {
 // ---------------------------------------------------------------------------
 // login — Device Authorization Grant (RFC 8628)
 //
-// Browser opening is mocked above because stdin can still be a TTY when Vitest
-// runs from an interactive terminal. We mock global fetch to drive the device-
-// authorization request and token poll, using interval=0 to avoid waiting.
+// These tests force the headless path below. `open` remains mocked because the
+// final regression deliberately enters the interactive branch. Global fetch
+// drives the device-authorization request and token poll with no wait interval.
 // ---------------------------------------------------------------------------
 
 const jsonResponse = (status: number, body: unknown): Response =>
@@ -279,7 +279,15 @@ const stubFetch = (tokenResponses: Response[]) => {
 };
 
 describe('AuthService.login (device flow)', () => {
+  const stdinIsTTYDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+
+  beforeEach(() => {
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, writable: true, value: false });
+  });
+
   afterEach(() => {
+    if (stdinIsTTYDescriptor) Object.defineProperty(process.stdin, 'isTTY', stdinIsTTYDescriptor);
+    else Reflect.deleteProperty(process.stdin, 'isTTY');
     vi.unstubAllGlobals();
   });
 
