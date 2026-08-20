@@ -201,13 +201,13 @@ describe('Gigadrive Next.js adapter', () => {
     const projectDir = path.join(repoRoot, 'apps', 'web');
     const distDir = path.join(projectDir, '.next');
     const fallbackPath = path.join(distDir, 'server', 'app', 'isr.html');
-    const staticPagePath = path.join(distDir, 'server', 'pages', 'about.html');
+    const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
     const staticChunkPath = path.join(distDir, 'static', 'chunks', 'app.js');
     await mkdir(path.dirname(fallbackPath), { recursive: true });
     await mkdir(path.dirname(staticPagePath), { recursive: true });
     await mkdir(path.dirname(staticChunkPath), { recursive: true });
     await writeFile(fallbackPath, '<html>isr</html>');
-    await writeFile(staticPagePath, '<html>about</html>');
+    await writeFile(staticPagePath, '<html>home</html>');
     await writeFile(staticChunkPath, 'chunk');
 
     const routeOutput = (id: string, config: Record<string, unknown>) => ({
@@ -252,9 +252,9 @@ describe('Gigadrive Next.js adapter', () => {
         ],
         staticFiles: [
           {
-            id: 'about',
+            id: 'index',
             type: 'STATIC_FILE',
-            pathname: '/about',
+            pathname: '/index',
             filePath: staticPagePath,
             immutableHash: undefined,
           },
@@ -307,10 +307,7 @@ describe('Gigadrive Next.js adapter', () => {
 
     expect(await readAssetManifest(projectDir)).toEqual({
       version: 1,
-      assets: [
-        { source: '.next/server/pages/about.html', path: '/about' },
-        { source: '.next/server/app/isr.html', path: '/isr' },
-      ],
+      assets: [{ source: '.next/server/pages/index.html', path: '/' }],
     });
     // No per-route entrypoints or wrappers exist in the single-server model.
     expect((manifest as unknown as Record<string, unknown>).entrypoints).toBeUndefined();

@@ -1,6 +1,7 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
 import { getDefaultPathMap } from '../../build-output-v3/get-default-path-map';
+import { MAXIMUM_ENTRY_PAGE_PATHS } from '../../nextjs-constants';
 import {
   parseGigadriveNextBuildManifest,
   type GigadriveNextBuildManifestV1,
@@ -11,8 +12,6 @@ import { AVAILABLE_REGIONS } from '../../regions';
 import type { FrameworkDefaultConfig, FrameworkDefinition } from '../types';
 
 const toPortablePath = (value: string): string => value.replaceAll('\\', '/');
-
-const MAXIMUM_ENTRY_PAGE_PATHS = 50;
 
 /**
  * Memory for the single standalone server, in MB.
@@ -193,7 +192,7 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
     [
       ...new Set(
         manifest.outputs.prerenders
-          .filter((output) => !output.fallback?.postponedState)
+          .filter((output) => output.fallback?.postponedState === undefined)
           .map((output) => output.pathname)
           .filter((pathname) => pathname.startsWith('/') && !pathname.includes('['))
       ),

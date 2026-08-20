@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StaticAssetManifestEntry, StaticAssetManifestV1 } from './asset-manifest';
 import type { NormalizedImagePolicy } from './image-policy';
+import { MAXIMUM_ENTRY_PAGE_PATHS } from './nextjs-constants';
 import type {
   GigadriveNextBuildManifestV1,
   GigadriveNextBuildManifestV2Export,
@@ -27,7 +28,6 @@ type NextPrerenderOutput = BuildCompleteContext['outputs']['prerenders'][number]
 type NextStaticFileOutput = BuildCompleteContext['outputs']['staticFiles'][number];
 
 const PRODUCTION_BUILD_PHASE = 'phase-production-build';
-const MAXIMUM_ENTRY_PAGE_PATHS = 50;
 const NEXT_ASSET_MANIFEST_PATH = '.gigadrive/assets/nextjs.json';
 const NEXT_PRERENDER_MANIFEST_PATH = '.gigadrive/nextjs-prerenders.json';
 const runtimeDirectory = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
@@ -125,7 +125,8 @@ const serializeStaticFileAsset = async (
   output: NextStaticFileOutput
 ): Promise<StaticAssetManifestEntry> => ({
   source: await requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
-  path: output.pathname,
+  // Pages Router normalizes its root page to `/index`; it is still served at `/`.
+  path: output.pathname === '/index' ? '/' : output.pathname,
   ...(output.immutableHash ? { immutable: true } : {}),
 });
 
@@ -134,7 +135,7 @@ const serializePrerenderAsset = (
   repoRoot: string,
   output: GigadriveNextPrerenderOutput
 ): StaticAssetManifestEntry | undefined => {
-  if (!output.fallback?.filePath) return undefined;
+  if (!output.fallback?.filePath || output.fallback.postponedState !== undefined) return undefined;
   return {
     source: toPortableRelativePath(projectDir, path.join(repoRoot, output.fallback.filePath)),
     path: output.pathname,
@@ -174,7 +175,7 @@ const getEntryPagePaths = (prerenders: GigadriveNextPrerenderOutput[]): string[]
   [
     ...new Set(
       prerenders
-        .filter((output) => !output.fallback?.postponedState)
+        .filter((output) => output.fallback?.postponedState === undefined)
         .map((output) => output.pathname)
         .filter((pathname) => pathname.startsWith('/') && !pathname.includes('['))
     ),
