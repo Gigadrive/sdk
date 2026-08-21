@@ -582,6 +582,53 @@ describe('Gigadrive Next.js adapter', () => {
     expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(1);
   });
 
+  it('rejects duplicate static asset paths during sidecar generation', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-duplicate-assets-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const outputDirectory = path.join(distDir, 'server', 'app');
+    const staticFilePath = path.join(outputDirectory, 'static.html');
+    const prerenderFilePath = path.join(outputDirectory, 'prerender.html');
+    await mkdir(outputDirectory, { recursive: true });
+    await writeFile(staticFilePath, '<html>static</html>');
+    await writeFile(prerenderFilePath, '<html>prerender</html>');
+
+    await expect(
+      onBuildComplete({
+        projectDir,
+        repoRoot: projectDir,
+        distDir,
+        config: nextConfig(),
+        nextVersion: '16.2.10',
+        buildId: 'build-id',
+        routing: emptyRouting,
+        outputs: {
+          ...emptyOutputs,
+          staticFiles: [
+            {
+              id: 'static',
+              type: 'STATIC_FILE',
+              pathname: '/collision',
+              filePath: staticFilePath,
+              immutableHash: undefined,
+            },
+          ],
+          prerenders: [
+            {
+              id: 'prerender',
+              type: 'PRERENDER',
+              pathname: '/collision',
+              parentOutputId: 'prerender',
+              groupId: 1,
+              fallback: { filePath: prerenderFilePath, initialRevalidate: false },
+              config: { bypassToken: 'preview-token' },
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow('Duplicate Next.js static asset path: /collision');
+  });
+
   it('keeps high-cardinality outputs in sidecars', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-sidecars-'));
     temporaryDirectories.push(projectDir);

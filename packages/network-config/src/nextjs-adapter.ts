@@ -264,7 +264,9 @@ async function serializeAssetManifest(
   ];
   const assetsByPath = new Map<string, StaticAssetManifestEntry>();
   for (const entry of entries) {
-    if (entry) assetsByPath.set(entry.path, entry);
+    if (!entry) continue;
+    if (assetsByPath.has(entry.path)) throw new Error(`Duplicate Next.js static asset path: ${entry.path}`);
+    assetsByPath.set(entry.path, entry);
   }
   return { version: 1, assets: [...assetsByPath.values()] };
 }
