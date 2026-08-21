@@ -70,6 +70,31 @@ describe('ConfigModuleLoader', () => {
     expect(result).toEqual({ version: 4, regions: ['global'] });
   });
 
+  it('should load a JavaScript config with an ESM default export', async () => {
+    const filePath = writeFixture('gigadrive.mjs', `export default { version: 4, regions: ['global'] };\n`);
+    const result = await load(filePath);
+    expect(result).toEqual({ version: 4, regions: ['global'] });
+  });
+
+  it('should load a CommonJS config exported via module.exports', async () => {
+    const filePath = writeFixture('gigadrive.cjs', `module.exports = { version: 4, regions: ['global'] };\n`);
+    const result = await load(filePath);
+    expect(result).toEqual({ version: 4, regions: ['global'] });
+  });
+
+  it('should load a plain .js config in CommonJS style', async () => {
+    const filePath = writeFixture('gigadrive.js', `module.exports = { version: 4, regions: ['global'] };\n`);
+    const result = await load(filePath);
+    expect(result).toEqual({ version: 4, regions: ['global'] });
+  });
+
+  it('should fail with ConfigModuleLoadError when a .mjs config is missing the default export', async () => {
+    const filePath = writeFixture('gigadrive.mjs', `export const config = { version: 4 };\n`);
+    const error = await loadError(filePath);
+    expect(error._tag).toBe('ConfigModuleLoadError');
+    expect(error.message).toContain('does not have a default export');
+  });
+
   it('should fail with ConfigModuleLoadError for a syntax error', async () => {
     const filePath = writeFixture('gigadrive.ts', `export default { version: 4,,, };\n`);
     const error = await loadError(filePath);

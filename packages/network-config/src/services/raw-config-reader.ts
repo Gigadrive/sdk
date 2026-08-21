@@ -6,6 +6,10 @@ import { ConfigModuleLoader } from './config-module-loader';
 
 export const ALLOWED_CONFIG_NAMES = [
   'gigadrive.ts',
+  'gigadrive.mts',
+  'gigadrive.js',
+  'gigadrive.mjs',
+  'gigadrive.cjs',
   'gigadrive.yaml',
   'gigadrive.yml',
   'gigadrive.json',
@@ -14,7 +18,7 @@ export const ALLOWED_CONFIG_NAMES = [
   'nebula.json',
 ] as const;
 
-const TS_EXTENSIONS = ['.ts', '.mts', '.cts'];
+const MODULE_EXTENSIONS = ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'];
 
 export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfigReader', {
   dependencies: [ConfigModuleLoader.Default],
@@ -41,9 +45,10 @@ export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfi
     });
 
     /**
-     * Reads a config file from disk and parses it as YAML or JSON. TypeScript
-     * config files (.ts/.mts/.cts) are evaluated as modules and must
-     * default-export the config object.
+     * Reads a config file from disk and parses it as YAML or JSON.
+     * TypeScript/JavaScript config files (.ts/.mts/.cts/.js/.mjs/.cjs) are
+     * evaluated as modules and must default-export the config object
+     * (`module.exports` for CommonJS files).
      *
      * @param filePath - Absolute path to the config file
      * @param options - Optional settings (e.g. disableVersionCheck)
@@ -77,7 +82,7 @@ export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfi
       const fileExtension = pathService.extname(filePath).toLowerCase();
 
       let parsed: Record<string, unknown>;
-      if (TS_EXTENSIONS.includes(fileExtension)) {
+      if (MODULE_EXTENSIONS.includes(fileExtension)) {
         parsed = yield* moduleLoader.loadConfigModule(filePath);
       } else {
         try {

@@ -93,6 +93,34 @@ describe('RawConfigReader', () => {
       );
       expect(result).toBe('/project/gigadrive.ts');
     });
+
+    it('should prefer gigadrive.ts over gigadrive.js', async () => {
+      const result = await runWithFs(
+        {
+          '/project/gigadrive.ts': 'export default { version: 4 };',
+          '/project/gigadrive.js': 'module.exports = { version: 4 };',
+        },
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.findConfig('/project');
+        })
+      );
+      expect(result).toBe('/project/gigadrive.ts');
+    });
+
+    it('should prefer gigadrive.js over gigadrive.yaml', async () => {
+      const result = await runWithFs(
+        {
+          '/project/gigadrive.js': 'module.exports = { version: 4 };',
+          '/project/gigadrive.yaml': 'version: 4',
+        },
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.findConfig('/project');
+        })
+      );
+      expect(result).toBe('/project/gigadrive.js');
+    });
   });
 
   describe('readRawConfig', () => {
@@ -214,6 +242,18 @@ describe('RawConfigReader', () => {
         })
       );
       expect(result).toEqual({ version: 4, name: 'from-ts' });
+    });
+
+    it('should delegate .js files to the ConfigModuleLoader instead of parsing as YAML', async () => {
+      const result = await runWithStubbedLoader(
+        { '/project/gigadrive.js': 'module.exports = { version: 4 };' },
+        Effect.succeed({ version: 4, name: 'from-js' }),
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.readRawConfig('/project/gigadrive.js');
+        })
+      );
+      expect(result).toEqual({ version: 4, name: 'from-js' });
     });
 
     it('should fail with ConfigVersionError when a .ts config is missing version', async () => {

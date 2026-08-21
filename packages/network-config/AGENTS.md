@@ -1,19 +1,21 @@
 # AGENTS.md — @gigadrive/network-config
 
 Configuration parsing library for Gigadrive Network deployments. Handles
-YAML/JSON/TypeScript config files (v4 schema), Vercel Build Output v3
-translation, region/runtime mapping, and schema validation via AJV. Part of the
-Gigadrive SDK monorepo (`packages/network-config`).
+YAML/JSON/TypeScript/JavaScript config files (v4 schema), Vercel Build Output
+v3 translation, region/runtime mapping, and schema validation via AJV. Part of
+the Gigadrive SDK monorepo (`packages/network-config`).
 
 Config files are discovered in this order (first match wins): `gigadrive.ts`,
+`gigadrive.mts`, `gigadrive.js`, `gigadrive.mjs`, `gigadrive.cjs`,
 `gigadrive.yaml`, `gigadrive.yml`, `gigadrive.json`, then the legacy `nebula.*`
-names. A `gigadrive.ts` config is evaluated as a module (via jiti) and must
-default-export the config object, optionally wrapped in the `defineConfig`
-helper for type inference. User configs should import the helper from the
-dependency-free `@gigadrive/network-config/define-config` subpath — the package
-root eagerly imports the `effect` / `@effect/platform` peer dependencies, which
-package managers that don't auto-install peers won't have present. Note that
-this executes user code at config-read time — the same trust model as
+names. A TypeScript/JavaScript config is evaluated as a module (via jiti) and
+must default-export the config object (`module.exports` for CommonJS files),
+optionally wrapped in the `defineConfig` helper for type inference. User
+configs should import the helper from the dependency-free
+`@gigadrive/network-config/define-config` subpath — the package root eagerly
+imports the `effect` / `@effect/platform` peer dependencies, which package
+managers that don't auto-install peers won't have present. Note that this
+executes user code at config-read time — the same trust model as
 `build_commands`. The loaded object still goes through the same AJV schema
 validation as YAML/JSON configs.
 
@@ -103,7 +105,7 @@ src/
 
 - **ajv / ajv-formats** — JSON Schema validation for config files.
 - **yaml** — YAML parsing.
-- **jiti** — evaluates TypeScript config files (`gigadrive.ts`).
+- **jiti** — evaluates TypeScript/JavaScript config files (`gigadrive.ts` etc.).
 - **minimatch** — glob pattern matching for asset filtering.
 - **@gigadrive/commons** — shared utilities (formatting, hashing).
 - **@gigadrive/build-utils** — file operations (exec, glob, downloads).
