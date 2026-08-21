@@ -212,17 +212,20 @@ const serializeStaticFileAsset = async (
 const serializePrerenderAsset = (
   projectDir: string,
   repoRoot: string,
+  distDir: string,
   output: GigadriveNextPrerenderOutput
 ): StaticAssetManifestEntry | undefined => {
   const { fallback } = output;
   // `false` disables scheduled ISR. Per-route bypass conditions still require
-  // runtime; the build-wide preview token remains available in the prerender sidecar.
+  // runtime; Pages Router prerenders also stay server-backed because they may
+  // be updated through on-demand ISR even without a time-based revalidation.
   const hasNoTimeBasedRevalidation = fallback?.initialRevalidate === false;
   if (
     !fallback?.filePath ||
     !hasNoTimeBasedRevalidation ||
     fallback.postponedState !== undefined ||
     output.config.bypassFor !== undefined ||
+    isInsideDirectory(path.join(distDir, 'server', 'pages'), path.resolve(repoRoot, fallback.filePath)) ||
     isDynamicRoutePathname(output.pathname)
   ) {
     return undefined;
@@ -257,7 +260,7 @@ async function serializeAssetManifest(
   );
   const entries = [
     ...staticEntries,
-    ...prerenders.map((output) => serializePrerenderAsset(projectDir, repoRoot, output)),
+    ...prerenders.map((output) => serializePrerenderAsset(projectDir, repoRoot, distDir, output)),
   ];
   const assetsByPath = new Map<string, StaticAssetManifestEntry>();
   for (const entry of entries) {

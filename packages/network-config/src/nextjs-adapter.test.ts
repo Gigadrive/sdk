@@ -546,6 +546,42 @@ describe('Gigadrive Next.js adapter', () => {
     expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(2);
   });
 
+  it('keeps Pages Router prerenders server-backed for on-demand revalidation', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-pages-revalidation-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const filePath = path.join(distDir, 'server', 'pages', 'products.html');
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, '<html>products</html>');
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: {
+        ...emptyOutputs,
+        prerenders: [
+          {
+            id: 'products',
+            type: 'PRERENDER',
+            pathname: '/products',
+            parentOutputId: 'products',
+            groupId: 1,
+            fallback: { filePath, initialRevalidate: false },
+            config: { bypassToken: 'preview-token' },
+          },
+        ],
+      },
+    });
+
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
+    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(1);
+  });
+
   it('keeps high-cardinality outputs in sidecars', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-sidecars-'));
     temporaryDirectories.push(projectDir);
