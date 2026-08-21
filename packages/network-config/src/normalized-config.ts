@@ -72,6 +72,15 @@ export interface NormalizedConfig {
     }>;
 
     /**
+     * Project-relative manifests containing logical static asset entries. A
+     * manifest keeps high-cardinality path mappings out of this configuration.
+     */
+    manifests?: Array<{
+      /** Project-relative path to a {@link StaticAssetManifest}. */
+      source: string;
+    }>;
+
+    /**
      * Whether routes for the assets should be generated during deployment.
      */
     dynamicRoutes?: boolean;
@@ -260,7 +269,8 @@ export type NormalizedFramework = NormalizedNextjsFramework;
  * discriminators. The whole deployment runs as one standalone server, so this
  * carries prerender/routing/image metadata but no per-route entrypoints.
  */
-export type NormalizedNextjsFramework = Omit<GigadriveNextBuildManifestV2Standalone, 'version'> & {
+export type NormalizedNextjsFramework = Omit<GigadriveNextBuildManifestV2Standalone, 'version' | 'outputs'> & {
+  outputs: Omit<GigadriveNextBuildManifestV2Standalone['outputs'], 'entryPagePaths'>;
   type: 'nextjs';
   schemaVersion: 2;
   /**

@@ -2,8 +2,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { parseStaticAssetManifest } from './asset-manifest';
 import gigadriveNextAdapter from './nextjs-adapter';
-import { parseGigadriveNextBuildManifest, type GigadriveNextBuildManifestV2Standalone } from './nextjs-manifest';
+import {
+  parseGigadriveNextBuildManifest,
+  parseGigadriveNextPrerenderManifest,
+  type GigadriveNextBuildManifestV2Standalone,
+} from './nextjs-manifest';
 
 const temporaryDirectories: string[] = [];
 
@@ -80,6 +85,14 @@ const onBuildComplete = async (context: Record<string, unknown>): Promise<void> 
 
 const readManifest = async (projectDir: string) =>
   parseGigadriveNextBuildManifest(await readFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), 'utf8'));
+
+const readAssetManifest = async (projectDir: string) =>
+  parseStaticAssetManifest(await readFile(path.join(projectDir, '.gigadrive', 'assets', 'nextjs.json'), 'utf8'));
+
+const readPrerenderManifest = async (projectDir: string) =>
+  parseGigadriveNextPrerenderManifest(
+    await readFile(path.join(projectDir, '.gigadrive', 'nextjs-prerenders.json'), 'utf8')
+  );
 
 afterEach(async () => {
   delete process.env.GIGADRIVE_DEPLOYMENT_ID;
@@ -188,8 +201,44 @@ describe('Gigadrive Next.js adapter', () => {
     const projectDir = path.join(repoRoot, 'apps', 'web');
     const distDir = path.join(projectDir, '.next');
     const fallbackPath = path.join(distDir, 'server', 'app', 'isr.html');
+    const isrFallbackPath = path.join(distDir, 'server', 'app', 'isr-plain.html');
+    const dynamicFallbackPath = path.join(distDir, 'server', 'pages', 'blog', '[slug].html');
+    const dynamicRscPath = path.join(distDir, 'server', 'app', 'blog', '[slug].rsc');
+    const rscFallbackPath = path.join(distDir, 'server', 'rsc-fallback.json');
+    const faviconPath = path.join(distDir, 'server', 'app', 'favicon.ico.body');
+    const faviconMetaPath = path.join(distDir, 'server', 'app', 'favicon.ico.meta');
+    const robotsPath = path.join(distDir, 'server', 'app', 'robots.txt.body');
+    const robotsMetaPath = path.join(distDir, 'server', 'app', 'robots.txt.meta');
+    const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
+    const staticChunkPath = path.join(distDir, 'static', 'chunks', 'app.js');
     await mkdir(path.dirname(fallbackPath), { recursive: true });
+    await mkdir(path.dirname(dynamicFallbackPath), { recursive: true });
+    await mkdir(path.dirname(dynamicRscPath), { recursive: true });
+    await mkdir(path.dirname(faviconPath), { recursive: true });
+    await mkdir(path.dirname(staticPagePath), { recursive: true });
+    await mkdir(path.dirname(staticChunkPath), { recursive: true });
     await writeFile(fallbackPath, '<html>isr</html>');
+    await writeFile(isrFallbackPath, '<html>isr plain</html>');
+    await writeFile(dynamicFallbackPath, '<html>fallback</html>');
+    await writeFile(dynamicRscPath, 'fallback-rsc');
+    await writeFile(rscFallbackPath, '{}');
+    await writeFile(faviconPath, 'icon');
+    await writeFile(
+      faviconMetaPath,
+      JSON.stringify({
+        status: 404,
+        headers: {
+          'content-type': 'image/x-icon',
+          'cache-control': 'public, max-age=0',
+          'x-next-cache-tags': 'категория',
+          'X-Nextjs-Prerender': '1',
+        },
+      })
+    );
+    await writeFile(robotsPath, 'User-agent: *');
+    await writeFile(robotsMetaPath, JSON.stringify({ headers: { 'x-next-cache-tags': 'категория' } }));
+    await writeFile(staticPagePath, '<html>home</html>');
+    await writeFile(staticChunkPath, 'chunk');
 
     const routeOutput = (id: string, config: Record<string, unknown>) => ({
       id,
@@ -230,8 +279,69 @@ describe('Gigadrive Next.js adapter', () => {
             },
             config: { renderingMode: 'PARTIALLY_STATIC', allowQuery: ['q'] },
           },
+          {
+            id: 'blog/[slug]',
+            type: 'PRERENDER',
+            pathname: '/blog/[slug]',
+            parentOutputId: 'blog',
+            groupId: 2,
+            fallback: { filePath: dynamicFallbackPath, initialRevalidate: 5 },
+            config: { allowQuery: ['slug'] },
+          },
+          {
+            id: 'isr-plain',
+            type: 'PRERENDER',
+            pathname: '/isr-plain',
+            parentOutputId: 'blog',
+            groupId: 3,
+            fallback: { filePath: isrFallbackPath, initialRevalidate: 60 },
+            config: {},
+          },
         ],
-        staticFiles: [],
+        staticFiles: [
+          {
+            id: 'index',
+            type: 'STATIC_FILE',
+            pathname: '/index',
+            filePath: staticPagePath,
+            immutableHash: undefined,
+          },
+          {
+            id: 'static/chunks/app.js',
+            type: 'STATIC_FILE',
+            pathname: '/_next/static/chunks/app.js',
+            filePath: staticChunkPath,
+            immutableHash: 'hash',
+          },
+          {
+            id: 'blog/[slug].rsc',
+            type: 'STATIC_FILE',
+            pathname: '/blog/[slug].rsc',
+            filePath: dynamicRscPath,
+            immutableHash: undefined,
+          },
+          {
+            id: 'index.rsc',
+            type: 'STATIC_FILE',
+            pathname: '/index.rsc',
+            filePath: rscFallbackPath,
+            immutableHash: undefined,
+          },
+          {
+            id: 'favicon.ico',
+            type: 'STATIC_FILE',
+            pathname: '/favicon.ico',
+            filePath: faviconPath,
+            immutableHash: undefined,
+          },
+          {
+            id: 'robots.txt',
+            type: 'STATIC_FILE',
+            pathname: '/robots.txt',
+            filePath: robotsPath,
+            immutableHash: undefined,
+          },
+        ],
       },
     });
 
@@ -248,11 +358,18 @@ describe('Gigadrive Next.js adapter', () => {
       config: { basePath: '', trailingSlash: false, cacheComponents: false, images: { qualities: [75] } },
       routing: { shouldNormalizeNextData: true, rsc: { header: 'rsc' } },
       outputs: {
+        prerenders: [],
+        prerenderManifest: '.gigadrive/nextjs-prerenders.json',
+        assetManifest: '.gigadrive/assets/nextjs.json',
+        entryPagePaths: ['/isr-plain'],
         staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
       },
     });
-    expect(manifest.outputs.prerenders).toHaveLength(1);
-    expect(manifest.outputs.prerenders[0]).toMatchObject({
+    expect(manifest.outputs.prerenders).toEqual([]);
+
+    const prerenderManifest = await readPrerenderManifest(projectDir);
+    expect(prerenderManifest?.prerenders).toHaveLength(3);
+    expect(prerenderManifest?.prerenders[0]).toMatchObject({
       id: 'isr',
       pathname: '/isr',
       fallback: {
@@ -263,10 +380,315 @@ describe('Gigadrive Next.js adapter', () => {
       },
       config: { renderingMode: 'PARTIALLY_STATIC', allowQuery: ['q'] },
     });
+    expect(prerenderManifest?.prerenders[1]).toMatchObject({
+      id: 'blog/[slug]',
+      pathname: '/blog/[slug]',
+      fallback: { filePath: 'apps/web/.next/server/pages/blog/[slug].html' },
+    });
+    expect(prerenderManifest?.prerenders[2]).toMatchObject({
+      id: 'isr-plain',
+      pathname: '/isr-plain',
+      fallback: { filePath: 'apps/web/.next/server/app/isr-plain.html', initialRevalidate: 60 },
+    });
+
+    expect(await readAssetManifest(projectDir)).toEqual({
+      version: 1,
+      assets: [
+        {
+          source: '.next/server/pages/index.html',
+          path: '/',
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+        {
+          source: '.next/server/rsc-fallback.json',
+          path: '/index.rsc',
+          headers: { 'content-type': 'text/x-component' },
+        },
+        {
+          source: '.next/server/app/favicon.ico.body',
+          path: '/favicon.ico',
+          status: 404,
+          headers: { 'content-type': 'image/x-icon', 'cache-control': 'public, max-age=0' },
+        },
+      ],
+    });
     // No per-route entrypoints or wrappers exist in the single-server model.
     expect((manifest as unknown as Record<string, unknown>).entrypoints).toBeUndefined();
     expect((manifest as unknown as Record<string, unknown>).outputEntrypoints).toBeUndefined();
     await expect(readFile(path.join(projectDir, '.gigadrive', 'nextjs', 'entrypoints'))).rejects.toThrow();
+  });
+
+  it('maps Pages Router root and status pages with a configured base path', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-base-path-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
+    const notFoundPagePath = path.join(distDir, 'server', 'pages', '404.html');
+    const localizedNotFoundPagePath = path.join(distDir, 'server', 'pages', 'de', '404.html');
+    const errorPagePath = path.join(distDir, 'server', 'pages', '500.html');
+    await mkdir(path.dirname(staticPagePath), { recursive: true });
+    await mkdir(path.dirname(localizedNotFoundPagePath), { recursive: true });
+    await writeFile(staticPagePath, '<html>home</html>');
+    await writeFile(notFoundPagePath, '<html>not found</html>');
+    await writeFile(localizedNotFoundPagePath, '<html>nicht gefunden</html>');
+    await writeFile(errorPagePath, '<html>error</html>');
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig({ basePath: '/docs', i18n: { locales: ['en', 'de'], defaultLocale: 'en' } }),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: {
+        ...emptyOutputs,
+        staticFiles: [
+          {
+            id: 'index',
+            type: 'STATIC_FILE',
+            pathname: '/docs/index',
+            filePath: staticPagePath,
+            immutableHash: undefined,
+          },
+          {
+            id: '/404',
+            type: 'STATIC_FILE',
+            pathname: '/docs/404',
+            filePath: notFoundPagePath,
+            immutableHash: undefined,
+          },
+          {
+            id: '/500',
+            type: 'STATIC_FILE',
+            pathname: '/docs/500',
+            filePath: errorPagePath,
+            immutableHash: undefined,
+          },
+          {
+            id: '/de/404',
+            type: 'STATIC_FILE',
+            pathname: '/docs/de/404',
+            filePath: localizedNotFoundPagePath,
+            immutableHash: undefined,
+          },
+        ],
+      },
+    });
+
+    expect(await readAssetManifest(projectDir)).toEqual({
+      version: 1,
+      assets: [
+        {
+          source: '.next/server/pages/index.html',
+          path: '/docs',
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+        {
+          source: '.next/server/pages/404.html',
+          path: '/docs/404',
+          status: 404,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+        {
+          source: '.next/server/pages/500.html',
+          path: '/docs/500',
+          status: 500,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+        {
+          source: '.next/server/pages/de/404.html',
+          path: '/docs/de/404',
+          status: 404,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+      ],
+    });
+  });
+
+  it('keeps per-route runtime bypasses server-backed while allowing a build-wide preview token', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-runtime-bypass-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const prerenderDirectory = path.join(distDir, 'server', 'app');
+    await mkdir(prerenderDirectory, { recursive: true });
+
+    const prerenders = await Promise.all(
+      ['server-action', 'preview'].map(async (id, index) => {
+        const filePath = path.join(prerenderDirectory, `${id}.html`);
+        await writeFile(filePath, `<html>${id}</html>`);
+        return {
+          id,
+          type: 'PRERENDER' as const,
+          pathname: `/${id}`,
+          parentOutputId: id,
+          groupId: index,
+          fallback: { filePath, initialRevalidate: false as const },
+          config: index === 0 ? { bypassFor: [] } : { bypassToken: 'preview-token' },
+        };
+      })
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: { ...emptyOutputs, prerenders },
+    });
+
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([
+      { source: '.next/server/app/preview.html', path: '/preview' },
+    ]);
+    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(2);
+  });
+
+  it('keeps Pages Router prerenders server-backed for on-demand revalidation', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-pages-revalidation-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const filePath = path.join(distDir, 'server', 'pages', 'products.html');
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, '<html>products</html>');
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: {
+        ...emptyOutputs,
+        prerenders: [
+          {
+            id: 'products',
+            type: 'PRERENDER',
+            pathname: '/products',
+            parentOutputId: 'products',
+            groupId: 1,
+            fallback: { filePath, initialRevalidate: false },
+            config: { bypassToken: 'preview-token' },
+          },
+        ],
+      },
+    });
+
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
+    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(1);
+  });
+
+  it('rejects duplicate static asset paths during sidecar generation', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-duplicate-assets-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const outputDirectory = path.join(distDir, 'server', 'app');
+    const staticFilePath = path.join(outputDirectory, 'static.html');
+    const prerenderFilePath = path.join(outputDirectory, 'prerender.html');
+    await mkdir(outputDirectory, { recursive: true });
+    await writeFile(staticFilePath, '<html>static</html>');
+    await writeFile(prerenderFilePath, '<html>prerender</html>');
+
+    await expect(
+      onBuildComplete({
+        projectDir,
+        repoRoot: projectDir,
+        distDir,
+        config: nextConfig(),
+        nextVersion: '16.2.10',
+        buildId: 'build-id',
+        routing: emptyRouting,
+        outputs: {
+          ...emptyOutputs,
+          staticFiles: [
+            {
+              id: 'static',
+              type: 'STATIC_FILE',
+              pathname: '/collision',
+              filePath: staticFilePath,
+              immutableHash: undefined,
+            },
+          ],
+          prerenders: [
+            {
+              id: 'prerender',
+              type: 'PRERENDER',
+              pathname: '/collision',
+              parentOutputId: 'prerender',
+              groupId: 1,
+              fallback: { filePath: prerenderFilePath, initialRevalidate: false },
+              config: { bypassToken: 'preview-token' },
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow('Duplicate Next.js static asset path: /collision');
+  });
+
+  it('keeps high-cardinality outputs in sidecars', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-sidecars-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const prerenderDirectory = path.join(distDir, 'server', 'app', 'docs');
+    await mkdir(prerenderDirectory, { recursive: true });
+
+    const prerenders = await Promise.all(
+      Array.from({ length: 75 }, async (_, index) => {
+        const filePath = path.join(prerenderDirectory, `${index}.html`);
+        await writeFile(filePath, `<html>${index}</html>`);
+        return {
+          id: `docs-${index}`,
+          type: 'PRERENDER',
+          pathname: `/docs/${index}`,
+          parentOutputId: 'docs',
+          groupId: index,
+          fallback: {
+            filePath,
+            initialRevalidate: false,
+            ...(index === 0
+              ? {
+                  initialStatus: 203,
+                  initialHeaders: {
+                    'content-type': 'text/html; charset=utf-8',
+                    'x-public': 'kept',
+                    'X-Next-Cache-Tags': 'docs,docs:0',
+                    'x-nextjs-prerender': '1',
+                  },
+                }
+              : {}),
+          },
+          config: { bypassToken: 'preview-token' },
+        };
+      })
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: { ...emptyOutputs, prerenders },
+    });
+
+    const manifest = (await readManifest(projectDir)) as GigadriveNextBuildManifestV2Standalone;
+    expect(manifest.outputs.prerenders).toEqual([]);
+    expect(manifest.outputs.entryPagePaths).toHaveLength(50);
+    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(75);
+    const assets = (await readAssetManifest(projectDir))?.assets;
+    expect(assets).toHaveLength(75);
+    expect(assets?.[0]).toEqual({
+      source: '.next/server/app/docs/0.html',
+      path: '/docs/0',
+      status: 203,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'x-public': 'kept' },
+    });
   });
 
   it('writes a minimal export manifest for static export on the managed runtime', async () => {

@@ -77,6 +77,26 @@ describe('generateConfig', () => {
     });
   });
 
+  it('should preserve manifest-backed asset collections', async () => {
+    const framework: FrameworkDefinition = {
+      ...mockFramework,
+      getDefaultConfig: () => ({
+        ...mockFramework.getDefaultConfig('npm'),
+        assetsDir: undefined,
+        assetManifests: [{ source: '.gigadrive/assets/build.json' }],
+      }),
+    };
+
+    const result = await Effect.runPromise(generateConfig(framework, 'npm'));
+    expect(result.assets).toEqual({
+      paths: [],
+      prefixToStrip: '',
+      manifests: [{ source: '.gigadrive/assets/build.json' }],
+      dynamicRoutes: true,
+      populateCache: true,
+    });
+  });
+
   it('should not set assets when assetsDir is not provided', async () => {
     const noAssetsFramework: FrameworkDefinition = {
       ...mockFramework,

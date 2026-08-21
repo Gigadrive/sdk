@@ -8,7 +8,7 @@ import type { NormalizedConfig } from '../normalized-config';
  * - commands: use user's if non-empty, otherwise framework's
  * - entrypoints: use user's if non-empty, otherwise framework's
  * - routes: use user's if non-empty, otherwise framework's
- * - assets: use user's if defined with paths, otherwise framework's
+ * - assets: use user's if it declares any sources, otherwise framework's
  * - excludeFiles: use user's if non-empty, otherwise framework's
  * - regions: always use user's (always populated from parsing)
  * - environmentVariables: deep merge (framework base, user overrides)
@@ -25,6 +25,11 @@ export const mergeWithFrameworkDefaults = Effect.fn('mergeWithFrameworkDefaults'
 ) {
   yield* Effect.logDebug('Merging user config with framework defaults');
 
+  const userHasAssets =
+    (userConfig.assets?.paths?.length ?? 0) > 0 ||
+    (userConfig.assets?.prefixes?.length ?? 0) > 0 ||
+    (userConfig.assets?.manifests?.length ?? 0) > 0;
+
   const merged: NormalizedConfig = {
     regions: userConfig.regions,
 
@@ -34,7 +39,7 @@ export const mergeWithFrameworkDefaults = Effect.fn('mergeWithFrameworkDefaults'
 
     routes: userConfig.routes.length > 0 ? userConfig.routes : frameworkConfig.routes,
 
-    assets: userConfig.assets?.paths && userConfig.assets.paths.length > 0 ? userConfig.assets : frameworkConfig.assets,
+    assets: userHasAssets ? userConfig.assets : frameworkConfig.assets,
 
     environmentVariables: {
       ...frameworkConfig.environmentVariables,

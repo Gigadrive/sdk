@@ -1,6 +1,7 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
 import { getDefaultPathMap } from '../../build-output-v3/get-default-path-map';
+import { MAXIMUM_ENTRY_PAGE_PATHS } from '../../nextjs-constants';
 import {
   parseGigadriveNextBuildManifest,
   type GigadriveNextBuildManifestV1,
@@ -11,13 +12,6 @@ import { AVAILABLE_REGIONS } from '../../regions';
 import type { FrameworkDefaultConfig, FrameworkDefinition } from '../types';
 
 const toPortablePath = (value: string): string => value.replaceAll('\\', '/');
-
-/**
- * Upper bound on the prerendered paths exported for CDN warming. Warming only
- * needs a representative sample; carrying the full table is what produced the
- * multi-megabyte gateway configuration this list replaces.
- */
-const MAXIMUM_ENTRY_PAGE_PATHS = 50;
 
 /**
  * Memory for the single standalone server, in MB.
@@ -189,25 +183,23 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
     populateCache: true,
   }));
 
-  // Prerender shells are NOT published as assets here. The single standalone
-  // server already ships every build-time prerender inside its own bundle
-  // (`writeStandaloneDirectory` recursively copies `.next/server/{app,pages}`)
-  // and the cache handler reads them from there, so uploading a second copy
-  // produced one object + one asset row per prerendered output — tens of
-  // thousands for a large content site — that nothing ever read.
-  //
-  // A bounded, representative sample of prerendered paths is still exported so
-  // the platform can warm the CDN without carrying the full output table.
-  const entryPagePaths = [
-    ...new Set(
-      manifest.outputs.prerenders
-        .filter((output) => !output.fallback?.postponedState)
-        .map((output) => output.pathname)
-        .filter((pathname) => pathname.startsWith('/') && !pathname.includes('['))
-    ),
-  ]
-    .sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))
-    .slice(0, MAXIMUM_ENTRY_PAGE_PATHS);
+  const assetManifests = manifest.outputs.assetManifest ? [{ source: manifest.outputs.assetManifest }] : undefined;
+  const { entryPagePaths: manifestEntryPagePaths, ...manifestOutputs } = manifest.outputs;
+
+  // The complete prerender table is referenced through a sidecar. Keep only a
+  // bounded path sample inline so normalized configuration remains compact.
+  const entryPagePaths =
+    manifestEntryPagePaths?.slice(0, MAXIMUM_ENTRY_PAGE_PATHS) ??
+    [
+      ...new Set(
+        manifest.outputs.prerenders
+          .filter((output) => output.fallback?.postponedState === undefined)
+          .map((output) => output.pathname)
+          .filter((pathname) => pathname.startsWith('/') && !pathname.includes('['))
+      ),
+    ]
+      .sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))
+      .slice(0, MAXIMUM_ENTRY_PAGE_PATHS);
 
   const singleEntrypoint: NormalizedConfigEntrypoint = {
     displayName: 'next-server',
@@ -236,10 +228,9 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
     server: manifest.server,
     config: manifest.config,
     routing: manifest.routing,
-    // The prerender table is deliberately not forwarded: the standalone server
-    // serves build-time prerenders from its own bundle, so the platform only
-    // needs the warming sample below.
-    outputs: { prerenders: [], staticAssets: manifest.outputs.staticAssets },
+    // Keep high-cardinality output metadata in portable sidecars rather than
+    // expanding it into normalized deployment configuration.
+    outputs: { ...manifestOutputs, prerenders: [] },
     entryPagePaths,
     type: 'nextjs' as const,
     schemaVersion: 2 as const,
@@ -252,6 +243,7 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
     assetPaths,
     assetOverrides,
     assetPrefixes,
+    assetManifests,
     assetsDir: manifest.distDir,
     assetsPrefixToStrip: '',
     populateAssetCache: true,

@@ -1,13 +1,18 @@
+import { Schema } from 'effect';
 import type { NextAdapter } from 'next';
-import { access, mkdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { StaticAssetHeaders, StaticAssetManifestEntry, StaticAssetManifestV1 } from './asset-manifest';
 import type { NormalizedImagePolicy } from './image-policy';
+import { decodeJson, decodeUnknown, HttpHeadersSchema } from './manifest-schema';
+import { MAXIMUM_ENTRY_PAGE_PATHS } from './nextjs-constants';
 import type {
   GigadriveNextBuildManifestV1,
   GigadriveNextBuildManifestV2Export,
   GigadriveNextBuildManifestV2Standalone,
+  GigadriveNextPrerenderManifestV1,
   GigadriveNextPrerenderOutput,
   GigadriveNextServerDescriptor,
   GigadriveNextStaticAssetPrefix,
@@ -22,8 +27,18 @@ type NextRouteOutput =
   | BuildCompleteContext['outputs']['appRoutes'][number]
   | NonNullable<BuildCompleteContext['outputs']['middleware']>;
 type NextPrerenderOutput = BuildCompleteContext['outputs']['prerenders'][number];
+type NextStaticFileOutput = BuildCompleteContext['outputs']['staticFiles'][number];
 
 const PRODUCTION_BUILD_PHASE = 'phase-production-build';
+const NEXT_ASSET_MANIFEST_PATH = '.gigadrive/assets/nextjs.json';
+const NEXT_PRERENDER_MANIFEST_PATH = '.gigadrive/nextjs-prerenders.json';
+const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
+const DEFAULT_RSC_CONTENT_TYPE = 'text/x-component';
+const INTERNAL_STATIC_RESPONSE_HEADERS = new Set(['x-next-cache-tags', 'x-nextjs-prerender']);
+const NextStaticFileMetaSchema = Schema.Struct({
+  status: Schema.optional(Schema.Int.pipe(Schema.between(100, 599))),
+  headers: Schema.mutable(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+});
 const runtimeDirectory = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 const runtimeModulePath = (environmentName: string, fileName: string): string =>
@@ -78,26 +93,199 @@ const toPortableRelativePath = (from: string, to: string, allowCurrentDirectory 
   return normalized;
 };
 
-async function resolveReadablePath(repoRoot: string, filePath: string) {
+async function resolveReadablePath(repoRoot: string, filePath: string, resolvedRoot?: string) {
   const absolutePath = path.resolve(path.isAbsolute(filePath) ? filePath : path.join(repoRoot, filePath));
   const portablePath = toPortableRelativePath(repoRoot, absolutePath);
   await access(absolutePath);
   // Validate the symlink-resolved location as well; the call throws when the
   // real path escapes the repository root.
   const resolvedPath = await realpath(absolutePath);
-  void toPortableRelativePath(repoRoot, resolvedPath);
+  void toPortableRelativePath(resolvedRoot ?? (await realpath(repoRoot)), resolvedPath);
   const fileStat = await stat(absolutePath);
   return { portablePath, fileStat };
 }
 
-async function requireReadableFile(repoRoot: string, filePath: string): Promise<string> {
-  const { portablePath, fileStat } = await resolveReadablePath(repoRoot, filePath);
+async function requireReadableFile(repoRoot: string, filePath: string, resolvedRoot?: string): Promise<string> {
+  const { portablePath, fileStat } = await resolveReadablePath(repoRoot, filePath, resolvedRoot);
   if (!fileStat.isFile()) throw new Error(`Next.js adapter output is not a readable file: ${filePath}`);
   return portablePath;
 }
 
+async function mapInBatches<Input, Output>(
+  values: Input[],
+  mapper: (value: Input) => Promise<Output>,
+  batchSize = 64
+): Promise<Output[]> {
+  const results: Output[] = [];
+  for (let index = 0; index < values.length; index += batchSize) {
+    results.push(...(await Promise.all(values.slice(index, index + batchSize).map((value) => mapper(value)))));
+  }
+  return results;
+}
+
+const isInsideDirectory = (directory: string, filePath: string): boolean => {
+  const relativePath = path.relative(path.resolve(directory), path.resolve(filePath));
+  return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+};
+
+const isDynamicRoutePathname = (pathname: string): boolean => pathname.includes('[');
+
+// Next reports the Pages Router root as `<basePath>/index`, while its public URL
+// is the base path itself (or `/` when no base path is configured).
+const normalizeStaticFilePathname = (pathname: string, basePath: string): string =>
+  pathname === `${basePath}/index` ? basePath || '/' : pathname;
+
+const getStaticStatus = (pathname: string, basePath: string, locales: readonly string[]): number | undefined => {
+  const routePathname = basePath && pathname.startsWith(`${basePath}/`) ? pathname.slice(basePath.length) : pathname;
+  const segments = routePathname.split('/').filter(Boolean);
+  const [firstSegment, secondSegment] = segments;
+  const statusPage =
+    segments.length === 1
+      ? firstSegment
+      : segments.length === 2 && firstSegment && locales.includes(firstSegment)
+        ? secondSegment
+        : undefined;
+  return statusPage === '404' ? 404 : statusPage === '500' ? 500 : undefined;
+};
+
+const hasContentType = (headers: StaticAssetHeaders): boolean =>
+  Object.keys(headers).some((name) => name.toLowerCase() === 'content-type');
+
+const getPublicStaticResponseHeaders = (headers: Record<string, unknown>): StaticAssetHeaders | undefined => {
+  const publicHeaders = Object.fromEntries(
+    Object.entries(headers).filter(([name]) => !INTERNAL_STATIC_RESPONSE_HEADERS.has(name.toLowerCase()))
+  );
+  return decodeUnknown(HttpHeadersSchema, publicHeaders);
+};
+
+async function getStaticFileResponseMetadata(
+  projectDir: string,
+  resolvedProjectDir: string,
+  output: NextStaticFileOutput,
+  rscContentType: string,
+  basePath: string,
+  locales: readonly string[]
+): Promise<Pick<StaticAssetManifestEntry, 'status' | 'headers'> | undefined> {
+  if (output.filePath.endsWith('.body')) {
+    const metaPath = `${output.filePath.slice(0, -'.body'.length)}.meta`;
+    await requireReadableFile(projectDir, metaPath, resolvedProjectDir);
+    const meta = decodeJson(NextStaticFileMetaSchema, await readFile(metaPath, 'utf8'));
+    const headers = meta ? getPublicStaticResponseHeaders(meta.headers) : undefined;
+    if (!meta || !headers || !hasContentType(headers)) return undefined;
+    return {
+      ...(meta.status !== undefined ? { status: meta.status } : {}),
+      headers,
+    };
+  }
+  if (output.filePath.endsWith('.html')) {
+    const status = getStaticStatus(output.pathname, basePath, locales);
+    return {
+      ...(status !== undefined ? { status } : {}),
+      headers: { 'content-type': HTML_CONTENT_TYPE },
+    };
+  }
+  if (output.pathname.endsWith('.rsc')) return { headers: { 'content-type': rscContentType } };
+  return {};
+}
+
+const serializeStaticFileAsset = async (
+  projectDir: string,
+  resolvedProjectDir: string,
+  basePath: string,
+  rscContentType: string,
+  locales: readonly string[],
+  output: NextStaticFileOutput
+): Promise<StaticAssetManifestEntry | undefined> => {
+  const [source, responseMetadata] = await Promise.all([
+    requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
+    getStaticFileResponseMetadata(projectDir, resolvedProjectDir, output, rscContentType, basePath, locales),
+  ]);
+  if (!responseMetadata) return undefined;
+  return {
+    source,
+    path: normalizeStaticFilePathname(output.pathname, basePath),
+    ...responseMetadata,
+    ...(output.immutableHash ? { immutable: true } : {}),
+  };
+};
+
+const serializePrerenderAsset = (
+  projectDir: string,
+  repoRoot: string,
+  distDir: string,
+  output: GigadriveNextPrerenderOutput
+): StaticAssetManifestEntry | undefined => {
+  const { fallback } = output;
+  // `false` disables scheduled ISR. Per-route bypass conditions still require
+  // runtime; Pages Router prerenders also stay server-backed because they may
+  // be updated through on-demand ISR even without a time-based revalidation.
+  const hasNoTimeBasedRevalidation = fallback?.initialRevalidate === false;
+  if (
+    !fallback?.filePath ||
+    !hasNoTimeBasedRevalidation ||
+    fallback.postponedState !== undefined ||
+    output.config.bypassFor !== undefined ||
+    isInsideDirectory(path.join(distDir, 'server', 'pages'), path.resolve(repoRoot, fallback.filePath)) ||
+    isDynamicRoutePathname(output.pathname)
+  ) {
+    return undefined;
+  }
+  const headers = fallback.initialHeaders ? getPublicStaticResponseHeaders(fallback.initialHeaders) : undefined;
+  return {
+    source: toPortableRelativePath(projectDir, path.join(repoRoot, fallback.filePath)),
+    path: output.pathname,
+    ...(fallback.initialStatus !== undefined ? { status: fallback.initialStatus } : {}),
+    ...(headers ? { headers } : {}),
+  };
+};
+
+async function serializeAssetManifest(
+  projectDir: string,
+  resolvedProjectDir: string,
+  repoRoot: string,
+  distDir: string,
+  basePath: string,
+  rscContentType: string,
+  locales: readonly string[],
+  staticFiles: NextStaticFileOutput[],
+  prerenders: GigadriveNextPrerenderOutput[]
+): Promise<StaticAssetManifestV1> {
+  const staticDirectory = path.join(distDir, 'static');
+  const staticEntries = await mapInBatches(
+    staticFiles.filter(
+      // The complete immutable subtree is already represented by a prefix.
+      (output) => !isInsideDirectory(staticDirectory, output.filePath) && !isDynamicRoutePathname(output.pathname)
+    ),
+    (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, basePath, rscContentType, locales, output)
+  );
+  const entries = [
+    ...staticEntries,
+    ...prerenders.map((output) => serializePrerenderAsset(projectDir, repoRoot, distDir, output)),
+  ];
+  const assetsByPath = new Map<string, StaticAssetManifestEntry>();
+  for (const entry of entries) {
+    if (!entry) continue;
+    if (assetsByPath.has(entry.path)) throw new Error(`Duplicate Next.js static asset path: ${entry.path}`);
+    assetsByPath.set(entry.path, entry);
+  }
+  return { version: 1, assets: [...assetsByPath.values()] };
+}
+
+const getEntryPagePaths = (prerenders: GigadriveNextPrerenderOutput[]): string[] =>
+  [
+    ...new Set(
+      prerenders
+        .filter((output) => output.fallback?.postponedState === undefined)
+        .map((output) => output.pathname)
+        .filter((pathname) => pathname.startsWith('/') && !isDynamicRoutePathname(pathname))
+    ),
+  ]
+    .sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))
+    .slice(0, MAXIMUM_ENTRY_PAGE_PATHS);
+
 const serializePrerenderOutput = async (
   repoRoot: string,
+  resolvedRepoRoot: string,
   output: NextPrerenderOutput
 ): Promise<GigadriveNextPrerenderOutput> => {
   const { bypassFor, ...prerenderConfig } = output.config;
@@ -113,7 +301,7 @@ const serializePrerenderOutput = async (
       ? {
           fallback: {
             ...(output.fallback.filePath
-              ? { filePath: await requireReadableFile(repoRoot, output.fallback.filePath) }
+              ? { filePath: await requireReadableFile(repoRoot, output.fallback.filePath, resolvedRepoRoot) }
               : {}),
             ...(output.fallback.initialStatus !== undefined ? { initialStatus: output.fallback.initialStatus } : {}),
             ...(output.fallback.initialHeaders ? { initialHeaders: output.fallback.initialHeaders } : {}),
@@ -352,9 +540,27 @@ const gigadriveNextAdapter: NextAdapter = {
       await ensureStandaloneServerTraces(projectDir, repoRoot, distDir, config);
     }
 
-    const prerenders = await Promise.all(
-      outputs.prerenders.map((output) => serializePrerenderOutput(repoRoot, output))
+    const [resolvedRepoRoot, resolvedProjectDir] = await Promise.all([realpath(repoRoot), realpath(projectDir)]);
+    const prerenders = await mapInBatches(outputs.prerenders, (output) =>
+      serializePrerenderOutput(repoRoot, resolvedRepoRoot, output)
     );
+    const assetManifest = await serializeAssetManifest(
+      projectDir,
+      resolvedProjectDir,
+      repoRoot,
+      distDir,
+      config.basePath,
+      routing.rsc.contentTypeHeader ?? DEFAULT_RSC_CONTENT_TYPE,
+      config.i18n?.locales ?? [],
+      outputs.staticFiles,
+      prerenders
+    );
+    const prerenderManifest: GigadriveNextPrerenderManifestV1 = { version: 1, prerenders };
+    await mkdir(path.join(metadataDirectory, 'assets'), { recursive: true });
+    await Promise.all([
+      writeFile(path.join(projectDir, NEXT_ASSET_MANIFEST_PATH), `${JSON.stringify(assetManifest)}\n`, 'utf8'),
+      writeFile(path.join(projectDir, NEXT_PRERENDER_MANIFEST_PATH), `${JSON.stringify(prerenderManifest)}\n`, 'utf8'),
+    ]);
     const server = aggregateServerDescriptor([
       ...outputs.pages,
       ...outputs.pagesApi,
@@ -394,7 +600,13 @@ const gigadriveNextAdapter: NextAdapter = {
         shouldNormalizeNextData: routing.shouldNormalizeNextData,
         rsc: toJsonValue(routing.rsc),
       },
-      outputs: { prerenders, staticAssets },
+      outputs: {
+        prerenders: [],
+        prerenderManifest: NEXT_PRERENDER_MANIFEST_PATH,
+        assetManifest: NEXT_ASSET_MANIFEST_PATH,
+        entryPagePaths: getEntryPagePaths(prerenders),
+        staticAssets,
+      },
     };
     await writeManifest(manifest);
   },

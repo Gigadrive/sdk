@@ -88,6 +88,8 @@ export interface FrameworkDefaultConfig {
     populateCache?: boolean;
     contentType?: string;
   }>;
+  /** Project-relative manifests containing logical static asset entries. */
+  assetManifests?: Array<{ source: string }>;
   populateAssetCache?: boolean;
   routes: Array<{ source: string; destination: string }>;
   environmentVariables: Record<string, string>;

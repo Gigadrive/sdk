@@ -81,13 +81,17 @@ export const postProcessConfig = Effect.fn('postProcessConfig')(function* (
 ) {
   const vercelParser = yield* VercelBuildOutputParser;
   let result = yield* vercelParser.parse(config, projectFolder);
+  const hasAssets =
+    (result.assets?.paths?.length ?? 0) > 0 ||
+    (result.assets?.prefixes?.length ?? 0) > 0 ||
+    (result.assets?.manifests?.length ?? 0) > 0;
 
   // Stricter check first: no functions, no assets, AND no routes → error
-  if (result.entrypoints.length === 0 && (result.assets?.paths?.length || 0) === 0 && result.routes.length === 0) {
+  if (result.entrypoints.length === 0 && !hasAssets && result.routes.length === 0) {
     result.errors.push(
       'The current project config does not resolve to any functions, assets or routes and can not be deployed.'
     );
-  } else if (result.entrypoints.length === 0 && (result.assets?.paths?.length || 0) === 0) {
+  } else if (result.entrypoints.length === 0 && !hasAssets) {
     result.warnings.push('The current project does not have any functions or assets to deploy.');
   }
 
