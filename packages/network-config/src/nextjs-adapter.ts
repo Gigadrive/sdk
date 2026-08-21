@@ -354,6 +354,39 @@ type CollectBuildTracesModule = {
 };
 
 /**
+ * Ignore globs that Turbopack's native server tracer applies on top of the
+ * shared `collectBuildTraces` ignore list (see `ignores()` in Next's
+ * `crates/next-api/src/next_server_nft.rs`). The JavaScript
+ * `collectBuildTraces` fallback only carries the webpack-era ignores, so
+ * tracing Next's server entries with it follows dev-only require edges —
+ * `router-server` → `setup-dev-bundler` → hot reloaders → the application's
+ * build toolchain (webpack, terser, esbuild, swc, babel plugins) — that
+ * Turbopack severs natively, roughly quadrupling the standalone output.
+ *
+ * Passing these through `outputFileTracingExcludes['next-server']` reuses
+ * `collectBuildTraces`' own extension point for the shared ignores, so they
+ * apply during trace traversal exactly like Turbopack's graph-level ignores.
+ * Only Next-internal dev/build-only modules are listed — never application
+ * packages — so application dependencies are excluded solely when their every
+ * require path runs through one of these modules, matching the native trace.
+ * If a future Next release moves one of these files the glob simply stops
+ * matching and the trace grows back; nothing breaks at runtime.
+ */
+const TURBOPACK_SERVER_TRACE_IGNORES = [
+  // client components with a NODE_ENV guard the tracer cannot evaluate
+  '**/next/dist/next-devtools/userspace/use-app-dev-rendering-indicator.js',
+  '**/next/dist/client/dev/hot-reloader/app/hot-reloader-app.js',
+  // server/lib/router-server.js requires this statically but only uses it in dev
+  '**/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+  // server/next.js requires this statically but only uses it in dev
+  '**/next/dist/server/dev/next-dev-server.js',
+  // build-time-only browser support data pulled in via next/dist/compiled/babel*
+  '**/next/dist/compiled/browserslist/**',
+  '**/next/dist/compiled/jest-worker/**/*',
+  '**/node_modules/react{,-dom,-server-dom-turbopack}/**/*.development.js',
+];
+
+/**
  * Next 16.3 stopped emitting the aggregated `next-server.js.nft.json` /
  * `next-minimal-server.js.nft.json` traces from Turbopack builds whenever an
  * adapter is configured, yet `next build` still runs the `output: 'standalone'`
@@ -362,7 +395,11 @@ type CollectBuildTracesModule = {
  * file, making this a no-op there. When the file is missing, regenerate both
  * aggregate traces with Next's own `collectBuildTraces` (the module the webpack
  * pipeline runs); without `buildTraceContext` it only writes the two aggregate
- * trace files and leaves Turbopack's per-entry traces untouched.
+ * trace files and leaves Turbopack's per-entry traces untouched. The
+ * regeneration also merges `TURBOPACK_SERVER_TRACE_IGNORES` into the config's
+ * `outputFileTracingExcludes` so the fallback prunes the same dev-only require
+ * edges as Turbopack's native tracer instead of dragging the application's
+ * build toolchain into the standalone output.
  */
 async function ensureStandaloneServerTraces(
   projectDir: string,
@@ -388,10 +425,20 @@ async function ensureStandaloneServerTraces(
         `next/dist/build/collect-build-traces from the project to regenerate it: ${message}`
     );
   }
+  const { outputFileTracingExcludes = {} } = config as {
+    outputFileTracingExcludes?: Record<string, string[]>;
+  };
+  const tracingConfig = {
+    ...config,
+    outputFileTracingExcludes: {
+      ...outputFileTracingExcludes,
+      'next-server': [...(outputFileTracingExcludes['next-server'] ?? []), ...TURBOPACK_SERVER_TRACE_IGNORES],
+    },
+  };
   try {
     await collectBuildTracesModule.collectBuildTraces({
       dir: projectDir,
-      config,
+      config: tracingConfig,
       distDir,
       edgeRuntimeRoutes: {},
       staticPages: [],

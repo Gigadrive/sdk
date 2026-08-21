@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -857,4 +858,110 @@ exports.collectBuildTraces = async (options) => {
       })
     ).rejects.toThrow('could not load next/dist/build/collect-build-traces');
   });
+
+  it('passes the Turbopack dev-only trace ignores to collectBuildTraces without mutating the config', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-trace-ignores-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'apps', 'web');
+    const distDir = path.join(projectDir, '.next');
+    await mkdir(distDir, { recursive: true });
+    await stubCollectBuildTraces(projectDir);
+    const config = nextConfig({
+      output: 'standalone',
+      outputFileTracingExcludes: { 'next-server': ['**/user-exclude/**'], '/api/*': ['**/route-exclude/**'] },
+    });
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      config,
+      nextVersion: '16.3.0',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
+    });
+
+    const options = JSON.parse(await readFile(path.join(distDir, 'collect-options.json'), 'utf8'));
+    const excludes = options.config.outputFileTracingExcludes;
+    // User-provided excludes stay first; the dev-only ignores Turbopack's native
+    // tracer uses (next_server_nft.rs) are appended so the JS fallback prunes the
+    // same dev-only require edges instead of tracing the app's build toolchain.
+    expect(excludes['next-server'][0]).toBe('**/user-exclude/**');
+    expect(excludes['next-server']).toEqual(
+      expect.arrayContaining([
+        '**/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+        '**/next/dist/server/dev/next-dev-server.js',
+        '**/next/dist/compiled/browserslist/**',
+      ])
+    );
+    expect(excludes['/api/*']).toEqual(['**/route-exclude/**']);
+    // The config Next handed to the adapter must not be mutated.
+    expect(config.outputFileTracingExcludes).toEqual({
+      'next-server': ['**/user-exclude/**'],
+      '/api/*': ['**/route-exclude/**'],
+    });
+  });
+
+  // Runs the real `next/dist/build/collect-build-traces` (from the workspace's
+  // Next devDependency) exactly like a Next 16.3 Turbopack adapter build whose
+  // aggregate trace is missing. Guards against the trace regression where the
+  // regenerated trace followed Next's dev-only require edges and quadrupled the
+  // standalone output with build toolchain packages.
+  it('regenerates a production-scoped aggregate trace with the real collect-build-traces', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-trace-real-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = path.join(repoRoot, 'apps', 'web');
+    const distDir = path.join(projectDir, '.next');
+    await mkdir(distDir, { recursive: true });
+    await mkdir(path.join(projectDir, 'node_modules'), { recursive: true });
+    await writeFile(path.join(projectDir, 'package.json'), '{"name":"fixture"}');
+    // Resolve the real Next package installed for this workspace and expose it
+    // to the fixture project the same way a real app resolves its own Next.
+    const realNextPackage = path.dirname(createRequire(import.meta.url).resolve('next/package.json'));
+    await symlink(realNextPackage, path.join(projectDir, 'node_modules', 'next'));
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir,
+      // The real Next store lives outside the fixture repoRoot, so trace from
+      // the filesystem root like monorepo setups with hoisted dependencies do.
+      config: nextConfig({ output: 'standalone', outputFileTracingRoot: path.parse(projectDir).root }),
+      nextVersion: '16.3.0',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
+    });
+
+    const trace = JSON.parse(await readFile(path.join(distDir, 'next-server.js.nft.json'), 'utf8')) as {
+      version: number;
+      files: string[];
+    };
+    expect(trace.version).toBe(1);
+    const included = (needle: string) => trace.files.some((file) => file.includes(needle));
+
+    // Build-only dependencies must stay out: these Next-internal dev modules are
+    // the gateways that previously pulled the app's webpack/terser/esbuild/swc
+    // toolchain into the trace, alongside the toolchain packages themselves.
+    expect(included('next/dist/server/lib/router-utils/setup-dev-bundler')).toBe(false);
+    expect(included('next/dist/server/dev/hot-reloader-webpack')).toBe(false);
+    expect(included('next/dist/compiled/browserslist/')).toBe(false);
+    expect(included('/node_modules/webpack/')).toBe(false);
+    expect(included('/node_modules/esbuild/')).toBe(false);
+    expect(included('/node_modules/babel-plugin-react-compiler/')).toBe(false);
+    expect(included('/node_modules/@swc/core')).toBe(false);
+
+    // Genuine production-server dependencies must stay in.
+    expect(included('next/dist/server/next-server.js')).toBe(true);
+    expect(included('next/dist/server/lib/start-server.js')).toBe(true);
+    expect(included('/node_modules/styled-jsx/')).toBe(true);
+    expect(included('next/dist/server/route-modules/app-page/module.compiled.js')).toBe(true);
+
+    const minimalTrace = JSON.parse(await readFile(path.join(distDir, 'next-minimal-server.js.nft.json'), 'utf8')) as {
+      files: string[];
+    };
+    expect(minimalTrace.files.length).toBeGreaterThan(0);
+    expect(await readManifest(projectDir)).toMatchObject({ version: 2, mode: 'standalone-v2' });
+  }, 120_000);
 });
