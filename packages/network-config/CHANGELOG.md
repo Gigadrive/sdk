@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 4.5.0
+
+### Minor Changes
+
+- Add portable, manifest-backed static asset collections and emit Next.js static and prerender outputs as compact build sidecars. ([#468](https://github.com/Gigadrive/sdk/pull/468))
+
 ## 4.4.0
 
 ### Minor Changes
