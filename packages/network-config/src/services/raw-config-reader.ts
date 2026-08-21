@@ -7,6 +7,7 @@ import { ConfigModuleLoader } from './config-module-loader';
 export const ALLOWED_CONFIG_NAMES = [
   'gigadrive.ts',
   'gigadrive.mts',
+  'gigadrive.cts',
   'gigadrive.js',
   'gigadrive.mjs',
   'gigadrive.cjs',

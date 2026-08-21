@@ -6,9 +6,9 @@ v3 translation, region/runtime mapping, and schema validation via AJV. Part of
 the Gigadrive SDK monorepo (`packages/network-config`).
 
 Config files are discovered in this order (first match wins): `gigadrive.ts`,
-`gigadrive.mts`, `gigadrive.js`, `gigadrive.mjs`, `gigadrive.cjs`,
-`gigadrive.yaml`, `gigadrive.yml`, `gigadrive.json`, then the legacy `nebula.*`
-names. A TypeScript/JavaScript config is evaluated as a module (via jiti) and
+`gigadrive.mts`, `gigadrive.cts`, `gigadrive.js`, `gigadrive.mjs`,
+`gigadrive.cjs`, `gigadrive.yaml`, `gigadrive.yml`, `gigadrive.json`, then the
+legacy `nebula.*` names. A TypeScript/JavaScript config is evaluated as a module (via jiti) and
 must default-export the config object (`module.exports` for CommonJS files),
 optionally wrapped in the `defineConfig` helper for type inference. User
 configs should import the helper from the dependency-free

@@ -108,6 +108,17 @@ describe('RawConfigReader', () => {
       expect(result).toBe('/project/gigadrive.ts');
     });
 
+    it('should find gigadrive.cts', async () => {
+      const result = await runWithFs(
+        { '/project/gigadrive.cts': 'module.exports = { version: 4 };' },
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.findConfig('/project');
+        })
+      );
+      expect(result).toBe('/project/gigadrive.cts');
+    });
+
     it('should prefer gigadrive.js over gigadrive.yaml', async () => {
       const result = await runWithFs(
         {
