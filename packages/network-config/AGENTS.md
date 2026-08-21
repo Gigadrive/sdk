@@ -1,9 +1,21 @@
 # AGENTS.md — @gigadrive/network-config
 
 Configuration parsing library for Gigadrive Network deployments. Handles
-YAML/JSON config files (v4 schema), Vercel Build Output v3 translation, region/
-runtime mapping, and schema validation via AJV. Part of the Gigadrive SDK
-monorepo (`packages/network-config`).
+YAML/JSON/TypeScript config files (v4 schema), Vercel Build Output v3
+translation, region/runtime mapping, and schema validation via AJV. Part of the
+Gigadrive SDK monorepo (`packages/network-config`).
+
+Config files are discovered in this order (first match wins): `gigadrive.ts`,
+`gigadrive.yaml`, `gigadrive.yml`, `gigadrive.json`, then the legacy `nebula.*`
+names. A `gigadrive.ts` config is evaluated as a module (via jiti) and must
+default-export the config object, optionally wrapped in the `defineConfig`
+helper for type inference. User configs should import the helper from the
+dependency-free `@gigadrive/network-config/define-config` subpath — the package
+root eagerly imports the `effect` / `@effect/platform` peer dependencies, which
+package managers that don't auto-install peers won't have present. Note that
+this executes user code at config-read time — the same trust model as
+`build_commands`. The loaded object still goes through the same AJV schema
+validation as YAML/JSON configs.
 
 ## Build Commands
 
@@ -57,25 +69,31 @@ pnpm vitest run packages/network-config/
 ```
 src/
   index.ts                            # barrel — re-exports all public modules
-  find-config.ts                      # locates config file in a project folder
   normalized-config.ts                # central NormalizedConfig interface + types
-  parse-config.ts                     # main entry: parse + validate via AJV
-  parse-raw-config.ts                 # YAML/JSON string → raw object
+  parse-config.ts                     # main entry: parseConfig / parseConfigRaw / postProcessConfig
+  define-config.ts                    # defineConfig identity helper for gigadrive.ts configs
+  errors.ts                           # Schema.TaggedError types (ConfigFileParseError, …)
   filter-functions-from-assets.ts     # separates function files from static assets
   regions.ts                          # AVAILABLE_REGIONS constant + Region type
   runtime.ts                          # AVAILABLE_RUNTIMES constant + Runtime type
+  test-utils.ts                       # makeTestFs in-memory FileSystem layer for tests
+  services/
+    index.ts                          # service exports + NetworkConfigLive layer
+    raw-config-reader.ts              # config discovery (ALLOWED_CONFIG_NAMES) + YAML/JSON reading
+    config-module-loader.ts           # evaluates gigadrive.ts config modules via jiti
+    schema-validator.ts               # AJV validation service
+    v4-config-parser.ts               # ConfigV4 → NormalizedConfig
+    vercel-build-output-parser.ts     # merges Vercel Build Output v3 into the config
   build-output-v3/
     index.ts                          # Vercel Build Output v3 types
-    parse.ts                          # transforms v3 output → NormalizedConfig
     translate-vercel-region.ts        # Vercel region code → Gigadrive region
     translate-vercel-runtime.ts       # Vercel runtime → Gigadrive runtime
     determine-repo-root.ts            # detects monorepo root from cwd
-    read-config-file.ts              # reads gigadrive.yaml/json from disk
     get-default-path-map.ts           # default static file → route mapping
     get-monorepo-files.ts             # lists files shared across monorepo
+  detection/                          # framework auto-detection (Effect-based)
   v4/
     index.ts                          # ConfigV4 interface definitions
-    parse.ts                          # v4 config parser + normalizer
     schema.ts                         # JSON Schema as TypeScript object
     schema.json                       # JSON Schema file (copied to dist on build)
     example.yaml                      # example v4 config for reference
@@ -85,6 +103,7 @@ src/
 
 - **ajv / ajv-formats** — JSON Schema validation for config files.
 - **yaml** — YAML parsing.
+- **jiti** — evaluates TypeScript config files (`gigadrive.ts`).
 - **minimatch** — glob pattern matching for asset filtering.
 - **@gigadrive/commons** — shared utilities (formatting, hashing).
 - **@gigadrive/build-utils** — file operations (exec, glob, downloads).

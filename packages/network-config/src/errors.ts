@@ -16,6 +16,12 @@ export class ConfigFileParseError extends Schema.TaggedError<ConfigFileParseErro
   cause: Schema.optional(Schema.String),
 }) {}
 
+export class ConfigModuleLoadError extends Schema.TaggedError<ConfigModuleLoadError>()('ConfigModuleLoadError', {
+  message: Schema.String,
+  filePath: Schema.String,
+  cause: Schema.optional(Schema.String),
+}) {}
+
 export class ConfigVersionError extends Schema.TaggedError<ConfigVersionError>()('ConfigVersionError', {
   message: Schema.String,
   filePath: Schema.String,

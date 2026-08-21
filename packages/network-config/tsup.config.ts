@@ -6,6 +6,7 @@ export default {
   format: ['cjs', 'esm'],
   entry: {
     index: 'src/index.ts',
+    'define-config': 'src/define-config.ts',
     'nextjs-adapter': 'src/nextjs-adapter.ts',
     'nextjs-cache-handler': 'src/nextjs-cache-handler.ts',
     'nextjs-cache-components-handler': 'src/nextjs-cache-components-handler.ts',

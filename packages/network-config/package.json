@@ -14,6 +14,11 @@
       "require": "./dist/index.js",
       "import": "./dist/index.mjs"
     },
+    "./define-config": {
+      "types": "./dist/define-config.d.ts",
+      "require": "./dist/define-config.js",
+      "import": "./dist/define-config.mjs"
+    },
     "./nextjs-adapter": {
       "types": "./dist/nextjs-adapter.d.ts",
       "require": "./dist/nextjs-adapter.cjs",
@@ -52,6 +57,7 @@
     "@gigadrive/commons": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "jiti": "^2.6.1",
     "minimatch": "^10.0.3",
     "safe-regex2": "^5.0.0",
     "yaml": "^2.8.1"

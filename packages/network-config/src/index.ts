@@ -1,4 +1,5 @@
 export * from './asset-manifest';
+export * from './define-config';
 export * from './detection';
 export * from './errors';
 export * from './filter-functions-from-assets';

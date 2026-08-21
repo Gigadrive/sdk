@@ -154,6 +154,44 @@ describe('ProjectConfigService.resolve', () => {
     });
   });
 
+  it('should resolve a gigadrive.ts config file, preferring it over gigadrive.yaml', async () => {
+    existingFiles.add('/project/gigadrive.ts');
+    existingFiles.add('/project/gigadrive.yaml');
+    mockedParseConfig.mockReturnValue(Effect.succeed(makeNormalizedConfig()) as never);
+    mockNoFrameworkDetected();
+
+    const result = await runEffect(ProjectConfigService.resolve('/project'));
+
+    expect(result.configPath).toBe('/project/gigadrive.ts');
+  });
+
+  it('should fail with ConfigParseError when a gigadrive.ts module fails to load', async () => {
+    existingFiles.add('/project/gigadrive.ts');
+    mockedParseConfig.mockReturnValue(
+      Effect.fail({
+        _tag: 'ConfigModuleLoadError',
+        message: 'Failed to load config module at /project/gigadrive.ts: unexpected token',
+        filePath: '/project/gigadrive.ts',
+        cause: 'unexpected token',
+      }) as never
+    );
+    mockNoFrameworkDetected();
+
+    const result = await runEffect(
+      ProjectConfigService.resolve('/project').pipe(
+        Effect.catchTag('ConfigParseError', (err) =>
+          Effect.succeed({ _tag: 'caught' as const, message: err.message, cause: err.cause })
+        )
+      )
+    );
+
+    expect(result).toMatchObject({
+      _tag: 'caught',
+      message: 'Failed to load config module at /project/gigadrive.ts: unexpected token',
+      cause: 'unexpected token',
+    });
+  });
+
   it('should fail with ConfigParseError when parseConfig fails', async () => {
     existingFiles.add('/project/gigadrive.yaml');
     mockedParseConfig.mockReturnValue(
