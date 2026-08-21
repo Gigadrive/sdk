@@ -2,6 +2,7 @@ import type {
   ConfigFileEmptyError,
   ConfigFileNotFoundError,
   ConfigFileParseError,
+  ConfigModuleLoadError,
   ConfigSchemaValidationError,
   ConfigVersionError,
   FunctionConfigError,
@@ -30,6 +31,7 @@ type ParseConfigErrors =
   | ConfigFileNotFoundError
   | ConfigFileEmptyError
   | ConfigFileParseError
+  | ConfigModuleLoadError
   | ConfigVersionError
   | ConfigSchemaValidationError
   | FunctionConfigError;
@@ -40,6 +42,8 @@ const wrapParseErrors = <R>(effect: Effect.Effect<NormalizedConfig, ParseConfigE
       ConfigFileNotFoundError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
       ConfigFileEmptyError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
       ConfigFileParseError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.cause })),
+      ConfigModuleLoadError: (e) =>
+        Effect.fail(new ConfigParseError({ message: e.message, cause: e.cause ?? e.filePath })),
       ConfigVersionError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
       ConfigSchemaValidationError: (e) =>
         Effect.fail(new ConfigParseError({ message: e.message, cause: e.validationErrors.join(', ') })),

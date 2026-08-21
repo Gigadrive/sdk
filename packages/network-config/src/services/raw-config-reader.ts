@@ -2,19 +2,31 @@ import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
 import { parse as parseYaml } from 'yaml';
 import { ConfigFileEmptyError, ConfigFileNotFoundError, ConfigFileParseError, ConfigVersionError } from '../errors';
+import { ConfigModuleLoader } from './config-module-loader';
 
 export const ALLOWED_CONFIG_NAMES = [
+  'gigadrive.ts',
+  'gigadrive.mts',
+  'gigadrive.cts',
+  'gigadrive.js',
+  'gigadrive.mjs',
+  'gigadrive.cjs',
   'gigadrive.yaml',
   'gigadrive.yml',
+  'gigadrive.json',
   'nebula.yaml',
   'nebula.yml',
   'nebula.json',
 ] as const;
 
+const MODULE_EXTENSIONS = ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'];
+
 export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfigReader', {
+  dependencies: [ConfigModuleLoader.Default],
   effect: Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
+    const moduleLoader = yield* ConfigModuleLoader;
 
     /**
      * Scans for a known config filename in the given project folder.
@@ -35,6 +47,9 @@ export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfi
 
     /**
      * Reads a config file from disk and parses it as YAML or JSON.
+     * TypeScript/JavaScript config files (.ts/.mts/.cts/.js/.mjs/.cjs) are
+     * evaluated as modules and must default-export the config object
+     * (`module.exports` for CommonJS files).
      *
      * @param filePath - Absolute path to the config file
      * @param options - Optional settings (e.g. disableVersionCheck)
@@ -68,22 +83,24 @@ export class RawConfigReader extends Effect.Service<RawConfigReader>()('RawConfi
       const fileExtension = pathService.extname(filePath).toLowerCase();
 
       let parsed: Record<string, unknown>;
-      try {
-        if (fileExtension === '.json') {
-          parsed = JSON.parse(fileContents) as Record<string, unknown>;
-        } else if (['.yml', '.yaml'].includes(fileExtension)) {
-          parsed = parseYaml(fileContents) as Record<string, unknown>;
-        } else {
-          parsed = parseYaml(fileContents) as Record<string, unknown>;
+      if (MODULE_EXTENSIONS.includes(fileExtension)) {
+        parsed = yield* moduleLoader.loadConfigModule(filePath);
+      } else {
+        try {
+          if (fileExtension === '.json') {
+            parsed = JSON.parse(fileContents) as Record<string, unknown>;
+          } else {
+            parsed = parseYaml(fileContents) as Record<string, unknown>;
+          }
+        } catch (error) {
+          return yield* Effect.fail(
+            new ConfigFileParseError({
+              message: `Failed to parse config file at ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              filePath,
+              cause: error instanceof Error ? error.message : undefined,
+            })
+          );
         }
-      } catch (error) {
-        return yield* Effect.fail(
-          new ConfigFileParseError({
-            message: `Failed to parse config file at ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            filePath,
-            cause: error instanceof Error ? error.message : undefined,
-          })
-        );
       }
 
       if (parsed == null) {

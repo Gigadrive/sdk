@@ -1,11 +1,29 @@
 import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
+import { ConfigModuleLoadError } from '../errors';
 import { makeTestFs, TestPathLayer } from '../test-utils';
+import { ConfigModuleLoader } from './config-module-loader';
 import { RawConfigReader } from './raw-config-reader';
 
 const runWithFs = <A, E>(files: Record<string, string>, effect: Effect.Effect<A, E, RawConfigReader>) =>
   Effect.runPromise(
     effect.pipe(Effect.provide(RawConfigReader.Default), Effect.provide(Layer.merge(makeTestFs(files), TestPathLayer)))
+  );
+
+/** Stubs the ConfigModuleLoader so .ts dispatch can be tested without real module evaluation. */
+const makeStubLoader = (result: Effect.Effect<Record<string, unknown>, ConfigModuleLoadError>) =>
+  Layer.succeed(ConfigModuleLoader, { loadConfigModule: () => result } as unknown as ConfigModuleLoader);
+
+const runWithStubbedLoader = <A, E>(
+  files: Record<string, string>,
+  loaderResult: Effect.Effect<Record<string, unknown>, ConfigModuleLoadError>,
+  effect: Effect.Effect<A, E, RawConfigReader>
+) =>
+  Effect.runPromise(
+    effect.pipe(
+      Effect.provide(RawConfigReader.DefaultWithoutDependencies),
+      Effect.provide(Layer.mergeAll(makeTestFs(files), TestPathLayer, makeStubLoader(loaderResult)))
+    )
   );
 
 describe('RawConfigReader', () => {
@@ -52,6 +70,67 @@ describe('RawConfigReader', () => {
         })
       );
       expect(result).toBe('/project/gigadrive.yaml');
+    });
+
+    it('should find gigadrive.json', async () => {
+      const result = await runWithFs(
+        { '/project/gigadrive.json': '{"version": 4}' },
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.findConfig('/project');
+        })
+      );
+      expect(result).toBe('/project/gigadrive.json');
+    });
+
+    it('should prefer gigadrive.ts over gigadrive.yaml', async () => {
+      const result = await runWithFs(
+        { '/project/gigadrive.ts': 'export default { version: 4 };', '/project/gigadrive.yaml': 'version: 4' },
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.findConfig('/project');
+        })
+      );
+      expect(result).toBe('/project/gigadrive.ts');
+    });
+
+    it('should prefer gigadrive.ts over gigadrive.js', async () => {
+      const result = await runWithFs(
+        {
+          '/project/gigadrive.ts': 'export default { version: 4 };',
+          '/project/gigadrive.js': 'module.exports = { version: 4 };',
+        },
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.findConfig('/project');
+        })
+      );
+      expect(result).toBe('/project/gigadrive.ts');
+    });
+
+    it('should find gigadrive.cts', async () => {
+      const result = await runWithFs(
+        { '/project/gigadrive.cts': 'module.exports = { version: 4 };' },
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.findConfig('/project');
+        })
+      );
+      expect(result).toBe('/project/gigadrive.cts');
+    });
+
+    it('should prefer gigadrive.js over gigadrive.yaml', async () => {
+      const result = await runWithFs(
+        {
+          '/project/gigadrive.js': 'module.exports = { version: 4 };',
+          '/project/gigadrive.yaml': 'version: 4',
+        },
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.findConfig('/project');
+        })
+      );
+      expect(result).toBe('/project/gigadrive.js');
     });
   });
 
@@ -162,6 +241,62 @@ describe('RawConfigReader', () => {
         )
       );
       expect(result).toMatchObject({ _tag: 'caught', filePath: '/project/config.yaml' });
+    });
+
+    it('should delegate .ts files to the ConfigModuleLoader', async () => {
+      const result = await runWithStubbedLoader(
+        { '/project/gigadrive.ts': 'export default { version: 4 };' },
+        Effect.succeed({ version: 4, name: 'from-ts' }),
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.readRawConfig('/project/gigadrive.ts');
+        })
+      );
+      expect(result).toEqual({ version: 4, name: 'from-ts' });
+    });
+
+    it('should delegate .js files to the ConfigModuleLoader instead of parsing as YAML', async () => {
+      const result = await runWithStubbedLoader(
+        { '/project/gigadrive.js': 'module.exports = { version: 4 };' },
+        Effect.succeed({ version: 4, name: 'from-js' }),
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.readRawConfig('/project/gigadrive.js');
+        })
+      );
+      expect(result).toEqual({ version: 4, name: 'from-js' });
+    });
+
+    it('should fail with ConfigVersionError when a .ts config is missing version', async () => {
+      const result = await runWithStubbedLoader(
+        { '/project/gigadrive.ts': 'export default {};' },
+        Effect.succeed({ name: 'no-version' }),
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.readRawConfig('/project/gigadrive.ts');
+        }).pipe(
+          Effect.catchTag('ConfigVersionError', (err) =>
+            Effect.succeed({ _tag: 'caught' as const, filePath: err.filePath })
+          )
+        )
+      );
+      expect(result).toMatchObject({ _tag: 'caught', filePath: '/project/gigadrive.ts' });
+    });
+
+    it('should propagate ConfigModuleLoadError from the loader', async () => {
+      const result = await runWithStubbedLoader(
+        { '/project/gigadrive.ts': 'export default oops;' },
+        Effect.fail(new ConfigModuleLoadError({ message: 'boom', filePath: '/project/gigadrive.ts' })),
+        Effect.gen(function* () {
+          const reader = yield* RawConfigReader;
+          return yield* reader.readRawConfig('/project/gigadrive.ts');
+        }).pipe(
+          Effect.catchTag('ConfigModuleLoadError', (err) =>
+            Effect.succeed({ _tag: 'caught' as const, message: err.message })
+          )
+        )
+      );
+      expect(result).toMatchObject({ _tag: 'caught', message: 'boom' });
     });
 
     it('should not fail for missing version when disableVersionCheck is true', async () => {

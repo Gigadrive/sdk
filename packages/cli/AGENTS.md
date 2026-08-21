@@ -18,7 +18,7 @@ packages/cli/
       auth-storage.ts           # AuthStorageService — ~/.gigadrive/auth.json persistence
       auth.ts                   # AuthService — login, logout, token refresh, user info
       api-client.ts             # ApiClientService — shared @gigadrive/sdk client factory
-      project-config.ts         # ProjectConfigService — gigadrive.yaml resolution
+      project-config.ts         # ProjectConfigService — gigadrive.ts/yaml/json resolution
       project-link.ts           # ProjectLinkService — .gigadrive/project.json (app link)
       package-manager.ts        # PackageManagerService — detect npm/yarn/pnpm/bun
       archive.ts                # ArchiveService — zip archive creation
