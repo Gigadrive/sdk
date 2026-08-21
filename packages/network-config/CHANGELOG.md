@@ -1,5 +1,17 @@
 # @gigadrive/network-config
 
+## 4.6.0
+
+### Minor Changes
+
+- Add optional type-safe `gigadrive.ts` config file support (plus `gigadrive.mts`/`.cts`/`.js`/`.mjs`/`.cjs` variants) and `gigadrive.json` discovery. A module config takes precedence over YAML/JSON when both exist; existing YAML/JSON configs continue to work unchanged. The new `defineConfig` helper is available from the dependency-free `@gigadrive/network-config/define-config` subpath (also re-exported from the package root). ([#470](https://github.com/Gigadrive/sdk/pull/470))
+
+### Patch Changes
+
+- fix(network-config): stop the regenerated Next.js 16.3 standalone server trace from including dev-only build toolchain dependencies ([#472](https://github.com/Gigadrive/sdk/pull/472))
+
+  When a Next.js 16.3 Turbopack build omits `next-server.js.nft.json` (it skips the aggregate server traces whenever an adapter is configured), the adapter regenerates it with Next's `collectBuildTraces`. That fallback only carries the webpack-era ignore list, so it followed dev-only require edges (`router-server` → `setup-dev-bundler` → hot reloaders) into the application's build toolchain (webpack, terser, esbuild, swc, babel plugins), roughly quadrupling the standalone output. The adapter now merges the same dev-only ignore globs Turbopack's native server tracer uses into `outputFileTracingExcludes['next-server']`, producing a native-equivalent minimal trace while preserving genuine runtime dependencies.
+
 ## 4.5.0
 
 ### Minor Changes
