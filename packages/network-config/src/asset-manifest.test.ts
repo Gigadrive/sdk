@@ -25,6 +25,8 @@ describe('parseStaticAssetManifest', () => {
     { source: 'public/file.txt', path: 'missing-leading-slash' },
     { source: 'public/file.txt', path: '/file?query=true' },
     { source: 'public/file.txt', path: '/../../etc/passwd' },
+    { source: 'public/file.txt', path: '/windows\\path' },
+    { source: 'public/file.txt', path: '/ok\u0000hidden' },
     { source: 'public/file.txt', path: '/ok\r\nx-injected: true' },
     { source: 'public/file.txt', path: '/ok\u007f' },
     { source: 'public/file.txt', path: '/file', status: 99 },
