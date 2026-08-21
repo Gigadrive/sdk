@@ -269,7 +269,8 @@ export type NormalizedFramework = NormalizedNextjsFramework;
  * discriminators. The whole deployment runs as one standalone server, so this
  * carries prerender/routing/image metadata but no per-route entrypoints.
  */
-export type NormalizedNextjsFramework = Omit<GigadriveNextBuildManifestV2Standalone, 'version'> & {
+export type NormalizedNextjsFramework = Omit<GigadriveNextBuildManifestV2Standalone, 'version' | 'outputs'> & {
+  outputs: Omit<GigadriveNextBuildManifestV2Standalone['outputs'], 'entryPagePaths'>;
   type: 'nextjs';
   schemaVersion: 2;
   /**

@@ -407,19 +407,26 @@ describe('Gigadrive Next.js adapter', () => {
     await expect(readFile(path.join(projectDir, '.gigadrive', 'nextjs', 'entrypoints'))).rejects.toThrow();
   });
 
-  it('maps the Pages Router root static file to a configured base path', async () => {
+  it('maps Pages Router root and status pages with a configured base path', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-base-path-'));
     temporaryDirectories.push(projectDir);
     const distDir = path.join(projectDir, '.next');
     const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
+    const notFoundPagePath = path.join(distDir, 'server', 'pages', '404.html');
+    const localizedNotFoundPagePath = path.join(distDir, 'server', 'pages', 'de', '404.html');
+    const errorPagePath = path.join(distDir, 'server', 'pages', '500.html');
     await mkdir(path.dirname(staticPagePath), { recursive: true });
+    await mkdir(path.dirname(localizedNotFoundPagePath), { recursive: true });
     await writeFile(staticPagePath, '<html>home</html>');
+    await writeFile(notFoundPagePath, '<html>not found</html>');
+    await writeFile(localizedNotFoundPagePath, '<html>nicht gefunden</html>');
+    await writeFile(errorPagePath, '<html>error</html>');
 
     await onBuildComplete({
       projectDir,
       repoRoot: projectDir,
       distDir,
-      config: nextConfig({ basePath: '/docs' }),
+      config: nextConfig({ basePath: '/docs', i18n: { locales: ['en', 'de'], defaultLocale: 'en' } }),
       nextVersion: '16.2.10',
       buildId: 'build-id',
       routing: emptyRouting,
@@ -431,6 +438,27 @@ describe('Gigadrive Next.js adapter', () => {
             type: 'STATIC_FILE',
             pathname: '/docs/index',
             filePath: staticPagePath,
+            immutableHash: undefined,
+          },
+          {
+            id: '/404',
+            type: 'STATIC_FILE',
+            pathname: '/docs/404',
+            filePath: notFoundPagePath,
+            immutableHash: undefined,
+          },
+          {
+            id: '/500',
+            type: 'STATIC_FILE',
+            pathname: '/docs/500',
+            filePath: errorPagePath,
+            immutableHash: undefined,
+          },
+          {
+            id: '/de/404',
+            type: 'STATIC_FILE',
+            pathname: '/docs/de/404',
+            filePath: localizedNotFoundPagePath,
             immutableHash: undefined,
           },
         ],
@@ -445,8 +473,64 @@ describe('Gigadrive Next.js adapter', () => {
           path: '/docs',
           headers: { 'content-type': 'text/html; charset=utf-8' },
         },
+        {
+          source: '.next/server/pages/404.html',
+          path: '/docs/404',
+          status: 404,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+        {
+          source: '.next/server/pages/500.html',
+          path: '/docs/500',
+          status: 500,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+        {
+          source: '.next/server/pages/de/404.html',
+          path: '/docs/de/404',
+          status: 404,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
       ],
     });
+  });
+
+  it('keeps prerenders with runtime bypass semantics server-backed', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-runtime-bypass-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const prerenderDirectory = path.join(distDir, 'server', 'app');
+    await mkdir(prerenderDirectory, { recursive: true });
+
+    const prerenders = await Promise.all(
+      ['server-action', 'preview'].map(async (id, index) => {
+        const filePath = path.join(prerenderDirectory, `${id}.html`);
+        await writeFile(filePath, `<html>${id}</html>`);
+        return {
+          id,
+          type: 'PRERENDER' as const,
+          pathname: `/${id}`,
+          parentOutputId: id,
+          groupId: index,
+          fallback: { filePath, initialRevalidate: false as const },
+          config: index === 0 ? { bypassFor: [] } : { bypassToken: 'preview-token' },
+        };
+      })
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: { ...emptyOutputs, prerenders },
+    });
+
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
+    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(2);
   });
 
   it('keeps high-cardinality outputs in sidecars', async () => {

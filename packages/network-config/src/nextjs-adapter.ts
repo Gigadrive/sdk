@@ -135,6 +135,19 @@ const isDynamicRoutePathname = (pathname: string): boolean => pathname.includes(
 const normalizeStaticFilePathname = (pathname: string, basePath: string): string =>
   pathname === `${basePath}/index` ? basePath || '/' : pathname;
 
+const getStaticStatus = (pathname: string, basePath: string, locales: readonly string[]): number | undefined => {
+  const routePathname = basePath && pathname.startsWith(`${basePath}/`) ? pathname.slice(basePath.length) : pathname;
+  const segments = routePathname.split('/').filter(Boolean);
+  const [firstSegment, secondSegment] = segments;
+  const statusPage =
+    segments.length === 1
+      ? firstSegment
+      : segments.length === 2 && firstSegment && locales.includes(firstSegment)
+        ? secondSegment
+        : undefined;
+  return statusPage === '404' ? 404 : statusPage === '500' ? 500 : undefined;
+};
+
 const hasContentType = (headers: StaticAssetHeaders): boolean =>
   Object.keys(headers).some((name) => name.toLowerCase() === 'content-type');
 
@@ -149,7 +162,9 @@ async function getStaticFileResponseMetadata(
   projectDir: string,
   resolvedProjectDir: string,
   output: NextStaticFileOutput,
-  rscContentType: string
+  rscContentType: string,
+  basePath: string,
+  locales: readonly string[]
 ): Promise<Pick<StaticAssetManifestEntry, 'status' | 'headers'>> {
   if (output.filePath.endsWith('.body')) {
     const metaPath = `${output.filePath.slice(0, -'.body'.length)}.meta`;
@@ -164,7 +179,13 @@ async function getStaticFileResponseMetadata(
       headers,
     };
   }
-  if (output.filePath.endsWith('.html')) return { headers: { 'content-type': HTML_CONTENT_TYPE } };
+  if (output.filePath.endsWith('.html')) {
+    const status = getStaticStatus(output.pathname, basePath, locales);
+    return {
+      ...(status !== undefined ? { status } : {}),
+      headers: { 'content-type': HTML_CONTENT_TYPE },
+    };
+  }
   if (output.pathname.endsWith('.rsc')) return { headers: { 'content-type': rscContentType } };
   return {};
 }
@@ -174,11 +195,12 @@ const serializeStaticFileAsset = async (
   resolvedProjectDir: string,
   basePath: string,
   rscContentType: string,
+  locales: readonly string[],
   output: NextStaticFileOutput
 ): Promise<StaticAssetManifestEntry> => {
   const [source, responseMetadata] = await Promise.all([
     requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
-    getStaticFileResponseMetadata(projectDir, resolvedProjectDir, output, rscContentType),
+    getStaticFileResponseMetadata(projectDir, resolvedProjectDir, output, rscContentType, basePath, locales),
   ]);
   return {
     source,
@@ -194,12 +216,15 @@ const serializePrerenderAsset = (
   output: GigadriveNextPrerenderOutput
 ): StaticAssetManifestEntry | undefined => {
   const { fallback } = output;
-  // Only `false` is permanently static; numbers (and Next's default of 1) are ISR.
-  const isPermanentlyStatic = fallback?.initialRevalidate === false;
+  // `false` disables scheduled ISR, but preview, Server Action, and other
+  // runtime bypass metadata must still keep the prerender server-backed.
+  const hasNoTimeBasedRevalidation = fallback?.initialRevalidate === false;
   if (
     !fallback?.filePath ||
-    !isPermanentlyStatic ||
+    !hasNoTimeBasedRevalidation ||
     fallback.postponedState !== undefined ||
+    output.config.bypassFor !== undefined ||
+    output.config.bypassToken !== undefined ||
     isDynamicRoutePathname(output.pathname)
   ) {
     return undefined;
@@ -220,6 +245,7 @@ async function serializeAssetManifest(
   distDir: string,
   basePath: string,
   rscContentType: string,
+  locales: readonly string[],
   staticFiles: NextStaticFileOutput[],
   prerenders: GigadriveNextPrerenderOutput[]
 ): Promise<StaticAssetManifestV1> {
@@ -229,7 +255,7 @@ async function serializeAssetManifest(
       // The complete immutable subtree is already represented by a prefix.
       (output) => !isInsideDirectory(staticDirectory, output.filePath) && !isDynamicRoutePathname(output.pathname)
     ),
-    (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, basePath, rscContentType, output)
+    (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, basePath, rscContentType, locales, output)
   );
   const entries = [
     ...staticEntries,
@@ -522,6 +548,7 @@ const gigadriveNextAdapter: NextAdapter = {
       distDir,
       config.basePath,
       routing.rsc.contentTypeHeader ?? DEFAULT_RSC_CONTENT_TYPE,
+      config.i18n?.locales ?? [],
       outputs.staticFiles,
       prerenders
     );

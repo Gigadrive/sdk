@@ -227,18 +227,39 @@ describe('Next.js framework detection', () => {
       outputs: {
         prerenderManifest: '.gigadrive/nextjs-prerenders.json',
         assetManifest: '.gigadrive/assets/nextjs.json',
-        entryPagePaths: ['/isr'],
         staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
       },
     });
     // The full prerender table remains in its sidecar; only a bounded warming sample is inline.
     expect(result.config.framework?.outputs.prerenders).toEqual([]);
+    expect(result.config.framework?.outputs).not.toHaveProperty('entryPagePaths');
     expect(result.config.framework?.entryPagePaths).toEqual(['/isr']);
     expect(result.config.images).toMatchObject({
       remotePatterns: [{ protocol: 'https', hostname: 'images.example.com', pathname: '/**' }],
       widths: [640, 1080],
     });
     expect(result.config.sharedArtifacts).toEqual([]);
+  });
+
+  it('should bound adapter-provided entry paths without duplicating them in outputs', async () => {
+    const suppliedPaths = Array.from({ length: 75 }, (_, index) => `/docs/${index}`);
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.gigadrive/nextjs.json': standaloneV2Manifest({
+        outputs: {
+          prerenders: [],
+          prerenderManifest: '.gigadrive/nextjs-prerenders.json',
+          assetManifest: '.gigadrive/assets/nextjs.json',
+          entryPagePaths: suppliedPaths,
+          staticAssets: [],
+        },
+      }),
+      '/project/.next/standalone/server.js': 'server',
+      '/project/.next/standalone/node_modules/next/package.json': '{}',
+    });
+
+    expect(result.config.framework?.entryPagePaths).toEqual(suppliedPaths.slice(0, 50));
+    expect(result.config.framework?.outputs).not.toHaveProperty('entryPagePaths');
   });
 
   it('should ignore malformed, unsafe, or legacy adapter-v2 metadata', async () => {

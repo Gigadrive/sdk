@@ -184,11 +184,12 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
   }));
 
   const assetManifests = manifest.outputs.assetManifest ? [{ source: manifest.outputs.assetManifest }] : undefined;
+  const { entryPagePaths: manifestEntryPagePaths, ...manifestOutputs } = manifest.outputs;
 
   // The complete prerender table is referenced through a sidecar. Keep only a
   // bounded path sample inline so normalized configuration remains compact.
   const entryPagePaths =
-    manifest.outputs.entryPagePaths ??
+    manifestEntryPagePaths?.slice(0, MAXIMUM_ENTRY_PAGE_PATHS) ??
     [
       ...new Set(
         manifest.outputs.prerenders
@@ -229,7 +230,7 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
     routing: manifest.routing,
     // Keep high-cardinality output metadata in portable sidecars rather than
     // expanding it into normalized deployment configuration.
-    outputs: { ...manifest.outputs, prerenders: [] },
+    outputs: { ...manifestOutputs, prerenders: [] },
     entryPagePaths,
     type: 'nextjs' as const,
     schemaVersion: 2 as const,
