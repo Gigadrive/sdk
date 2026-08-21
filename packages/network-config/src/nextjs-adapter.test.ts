@@ -207,6 +207,8 @@ describe('Gigadrive Next.js adapter', () => {
     const rscFallbackPath = path.join(distDir, 'server', 'rsc-fallback.json');
     const faviconPath = path.join(distDir, 'server', 'app', 'favicon.ico.body');
     const faviconMetaPath = path.join(distDir, 'server', 'app', 'favicon.ico.meta');
+    const robotsPath = path.join(distDir, 'server', 'app', 'robots.txt.body');
+    const robotsMetaPath = path.join(distDir, 'server', 'app', 'robots.txt.meta');
     const staticPagePath = path.join(distDir, 'server', 'pages', 'index.html');
     const staticChunkPath = path.join(distDir, 'static', 'chunks', 'app.js');
     await mkdir(path.dirname(fallbackPath), { recursive: true });
@@ -228,11 +230,13 @@ describe('Gigadrive Next.js adapter', () => {
         headers: {
           'content-type': 'image/x-icon',
           'cache-control': 'public, max-age=0',
-          'x-next-cache-tags': 'favicon,metadata',
+          'x-next-cache-tags': 'категория',
           'X-Nextjs-Prerender': '1',
         },
       })
     );
+    await writeFile(robotsPath, 'User-agent: *');
+    await writeFile(robotsMetaPath, JSON.stringify({ headers: { 'x-next-cache-tags': 'категория' } }));
     await writeFile(staticPagePath, '<html>home</html>');
     await writeFile(staticChunkPath, 'chunk');
 
@@ -328,6 +332,13 @@ describe('Gigadrive Next.js adapter', () => {
             type: 'STATIC_FILE',
             pathname: '/favicon.ico',
             filePath: faviconPath,
+            immutableHash: undefined,
+          },
+          {
+            id: 'robots.txt',
+            type: 'STATIC_FILE',
+            pathname: '/robots.txt',
+            filePath: robotsPath,
             immutableHash: undefined,
           },
         ],
@@ -495,7 +506,7 @@ describe('Gigadrive Next.js adapter', () => {
     });
   });
 
-  it('keeps prerenders with runtime bypass semantics server-backed', async () => {
+  it('keeps per-route runtime bypasses server-backed while allowing a build-wide preview token', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-runtime-bypass-'));
     temporaryDirectories.push(projectDir);
     const distDir = path.join(projectDir, '.next');
@@ -529,7 +540,9 @@ describe('Gigadrive Next.js adapter', () => {
       outputs: { ...emptyOutputs, prerenders },
     });
 
-    expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([
+      { source: '.next/server/app/preview.html', path: '/preview' },
+    ]);
     expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(2);
   });
 
@@ -565,7 +578,7 @@ describe('Gigadrive Next.js adapter', () => {
                 }
               : {}),
           },
-          config: {},
+          config: { bypassToken: 'preview-token' },
         };
       })
     );

@@ -43,8 +43,10 @@ export const HttpSingleValueHeadersSchema = Schema.mutable(
   Schema.Record({ key: Schema.String, value: HttpHeaderValueSchema })
 ).pipe(Schema.filter((headers) => Object.keys(headers).every((name) => HTTP_HEADER_NAME.test(name))));
 
+/** Decode an unknown value with an Effect schema, returning `undefined` on invalid input. */
+export const decodeUnknown = <A, I>(schema: Schema.Schema<A, I, never>, value: unknown): A | undefined =>
+  Schema.decodeUnknownOption(schema, { onExcessProperty: 'preserve' })(value).pipe(Option.getOrUndefined);
+
 /** Decode a JSON string with an Effect schema, returning `undefined` on invalid input. */
 export const decodeJson = <A, I>(schema: Schema.Schema<A, I, never>, content: string): A | undefined =>
-  Schema.decodeUnknownOption(Schema.parseJson(schema), { onExcessProperty: 'preserve' })(content).pipe(
-    Option.getOrUndefined
-  );
+  decodeUnknown(Schema.parseJson(schema), content);

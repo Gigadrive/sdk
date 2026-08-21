@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StaticAssetHeaders, StaticAssetManifestEntry, StaticAssetManifestV1 } from './asset-manifest';
 import type { NormalizedImagePolicy } from './image-policy';
-import { decodeJson, HttpHeadersSchema } from './manifest-schema';
+import { decodeJson, decodeUnknown, HttpHeadersSchema } from './manifest-schema';
 import { MAXIMUM_ENTRY_PAGE_PATHS } from './nextjs-constants';
 import type {
   GigadriveNextBuildManifestV1,
@@ -37,7 +37,7 @@ const DEFAULT_RSC_CONTENT_TYPE = 'text/x-component';
 const INTERNAL_STATIC_RESPONSE_HEADERS = new Set(['x-next-cache-tags', 'x-nextjs-prerender']);
 const NextStaticFileMetaSchema = Schema.Struct({
   status: Schema.optional(Schema.Int.pipe(Schema.between(100, 599))),
-  headers: HttpHeadersSchema,
+  headers: Schema.mutable(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
 });
 const runtimeDirectory = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
@@ -151,11 +151,11 @@ const getStaticStatus = (pathname: string, basePath: string, locales: readonly s
 const hasContentType = (headers: StaticAssetHeaders): boolean =>
   Object.keys(headers).some((name) => name.toLowerCase() === 'content-type');
 
-const getPublicStaticResponseHeaders = (headers: StaticAssetHeaders): StaticAssetHeaders | undefined => {
+const getPublicStaticResponseHeaders = (headers: Record<string, unknown>): StaticAssetHeaders | undefined => {
   const publicHeaders = Object.fromEntries(
     Object.entries(headers).filter(([name]) => !INTERNAL_STATIC_RESPONSE_HEADERS.has(name.toLowerCase()))
   );
-  return Object.keys(publicHeaders).length > 0 ? publicHeaders : undefined;
+  return decodeUnknown(HttpHeadersSchema, publicHeaders);
 };
 
 async function getStaticFileResponseMetadata(
@@ -165,15 +165,13 @@ async function getStaticFileResponseMetadata(
   rscContentType: string,
   basePath: string,
   locales: readonly string[]
-): Promise<Pick<StaticAssetManifestEntry, 'status' | 'headers'>> {
+): Promise<Pick<StaticAssetManifestEntry, 'status' | 'headers'> | undefined> {
   if (output.filePath.endsWith('.body')) {
     const metaPath = `${output.filePath.slice(0, -'.body'.length)}.meta`;
     await requireReadableFile(projectDir, metaPath, resolvedProjectDir);
     const meta = decodeJson(NextStaticFileMetaSchema, await readFile(metaPath, 'utf8'));
     const headers = meta ? getPublicStaticResponseHeaders(meta.headers) : undefined;
-    if (!meta || !headers || !hasContentType(headers)) {
-      throw new Error(`Next.js static metadata is missing valid response headers: ${metaPath}`);
-    }
+    if (!meta || !headers || !hasContentType(headers)) return undefined;
     return {
       ...(meta.status !== undefined ? { status: meta.status } : {}),
       headers,
@@ -197,11 +195,12 @@ const serializeStaticFileAsset = async (
   rscContentType: string,
   locales: readonly string[],
   output: NextStaticFileOutput
-): Promise<StaticAssetManifestEntry> => {
+): Promise<StaticAssetManifestEntry | undefined> => {
   const [source, responseMetadata] = await Promise.all([
     requireReadableFile(projectDir, output.filePath, resolvedProjectDir),
     getStaticFileResponseMetadata(projectDir, resolvedProjectDir, output, rscContentType, basePath, locales),
   ]);
+  if (!responseMetadata) return undefined;
   return {
     source,
     path: normalizeStaticFilePathname(output.pathname, basePath),
@@ -216,15 +215,14 @@ const serializePrerenderAsset = (
   output: GigadriveNextPrerenderOutput
 ): StaticAssetManifestEntry | undefined => {
   const { fallback } = output;
-  // `false` disables scheduled ISR, but preview, Server Action, and other
-  // runtime bypass metadata must still keep the prerender server-backed.
+  // `false` disables scheduled ISR. Per-route bypass conditions still require
+  // runtime; the build-wide preview token remains available in the prerender sidecar.
   const hasNoTimeBasedRevalidation = fallback?.initialRevalidate === false;
   if (
     !fallback?.filePath ||
     !hasNoTimeBasedRevalidation ||
     fallback.postponedState !== undefined ||
     output.config.bypassFor !== undefined ||
-    output.config.bypassToken !== undefined ||
     isDynamicRoutePathname(output.pathname)
   ) {
     return undefined;
