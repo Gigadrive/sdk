@@ -1,5 +1,17 @@
 # gigadrive
 
+## 2.6.0
+
+### Minor Changes
+
+- Add optional type-safe `gigadrive.ts` config file support (plus `gigadrive.mts`/`.cts`/`.js`/`.mjs`/`.cjs` variants) and `gigadrive.json` discovery. A module config takes precedence over YAML/JSON when both exist; existing YAML/JSON configs continue to work unchanged. The new `defineConfig` helper is available from the dependency-free `@gigadrive/network-config/define-config` subpath (also re-exported from the package root). ([#470](https://github.com/Gigadrive/sdk/pull/470))
+
+### Patch Changes
+
+- Updated dependencies [[`e5eb657`](https://github.com/Gigadrive/sdk/commit/e5eb657b535138b32c22d2af2c47355e3d596222), [`532ed1b`](https://github.com/Gigadrive/sdk/commit/532ed1bea4fa1b52d8073108cc1669f5dbcd5b7e)]:
+  - @gigadrive/network-config@4.6.0
+  - @gigadrive/sdk@0.8.4
+
 ## 2.5.38
 
 ### Patch Changes
