@@ -7,11 +7,11 @@ const MISSING_DEFAULT_EXPORT = Symbol('MissingDefaultExport');
 
 /**
  * Extensions that can only be ESM-authored, where a missing default export is
- * a user mistake worth a specific error. Plain `.js` and `.cjs` files may be
- * CommonJS, whose `module.exports` only surfaces through jiti's interop
+ * a user mistake worth a specific error. `.js`, `.cjs`, and `.cts` files may
+ * be CommonJS, whose `module.exports` only surfaces through jiti's interop
  * default rather than as a genuine `default` binding.
  */
-const STRICT_DEFAULT_EXPORT_EXTENSIONS = ['.ts', '.mts', '.cts', '.mjs'];
+const STRICT_DEFAULT_EXPORT_EXTENSIONS = ['.ts', '.mts', '.mjs'];
 
 export class ConfigModuleLoader extends Effect.Service<ConfigModuleLoader>()('ConfigModuleLoader', {
   effect: Effect.gen(function* () {

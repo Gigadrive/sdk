@@ -88,6 +88,12 @@ describe('ConfigModuleLoader', () => {
     expect(result).toEqual({ version: 4, regions: ['global'] });
   });
 
+  it('should load a .cts config exported via module.exports', async () => {
+    const filePath = writeFixture('gigadrive.cts', `module.exports = { version: 4, regions: ['global'] };\n`);
+    const result = await load(filePath);
+    expect(result).toEqual({ version: 4, regions: ['global'] });
+  });
+
   it('should fail with ConfigModuleLoadError when a .mjs config is missing the default export', async () => {
     const filePath = writeFixture('gigadrive.mjs', `export const config = { version: 4 };\n`);
     const error = await loadError(filePath);
