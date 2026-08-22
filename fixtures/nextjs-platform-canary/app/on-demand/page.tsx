@@ -7,6 +7,15 @@ async function mutateOnDemandPage() {
   revalidatePath('/on-demand');
 }
 
+/**
+ * Renders the mutable static page and its invalidating Server Action.
+ *
+ * @returns The on-demand revalidation canary UI.
+ * @example
+ * ```tsx
+ * <OnDemandPage />
+ * ```
+ */
 export default function OnDemandPage() {
   return (
     <main>

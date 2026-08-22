@@ -4,6 +4,8 @@ import { request as httpsRequest } from 'node:https';
 
 const baseUrl = process.env.CANARY_URL?.replace(/\/$/, '');
 assert(baseUrl, 'CANARY_URL is required');
+const revalidationSecret = process.env.CANARY_REVALIDATE_SECRET;
+assert(revalidationSecret, 'CANARY_REVALIDATE_SECRET is required');
 const skipPlatformImage = process.env.CANARY_SKIP_PLATFORM_IMAGE === 'true';
 
 const request = async (pathname, init) => {
@@ -114,7 +116,12 @@ const secondCacheComponent = token((await request('/cache-components')).body, 'c
 assert.equal(secondCacheComponent, firstCacheComponent, 'Cache Component changed without revalidation');
 
 assert.deepEqual(
-  (await requestJson('/api/revalidate', { method: 'POST' })).json,
+  (
+    await requestJson('/api/revalidate', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${revalidationSecret}` },
+    })
+  ).json,
   { cacheComponentRevalidated: true, onDemandPathRevalidated: true },
   'Cache Component revalidation failed'
 );
