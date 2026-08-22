@@ -114,6 +114,58 @@ export const GigadriveNextStaticAssetPrefixSchema = Schema.mutable(
 );
 export type GigadriveNextStaticAssetPrefix = Schema.Schema.Type<typeof GigadriveNextStaticAssetPrefixSchema>;
 
+/** Portable request condition used by a Next.js middleware/Proxy matcher. */
+export const GigadriveNextRouteConditionSchema = Schema.Union(
+  Schema.mutable(
+    Schema.Struct({
+      type: Schema.Literal('header', 'cookie', 'query'),
+      key: Schema.String,
+      value: Schema.optional(Schema.String),
+    })
+  ),
+  Schema.mutable(
+    Schema.Struct({
+      type: Schema.Literal('host'),
+      value: Schema.String,
+    })
+  )
+);
+export type GigadriveNextRouteCondition = Schema.Schema.Type<typeof GigadriveNextRouteConditionSchema>;
+
+/** Validated public matcher metadata for a Next.js middleware or Proxy entrypoint. */
+export const GigadriveNextMiddlewareMatcherSchema = Schema.mutable(
+  Schema.Struct({
+    source: Schema.String,
+    sourceRegex: Schema.String,
+    has: Schema.optional(Schema.mutable(Schema.Array(GigadriveNextRouteConditionSchema))),
+    missing: Schema.optional(Schema.mutable(Schema.Array(GigadriveNextRouteConditionSchema))),
+  })
+);
+export type GigadriveNextMiddlewareMatcher = Schema.Schema.Type<typeof GigadriveNextMiddlewareMatcherSchema>;
+
+/**
+ * Portable middleware/Proxy discovery result.
+ *
+ * The object is emitted for every new standalone build. Its optional position
+ * in the containing manifest preserves parsing of manifests written by older
+ * SDK releases, where absence means that middleware presence is unknown.
+ */
+export const GigadriveNextMiddlewareDescriptorSchema = Schema.Union(
+  Schema.mutable(
+    Schema.Struct({
+      present: Schema.Literal(true),
+      matchers: Schema.mutable(Schema.Array(GigadriveNextMiddlewareMatcherSchema)),
+    })
+  ),
+  Schema.mutable(
+    Schema.Struct({
+      present: Schema.Literal(false),
+      matchers: Schema.mutable(Schema.Tuple()),
+    })
+  )
+);
+export type GigadriveNextMiddlewareDescriptor = Schema.Schema.Type<typeof GigadriveNextMiddlewareDescriptorSchema>;
+
 /** Aggregated runtime configuration for the standalone server. */
 export const GigadriveNextServerDescriptorSchema = Schema.mutable(
   Schema.Struct({
@@ -191,6 +243,7 @@ export const GigadriveNextBuildManifestV2StandaloneSchema = Schema.mutable(
         assetManifest: Schema.optional(PortableRelativePathSchema),
         entryPagePaths: Schema.optional(Schema.mutable(Schema.Array(UrlPathnameSchema))),
         staticAssets: StaticAssetArraySchema,
+        middleware: Schema.optional(GigadriveNextMiddlewareDescriptorSchema),
       })
     ),
   })

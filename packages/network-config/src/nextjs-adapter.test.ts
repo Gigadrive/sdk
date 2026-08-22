@@ -364,6 +364,7 @@ describe('Gigadrive Next.js adapter', () => {
         assetManifest: '.gigadrive/assets/nextjs.json',
         entryPagePaths: ['/isr-plain'],
         staticAssets: [{ sourceDir: '.next/static', urlPrefix: '_next/static', immutable: true }],
+        middleware: { present: false, matchers: [] },
       },
     });
     expect(manifest.outputs.prerenders).toEqual([]);
@@ -417,6 +418,52 @@ describe('Gigadrive Next.js adapter', () => {
     expect((manifest as unknown as Record<string, unknown>).entrypoints).toBeUndefined();
     expect((manifest as unknown as Record<string, unknown>).outputEntrypoints).toBeUndefined();
     await expect(readFile(path.join(projectDir, '.gigadrive', 'nextjs', 'entrypoints'))).rejects.toThrow();
+  });
+
+  it('serializes exact middleware matcher metadata without mutating the Next output', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-middleware-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const matchers = [
+      {
+        source: '/((?!api|_next|en|de|.*\\..*).*)',
+        sourceRegex: '^(?:/(_next/data/[^/]+))?/((?!api|_next|en|de|.*\\..*).*)$',
+        has: [
+          { type: 'header', key: 'x-tenant', value: 'public' },
+          { type: 'host', value: 'example.com' },
+        ],
+        missing: [{ type: 'cookie', key: 'preview', value: '1' }],
+      },
+    ];
+    const originalMatchers = structuredClone(matchers);
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.3.1',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: {
+        ...emptyOutputs,
+        middleware: {
+          id: 'middleware',
+          type: 'MIDDLEWARE',
+          filePath: path.join(distDir, 'server', 'middleware.js'),
+          pathname: '/',
+          sourcePage: 'middleware.ts',
+          runtime: 'nodejs',
+          assets: {},
+          config: { matchers },
+        },
+      },
+    });
+
+    const manifest = (await readManifest(projectDir)) as GigadriveNextBuildManifestV2Standalone;
+    expect(manifest.outputs.middleware).toEqual({ present: true, matchers: originalMatchers });
+    expect(matchers).toEqual(originalMatchers);
+    expect(manifest.outputs.middleware?.matchers[0]).not.toBe(matchers[0]);
   });
 
   it('maps Pages Router root and status pages with a configured base path', async () => {
@@ -507,25 +554,40 @@ describe('Gigadrive Next.js adapter', () => {
     });
   });
 
-  it('keeps per-route runtime bypasses server-backed while allowing a build-wide preview token', async () => {
+  it('promotes immutable App Router HTML, RSC, segment RSC, and route-handler output with runtime bypasses', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-runtime-bypass-'));
     temporaryDirectories.push(projectDir);
     const distDir = path.join(projectDir, '.next');
     const prerenderDirectory = path.join(distDir, 'server', 'app');
     await mkdir(prerenderDirectory, { recursive: true });
-
+    const bypassFor = [
+      { type: 'header', key: 'next-action' },
+      { type: 'header', key: 'content-type', value: 'multipart/form-data;.*' },
+    ];
+    const outputs = [
+      { id: 'home', pathname: '/en', fileName: 'en.html', headers: { 'content-type': 'text/html; charset=utf-8' } },
+      { id: 'home-rsc', pathname: '/en.rsc', fileName: 'en.rsc', headers: { 'content-type': 'text/x-component' } },
+      {
+        id: 'home-segment',
+        pathname: '/en.segments/_full.segment.rsc',
+        fileName: 'en.segments/_full.segment.rsc',
+        headers: { 'content-type': 'text/x-component' },
+      },
+      { id: 'rss', pathname: '/rss.xml', fileName: 'rss.xml.body', headers: { 'content-type': 'application/rss+xml' } },
+    ];
     const prerenders = await Promise.all(
-      ['server-action', 'preview'].map(async (id, index) => {
-        const filePath = path.join(prerenderDirectory, `${id}.html`);
-        await writeFile(filePath, `<html>${id}</html>`);
+      outputs.map(async ({ id, pathname, fileName, headers }, index) => {
+        const filePath = path.join(prerenderDirectory, fileName);
+        await mkdir(path.dirname(filePath), { recursive: true });
+        await writeFile(filePath, id);
         return {
           id,
           type: 'PRERENDER' as const,
-          pathname: `/${id}`,
+          pathname,
           parentOutputId: id,
           groupId: index,
-          fallback: { filePath, initialRevalidate: false as const },
-          config: index === 0 ? { bypassFor: [] } : { bypassToken: 'preview-token' },
+          fallback: { filePath, initialRevalidate: false as const, initialHeaders: headers },
+          config: { bypassToken: 'preview-token', bypassFor },
         };
       })
     );
@@ -541,10 +603,74 @@ describe('Gigadrive Next.js adapter', () => {
       outputs: { ...emptyOutputs, prerenders },
     });
 
-    expect((await readAssetManifest(projectDir))?.assets).toEqual([
-      { source: '.next/server/app/preview.html', path: '/preview' },
-    ]);
-    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(2);
+    expect((await readAssetManifest(projectDir))?.assets).toEqual(
+      outputs.map(({ pathname, fileName, headers }) => ({
+        source: `.next/server/app/${fileName}`,
+        path: pathname,
+        headers,
+      }))
+    );
+    const sidecar = await readPrerenderManifest(projectDir);
+    expect(sidecar?.prerenders).toHaveLength(4);
+    expect(sidecar?.prerenders.every((output) => output.config.bypassFor !== undefined)).toBe(true);
+    expect(sidecar?.prerenders[0].config.bypassFor).toEqual(bypassFor);
+    // The gateway consumes these conditions before static lookup: matching
+    // Server Action and multipart requests remain backed by the standalone
+    // runtime while ordinary GET/HEAD requests can use the promoted assets.
+    expect(sidecar?.prerenders[0].config.bypassFor).toEqual(
+      expect.arrayContaining([
+        { type: 'header', key: 'next-action' },
+        { type: 'header', key: 'content-type', value: 'multipart/form-data;.*' },
+      ])
+    );
+  });
+
+  it('does not promote scheduled ISR, postponed/PPR output, dynamic routes, or Pages Router prerenders', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-unsafe-prerenders-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const cases = [
+      { id: 'scheduled', pathname: '/scheduled', directory: 'app', initialRevalidate: 60 },
+      { id: 'postponed', pathname: '/postponed', directory: 'app', initialRevalidate: false, postponedState: 'state' },
+      { id: 'ppr-chain', pathname: '/ppr-chain', directory: 'app', initialRevalidate: false, pprChain: true },
+      { id: 'dynamic', pathname: '/blog/[slug]', directory: 'app', initialRevalidate: false },
+      { id: 'pages', pathname: '/products', directory: 'pages', initialRevalidate: false },
+    ];
+    const prerenders = await Promise.all(
+      cases.map(async ({ id, pathname, directory, initialRevalidate, postponedState, pprChain }, index) => {
+        const filePath = path.join(distDir, 'server', directory, `${id}.html`);
+        await mkdir(path.dirname(filePath), { recursive: true });
+        await writeFile(filePath, id);
+        return {
+          id,
+          type: 'PRERENDER' as const,
+          pathname,
+          parentOutputId: id,
+          groupId: index,
+          ...(pprChain ? { pprChain: { headers: { vary: 'rsc' } } } : {}),
+          fallback: {
+            filePath,
+            initialRevalidate,
+            ...(postponedState ? { postponedState } : {}),
+          },
+          config: {},
+        };
+      })
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.3.1',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: { ...emptyOutputs, prerenders },
+    });
+
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
+    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(cases.length);
   });
 
   it('keeps Pages Router prerenders server-backed for on-demand revalidation', async () => {

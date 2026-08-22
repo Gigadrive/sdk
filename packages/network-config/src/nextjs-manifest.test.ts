@@ -98,6 +98,49 @@ describe('parseGigadriveNextBuildManifest', () => {
     expect(parse(manifest)).toEqual(manifest);
   });
 
+  it('accepts middleware present with exact matcher conditions', () => {
+    const middleware = {
+      present: true,
+      matchers: [
+        {
+          source: '/((?!api|_next).*)',
+          sourceRegex: '^/((?!api|_next).*)$',
+          has: [
+            { type: 'header', key: 'x-tenant', value: 'public' },
+            { type: 'host', value: 'example.com' },
+          ],
+          missing: [{ type: 'cookie', key: 'preview' }],
+        },
+      ],
+    };
+    const manifest = standaloneV2({ outputs: { ...standaloneV2().outputs, middleware } });
+    expect(parse(manifest)).toEqual(manifest);
+  });
+
+  it('accepts explicit middleware absence', () => {
+    const manifest = standaloneV2({
+      outputs: { ...standaloneV2().outputs, middleware: { present: false, matchers: [] } },
+    });
+    expect(parse(manifest)).toEqual(manifest);
+  });
+
+  it('keeps backward compatibility with manifests that predate middleware discovery', () => {
+    const manifest = standaloneV2();
+    expect(manifest.outputs).not.toHaveProperty('middleware');
+    expect(parse(manifest)).toEqual(manifest);
+  });
+
+  it.each([
+    { present: false, matchers: [{ source: '/:path*', sourceRegex: '^/.*$' }] },
+    { present: true, matchers: [{ source: '/:path*' }] },
+    {
+      present: true,
+      matchers: [{ source: '/:path*', sourceRegex: '^/.*$', has: [{ type: 'header', value: 'missing-key' }] }],
+    },
+  ])('rejects invalid middleware discovery metadata %#', (middleware) => {
+    expect(parse(standaloneV2({ outputs: { ...standaloneV2().outputs, middleware } }))).toBeUndefined();
+  });
+
   it('accepts a minimal export manifest', () => {
     const manifest = {
       version: 2,

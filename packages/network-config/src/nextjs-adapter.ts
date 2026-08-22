@@ -216,15 +216,17 @@ const serializePrerenderAsset = (
   output: GigadriveNextPrerenderOutput
 ): StaticAssetManifestEntry | undefined => {
   const { fallback } = output;
-  // `false` disables scheduled ISR. Per-route bypass conditions still require
-  // runtime; Pages Router prerenders also stay server-backed because they may
-  // be updated through on-demand ISR even without a time-based revalidation.
+  // `false` disables scheduled ISR. Bypass conditions are preserved in the
+  // prerender sidecar so matching requests still reach the runtime, while an
+  // ordinary GET/HEAD can use this immutable App Router response. Pages Router
+  // prerenders stay server-backed because they may be updated through
+  // on-demand ISR even without a time-based revalidation.
   const hasNoTimeBasedRevalidation = fallback?.initialRevalidate === false;
   if (
     !fallback?.filePath ||
     !hasNoTimeBasedRevalidation ||
     fallback.postponedState !== undefined ||
-    output.config.bypassFor !== undefined ||
+    output.pprChain !== undefined ||
     isInsideDirectory(path.join(distDir, 'server', 'pages'), path.resolve(repoRoot, fallback.filePath)) ||
     isDynamicRoutePathname(output.pathname)
   ) {
@@ -653,6 +655,17 @@ const gigadriveNextAdapter: NextAdapter = {
         assetManifest: NEXT_ASSET_MANIFEST_PATH,
         entryPagePaths: getEntryPagePaths(prerenders),
         staticAssets,
+        middleware: outputs.middleware
+          ? {
+              present: true,
+              matchers: (outputs.middleware.config.matchers ?? []).map(({ source, sourceRegex, has, missing }) => ({
+                source,
+                sourceRegex,
+                has,
+                missing,
+              })),
+            }
+          : { present: false, matchers: [] },
       },
     };
     await writeManifest(manifest);
