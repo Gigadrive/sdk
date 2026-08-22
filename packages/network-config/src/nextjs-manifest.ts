@@ -69,38 +69,71 @@ const ImagePolicySchema: Schema.Schema<NormalizedImagePolicy> = Schema.mutable(
   })
 );
 
-export const GigadriveNextPrerenderOutputSchema = Schema.mutable(
-  Schema.Struct({
-    id: Schema.String,
-    type: Schema.Literal('PRERENDER'),
-    pathname: UrlPathnameSchema,
-    parentOutputId: Schema.String,
-    groupId: Schema.Number,
-    pprChain: Schema.optional(Schema.mutable(Schema.Struct({ headers: HttpSingleValueHeadersSchema }))),
-    parentFallbackMode: Schema.optional(JsonValueSchema),
-    fallback: Schema.optional(
-      Schema.mutable(
-        Schema.Struct({
-          filePath: Schema.optional(PortableRelativePathSchema),
-          initialStatus: Schema.optional(Schema.Int.pipe(Schema.between(100, 599))),
-          initialHeaders: Schema.optional(HttpHeadersSchema),
-          initialExpiration: Schema.optional(Schema.Number),
-          initialRevalidate: Schema.optional(Schema.Union(Schema.Number, Schema.Literal(false))),
-          postponedState: Schema.optional(Schema.String),
-        })
-      )
-    ),
-    config: Schema.mutable(
+const GigadriveNextPrerenderOutputFields = {
+  id: Schema.String,
+  type: Schema.Literal('PRERENDER'),
+  pathname: UrlPathnameSchema,
+  route: Schema.optional(UrlPathnameSchema),
+  parentOutputId: Schema.String,
+  groupId: Schema.Number,
+  pprChain: Schema.optional(Schema.mutable(Schema.Struct({ headers: HttpSingleValueHeadersSchema }))),
+  parentFallbackMode: Schema.optional(JsonValueSchema),
+  fallback: Schema.optional(
+    Schema.mutable(
       Schema.Struct({
-        allowQuery: Schema.optional(StringArraySchema),
-        allowHeader: Schema.optional(StringArraySchema),
-        bypassFor: Schema.optional(Schema.mutable(Schema.Array(JsonValueSchema))),
-        renderingMode: Schema.optional(Schema.String),
-        partialFallback: Schema.optional(Schema.Boolean),
-        bypassToken: Schema.optional(Schema.String),
+        filePath: Schema.optional(PortableRelativePathSchema),
+        initialStatus: Schema.optional(Schema.Int.pipe(Schema.between(100, 599))),
+        initialHeaders: Schema.optional(HttpHeadersSchema),
+        initialExpiration: Schema.optional(Schema.Number),
+        initialRevalidate: Schema.optional(Schema.Union(Schema.Number, Schema.Literal(false))),
+        postponedState: Schema.optional(Schema.String),
       })
-    ),
-  })
+    )
+  ),
+  config: Schema.mutable(
+    Schema.Struct({
+      allowQuery: Schema.optional(StringArraySchema),
+      allowHeader: Schema.optional(StringArraySchema),
+      bypassFor: Schema.optional(Schema.mutable(Schema.Array(JsonValueSchema))),
+      renderingMode: Schema.optional(Schema.String),
+      partialFallback: Schema.optional(Schema.Boolean),
+      bypassToken: Schema.optional(Schema.String),
+    })
+  ),
+} as const;
+
+const GigadriveNextPrerenderClassificationSchema = Schema.Struct({
+  routeType: Schema.Literal('route', 'fallback', 'shell', 'page'),
+  response: Schema.Literal('empty', 'initial', 'complete'),
+  compute: Schema.Literal('blocking', 'resuming', 'static'),
+  htmlSize: Schema.optional(Schema.Number),
+});
+
+const GigadriveNextPrerenderWithoutClassificationSchema = Schema.Struct({
+  routeType: Schema.optional(Schema.Never),
+  response: Schema.optional(Schema.Never),
+  compute: Schema.optional(Schema.Never),
+  htmlSize: Schema.optional(Schema.Never),
+});
+
+/**
+ * Portable Next.js prerender metadata.
+ *
+ * A fallback file is a mutable incremental-cache build seed, not a permanently
+ * authoritative static asset. Consumers must evaluate bypass, preview,
+ * revalidation, and PPR metadata before using it, and may only short-circuit
+ * ordinary GET and HEAD requests.
+ */
+export const GigadriveNextPrerenderOutputSchema = Schema.Union(
+  Schema.mutable(
+    Schema.Struct({ ...GigadriveNextPrerenderOutputFields, ...GigadriveNextPrerenderClassificationSchema.fields })
+  ),
+  Schema.mutable(
+    Schema.Struct({
+      ...GigadriveNextPrerenderOutputFields,
+      ...GigadriveNextPrerenderWithoutClassificationSchema.fields,
+    })
+  )
 );
 export type GigadriveNextPrerenderOutput = Schema.Schema.Type<typeof GigadriveNextPrerenderOutputSchema>;
 
@@ -179,6 +212,12 @@ export type GigadriveNextServerDescriptor = Schema.Schema.Type<typeof GigadriveN
 const PrerenderArraySchema = Schema.mutable(Schema.Array(GigadriveNextPrerenderOutputSchema));
 const StaticAssetArraySchema = Schema.mutable(Schema.Array(GigadriveNextStaticAssetPrefixSchema));
 const JsonValueArraySchema = Schema.mutable(Schema.Array(JsonValueSchema));
+
+/** Methods for which a validated prerender seed may participate in response lookup. */
+export const GigadriveNextPrerenderSeedMethodsSchema = Schema.mutable(
+  Schema.Tuple(Schema.Literal('GET'), Schema.Literal('HEAD'))
+);
+export type GigadriveNextPrerenderSeedMethods = Schema.Schema.Type<typeof GigadriveNextPrerenderSeedMethodsSchema>;
 
 export const GigadriveNextBuildManifestV1Schema = Schema.mutable(
   Schema.Struct({
@@ -260,10 +299,16 @@ export const GigadriveNextBuildManifestSchema = Schema.Union(
 export type GigadriveNextBuildManifestV2 = GigadriveNextBuildManifestV2Standalone | GigadriveNextBuildManifestV2Export;
 export type GigadriveNextBuildManifest = Schema.Schema.Type<typeof GigadriveNextBuildManifestSchema>;
 
-/** Portable sidecar containing high-cardinality Next.js prerender metadata. */
+/**
+ * Portable sidecar containing high-cardinality Next.js prerender build seeds.
+ *
+ * `seedMethods` is optional only for parsing sidecars emitted by older SDK
+ * releases. New adapters always emit the explicit GET/HEAD method scope.
+ */
 export const GigadriveNextPrerenderManifestV1Schema = Schema.mutable(
   Schema.Struct({
     version: Schema.Literal(1),
+    seedMethods: Schema.optional(GigadriveNextPrerenderSeedMethodsSchema),
     prerenders: PrerenderArraySchema,
   })
 );

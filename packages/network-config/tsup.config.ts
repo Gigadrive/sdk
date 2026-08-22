@@ -5,6 +5,10 @@ export default [
     ...tsupDefaults,
     cjsInterop: true,
     format: ['cjs', 'esm'],
+    // The published CJS entry must not delegate to the legacy IIFE-shaped CJS
+    // artifacts of these workspace dependencies. Bundling the two utilities
+    // keeps both real-file `require()` and ESM import consumers functional.
+    noExternal: ['@gigadrive/build-utils', '@gigadrive/commons'],
     entry: {
       index: 'src/index.ts',
       'nextjs-adapter': 'src/nextjs-adapter.ts',

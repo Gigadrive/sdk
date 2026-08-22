@@ -1,3 +1,6 @@
+import type { NextAdapter } from 'next';
+import { defaultConfig } from 'next/dist/server/config-shared';
+import { AdapterOutputType } from 'next/dist/shared/lib/constants';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -12,6 +15,7 @@ import {
 } from './nextjs-manifest';
 
 const temporaryDirectories: string[] = [];
+type BuildCompleteContext = Parameters<NonNullable<NextAdapter['onBuildComplete']>>[0];
 
 const nextConfig = (overrides: Record<string, unknown> = {}) => ({
   basePath: '',
@@ -82,6 +86,11 @@ const onBuildComplete = async (context: Record<string, unknown>): Promise<void> 
   await (gigadriveNextAdapter.onBuildComplete as unknown as (context: Record<string, unknown>) => Promise<void>)(
     context
   );
+};
+
+const onTypedBuildComplete = async (context: BuildCompleteContext): Promise<void> => {
+  if (!gigadriveNextAdapter.onBuildComplete) throw new Error('Expected onBuildComplete');
+  await gigadriveNextAdapter.onBuildComplete(context);
 };
 
 const readManifest = async (projectDir: string) =>
@@ -370,6 +379,7 @@ describe('Gigadrive Next.js adapter', () => {
     expect(manifest.outputs.prerenders).toEqual([]);
 
     const prerenderManifest = await readPrerenderManifest(projectDir);
+    expect(prerenderManifest?.seedMethods).toEqual(['GET', 'HEAD']);
     expect(prerenderManifest?.prerenders).toHaveLength(3);
     expect(prerenderManifest?.prerenders[0]).toMatchObject({
       id: 'isr',
@@ -466,6 +476,195 @@ describe('Gigadrive Next.js adapter', () => {
     expect(manifest.outputs.middleware?.matchers[0]).not.toBe(matchers[0]);
   });
 
+  it('serializes a compile-time-conformant Next 16.3 generated route and its related outputs', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-typed-16-3-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const outputDirectory = path.join(distDir, 'server', 'app', 'blog');
+    const htmlPath = path.join(outputDirectory, 'first.html');
+    const rscPath = path.join(outputDirectory, 'first.rsc');
+    const segmentPath = path.join(outputDirectory, 'first.segments', '_full.segment.rsc');
+    await mkdir(path.dirname(segmentPath), { recursive: true });
+    await Promise.all([
+      writeFile(htmlPath, '<html>first</html>'),
+      writeFile(rscPath, 'rsc'),
+      writeFile(segmentPath, 'segment'),
+    ]);
+
+    const prerenderBase = {
+      type: AdapterOutputType.PRERENDER,
+      route: '/blog/[slug]',
+      parentOutputId: '/blog/[slug]',
+      groupId: 1,
+      config: {
+        allowQuery: ['nxtPslug'],
+        allowHeader: ['host'],
+        bypassFor: [{ type: 'header' as const, key: 'next-action' }],
+        bypassToken: 'preview-token',
+      },
+    } as const;
+    const context = {
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: { ...defaultConfig, output: undefined },
+      nextVersion: '16.3.1',
+      buildId: 'typed-build-id',
+      routing: {
+        beforeMiddleware: [],
+        middlewareMatchers: [],
+        beforeFiles: [],
+        afterFiles: [],
+        dynamicRoutes: [],
+        onMatch: [],
+        fallback: [],
+        shouldNormalizeNextData: false,
+        rsc: {
+          header: 'rsc',
+          didPostponeHeader: 'x-nextjs-postponed',
+          contentTypeHeader: 'text/x-component',
+          varyHeader: 'rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch',
+          prefetchHeader: 'next-router-prefetch',
+          suffix: '.rsc',
+          prefetchSegmentHeader: 'next-router-segment-prefetch',
+          prefetchSegmentDirSuffix: '.segments',
+          prefetchSegmentSuffix: '.segment.rsc',
+          clientParamParsing: true,
+          clientParamParsingOrigins: undefined,
+          dynamicRSCPrerender: true,
+        },
+      },
+      outputs: {
+        pages: [],
+        pagesApi: [],
+        appPages: [],
+        appRoutes: [],
+        prerenders: [
+          {
+            ...prerenderBase,
+            id: '/blog/first',
+            pathname: '/blog/first',
+            fallback: { filePath: htmlPath, initialRevalidate: false, postponedState: undefined },
+            routeType: 'page',
+            response: 'complete',
+            compute: 'static',
+            htmlSize: 18,
+          },
+          {
+            ...prerenderBase,
+            id: '/blog/first.rsc',
+            pathname: '/blog/first.rsc',
+            fallback: { filePath: rscPath, initialRevalidate: false, postponedState: undefined },
+          },
+          {
+            ...prerenderBase,
+            id: '/blog/first.segments/_full.segment.rsc',
+            pathname: '/blog/first.segments/_full.segment.rsc',
+            fallback: { filePath: segmentPath, initialRevalidate: false, postponedState: undefined },
+          },
+        ],
+        staticFiles: [],
+      },
+    } satisfies BuildCompleteContext;
+
+    await onTypedBuildComplete(context);
+
+    const sidecar = await readPrerenderManifest(projectDir);
+    expect(sidecar?.seedMethods).toEqual(['GET', 'HEAD']);
+    expect(sidecar?.prerenders).toEqual([
+      expect.objectContaining({
+        route: '/blog/[slug]',
+        pathname: '/blog/first',
+        routeType: 'page',
+        response: 'complete',
+        compute: 'static',
+        htmlSize: 18,
+      }),
+      expect.not.objectContaining({ routeType: expect.anything() }),
+      expect.not.objectContaining({ routeType: expect.anything() }),
+    ]);
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
+  });
+
+  it('preserves every Next 16.3 primary classification while related outputs omit it', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-classification-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const outputDirectory = path.join(distDir, 'server', 'app');
+    const classifications = [
+      {
+        id: 'generated-page',
+        route: '/blog/[slug]',
+        pathname: '/blog/first',
+        routeType: 'page',
+        response: 'complete',
+        compute: 'static',
+        htmlSize: 123,
+      },
+      {
+        id: 'dynamic-shell',
+        route: '/docs/[slug]',
+        pathname: '/docs/[slug]',
+        routeType: 'shell',
+        response: 'initial',
+        compute: 'resuming',
+      },
+      {
+        id: 'blocking-fallback',
+        route: '/products/[id]',
+        pathname: '/products/[id]',
+        routeType: 'fallback',
+        response: 'empty',
+        compute: 'blocking',
+      },
+      {
+        id: 'route-handler',
+        route: '/rss.xml',
+        pathname: '/rss.xml',
+        routeType: 'route',
+        response: 'complete',
+        compute: 'static',
+      },
+    ] as const;
+    const prerenders = await Promise.all(
+      [...classifications, { id: 'related-rsc', route: '/blog/[slug]', pathname: '/blog/first.rsc' }].map(
+        async (output, index) => {
+          const filePath = path.join(outputDirectory, `${output.id}.body`);
+          await mkdir(path.dirname(filePath), { recursive: true });
+          await writeFile(filePath, output.id);
+          return {
+            ...output,
+            type: 'PRERENDER' as const,
+            parentOutputId: output.route,
+            groupId: index,
+            fallback: { filePath, initialRevalidate: false as const },
+            config: {},
+          };
+        }
+      )
+    );
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.3.1',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: { ...emptyOutputs, prerenders },
+    });
+
+    const sidecar = await readPrerenderManifest(projectDir);
+    expect(sidecar?.prerenders.slice(0, classifications.length)).toEqual(
+      classifications.map((classification) => expect.objectContaining(classification))
+    );
+    expect(sidecar?.prerenders.at(-1)).not.toHaveProperty('routeType');
+    expect(sidecar?.prerenders.at(-1)).not.toHaveProperty('response');
+    expect(sidecar?.prerenders.at(-1)).not.toHaveProperty('compute');
+    expect(sidecar?.prerenders.at(-1)).not.toHaveProperty('htmlSize');
+  });
+
   it('maps Pages Router root and status pages with a configured base path', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-base-path-'));
     temporaryDirectories.push(projectDir);
@@ -554,7 +753,7 @@ describe('Gigadrive Next.js adapter', () => {
     });
   });
 
-  it('promotes immutable App Router HTML, RSC, segment RSC, and route-handler output with runtime bypasses', async () => {
+  it('keeps mutable App Router HTML, RSC, segment RSC, and route-handler seeds out of static assets', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-runtime-bypass-'));
     temporaryDirectories.push(projectDir);
     const distDir = path.join(projectDir, '.next');
@@ -603,20 +802,15 @@ describe('Gigadrive Next.js adapter', () => {
       outputs: { ...emptyOutputs, prerenders },
     });
 
-    expect((await readAssetManifest(projectDir))?.assets).toEqual(
-      outputs.map(({ pathname, fileName, headers }) => ({
-        source: `.next/server/app/${fileName}`,
-        path: pathname,
-        headers,
-      }))
-    );
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
     const sidecar = await readPrerenderManifest(projectDir);
+    expect(sidecar?.seedMethods).toEqual(['GET', 'HEAD']);
     expect(sidecar?.prerenders).toHaveLength(4);
     expect(sidecar?.prerenders.every((output) => output.config.bypassFor !== undefined)).toBe(true);
     expect(sidecar?.prerenders[0].config.bypassFor).toEqual(bypassFor);
-    // The gateway consumes these conditions before static lookup: matching
-    // Server Action and multipart requests remain backed by the standalone
-    // runtime while ordinary GET/HEAD requests can use the promoted assets.
+    // Consumers may use these files only as mutable incremental-cache seeds.
+    // Server Actions and multipart requests bypass them, and the explicit
+    // method scope prevents OPTIONS or unsupported methods from short-circuiting.
     expect(sidecar?.prerenders[0].config.bypassFor).toEqual(
       expect.arrayContaining([
         { type: 'header', key: 'next-action' },
@@ -625,7 +819,7 @@ describe('Gigadrive Next.js adapter', () => {
     );
   });
 
-  it('does not promote scheduled ISR, postponed/PPR output, dynamic routes, or Pages Router prerenders', async () => {
+  it('preserves scheduled ISR, postponed/PPR, generated dynamic, and Pages Router output only as seeds', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-unsafe-prerenders-'));
     temporaryDirectories.push(projectDir);
     const distDir = path.join(projectDir, '.next');
@@ -633,11 +827,17 @@ describe('Gigadrive Next.js adapter', () => {
       { id: 'scheduled', pathname: '/scheduled', directory: 'app', initialRevalidate: 60 },
       { id: 'postponed', pathname: '/postponed', directory: 'app', initialRevalidate: false, postponedState: 'state' },
       { id: 'ppr-chain', pathname: '/ppr-chain', directory: 'app', initialRevalidate: false, pprChain: true },
-      { id: 'dynamic', pathname: '/blog/[slug]', directory: 'app', initialRevalidate: false },
+      {
+        id: 'dynamic',
+        route: '/blog/[slug]',
+        pathname: '/blog/first',
+        directory: 'app',
+        initialRevalidate: false,
+      },
       { id: 'pages', pathname: '/products', directory: 'pages', initialRevalidate: false },
     ];
     const prerenders = await Promise.all(
-      cases.map(async ({ id, pathname, directory, initialRevalidate, postponedState, pprChain }, index) => {
+      cases.map(async ({ id, route, pathname, directory, initialRevalidate, postponedState, pprChain }, index) => {
         const filePath = path.join(distDir, 'server', directory, `${id}.html`);
         await mkdir(path.dirname(filePath), { recursive: true });
         await writeFile(filePath, id);
@@ -645,6 +845,7 @@ describe('Gigadrive Next.js adapter', () => {
           id,
           type: 'PRERENDER' as const,
           pathname,
+          ...(route ? { route } : {}),
           parentOutputId: id,
           groupId: index,
           ...(pprChain ? { pprChain: { headers: { vary: 'rsc' } } } : {}),
@@ -670,7 +871,13 @@ describe('Gigadrive Next.js adapter', () => {
     });
 
     expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
-    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(cases.length);
+    const sidecar = await readPrerenderManifest(projectDir);
+    expect(sidecar?.seedMethods).toEqual(['GET', 'HEAD']);
+    expect(sidecar?.prerenders).toHaveLength(cases.length);
+    expect(sidecar?.prerenders.find((output) => output.id === 'dynamic')).toMatchObject({
+      route: '/blog/[slug]',
+      pathname: '/blog/first',
+    });
   });
 
   it('keeps Pages Router prerenders server-backed for on-demand revalidation', async () => {
@@ -709,7 +916,7 @@ describe('Gigadrive Next.js adapter', () => {
     expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(1);
   });
 
-  it('rejects duplicate static asset paths during sidecar generation', async () => {
+  it('keeps a static file authoritative when a prerender seed has the same pathname', async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-duplicate-assets-'));
     temporaryDirectories.push(projectDir);
     const distDir = path.join(projectDir, '.next');
@@ -720,40 +927,52 @@ describe('Gigadrive Next.js adapter', () => {
     await writeFile(staticFilePath, '<html>static</html>');
     await writeFile(prerenderFilePath, '<html>prerender</html>');
 
-    await expect(
-      onBuildComplete({
-        projectDir,
-        repoRoot: projectDir,
-        distDir,
-        config: nextConfig(),
-        nextVersion: '16.2.10',
-        buildId: 'build-id',
-        routing: emptyRouting,
-        outputs: {
-          ...emptyOutputs,
-          staticFiles: [
-            {
-              id: 'static',
-              type: 'STATIC_FILE',
-              pathname: '/collision',
-              filePath: staticFilePath,
-              immutableHash: undefined,
-            },
-          ],
-          prerenders: [
-            {
-              id: 'prerender',
-              type: 'PRERENDER',
-              pathname: '/collision',
-              parentOutputId: 'prerender',
-              groupId: 1,
-              fallback: { filePath: prerenderFilePath, initialRevalidate: false },
-              config: { bypassToken: 'preview-token' },
-            },
-          ],
-        },
-      })
-    ).rejects.toThrow('Duplicate Next.js static asset path: /collision');
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.2.10',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: {
+        ...emptyOutputs,
+        staticFiles: [
+          {
+            id: 'static',
+            type: 'STATIC_FILE',
+            pathname: '/collision',
+            filePath: staticFilePath,
+            immutableHash: undefined,
+          },
+        ],
+        prerenders: [
+          {
+            id: 'prerender',
+            type: 'PRERENDER',
+            pathname: '/collision',
+            parentOutputId: 'prerender',
+            groupId: 1,
+            fallback: { filePath: prerenderFilePath, initialRevalidate: false },
+            config: { bypassToken: 'preview-token' },
+          },
+        ],
+      },
+    });
+
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([
+      {
+        source: '.next/server/app/static.html',
+        path: '/collision',
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      },
+    ]);
+    expect((await readPrerenderManifest(projectDir))?.prerenders).toEqual([
+      expect.objectContaining({
+        id: 'prerender',
+        fallback: expect.objectContaining({ filePath: '.next/server/app/prerender.html' }),
+      }),
+    ]);
   });
 
   it('keeps high-cardinality outputs in sidecars', async () => {
@@ -807,15 +1026,22 @@ describe('Gigadrive Next.js adapter', () => {
     const manifest = (await readManifest(projectDir)) as GigadriveNextBuildManifestV2Standalone;
     expect(manifest.outputs.prerenders).toEqual([]);
     expect(manifest.outputs.entryPagePaths).toHaveLength(50);
-    expect((await readPrerenderManifest(projectDir))?.prerenders).toHaveLength(75);
-    const assets = (await readAssetManifest(projectDir))?.assets;
-    expect(assets).toHaveLength(75);
-    expect(assets?.[0]).toEqual({
-      source: '.next/server/app/docs/0.html',
-      path: '/docs/0',
-      status: 203,
-      headers: { 'content-type': 'text/html; charset=utf-8', 'x-public': 'kept' },
+    const sidecar = await readPrerenderManifest(projectDir);
+    expect(sidecar?.seedMethods).toEqual(['GET', 'HEAD']);
+    expect(sidecar?.prerenders).toHaveLength(75);
+    expect(sidecar?.prerenders[0]).toMatchObject({
+      fallback: {
+        filePath: '.next/server/app/docs/0.html',
+        initialStatus: 203,
+        initialHeaders: {
+          'content-type': 'text/html; charset=utf-8',
+          'x-public': 'kept',
+          'X-Next-Cache-Tags': 'docs,docs:0',
+          'x-nextjs-prerender': '1',
+        },
+      },
     });
+    expect((await readAssetManifest(projectDir))?.assets).toEqual([]);
   });
 
   it('writes a minimal export manifest for static export on the managed runtime', async () => {

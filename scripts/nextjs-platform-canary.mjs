@@ -86,6 +86,17 @@ assert.deepEqual((await requestJson('/api/edge')).json, { runtime: 'edge', route
 assert.deepEqual((await requestJson('/api/after')).json, { after: 'registered' });
 assert.deepEqual((await requestJson('/api/legacy')).json, { router: 'pages-api' });
 assert.match((await request('/legacy')).body, /id="legacy-page"[^>]*>pages</);
+assert.match((await request('/generated/first')).body, /id="generated-slug"[^>]*>first</);
+assert.match((await request('/legacy-generated/first')).body, /id="legacy-generated-slug"[^>]*>first</);
+assert.match((await request('/legacy-generated-strict/first')).body, /id="legacy-generated-strict-slug"[^>]*>first</);
+
+const head = await fetch(`${baseUrl}/on-demand`, { method: 'HEAD', signal: AbortSignal.timeout(15_000) });
+assert.equal(head.status, 200, 'HEAD did not retain the native Next response');
+assert.equal(await head.text(), '', 'HEAD unexpectedly returned a body');
+const options = await fetch(`${baseUrl}/on-demand`, { method: 'OPTIONS', signal: AbortSignal.timeout(15_000) });
+assert.equal(options.status, 405, 'OPTIONS was incorrectly served as a generic static response');
+const unsupported = await fetch(`${baseUrl}/on-demand`, { method: 'PUT', signal: AbortSignal.timeout(15_000) });
+assert.equal(unsupported.status, 405, 'An unsupported method was incorrectly served as a generic static response');
 
 const middleware = await request('/middleware-source');
 assert.equal(middleware.response.headers.get('x-canary-middleware'), 'rewritten');
@@ -104,7 +115,7 @@ assert.equal(secondCacheComponent, firstCacheComponent, 'Cache Component changed
 
 assert.deepEqual(
   (await requestJson('/api/revalidate', { method: 'POST' })).json,
-  { cacheComponentRevalidated: true },
+  { cacheComponentRevalidated: true, onDemandPathRevalidated: true },
   'Cache Component revalidation failed'
 );
 assert.deepEqual(
@@ -153,6 +164,25 @@ assert.equal(new URL(actionResult.response.url).searchParams.get('result'), 'can
 assert.match(actionResult.body, /action-result/);
 assert.match(actionResult.body, /canary-action/);
 
+const onDemandPage = await request('/on-demand');
+const initialOnDemandValue = Number(token(onDemandPage.body, 'on-demand-value'));
+const onDemandActionName = onDemandPage.body.match(/name="(\$ACTION_ID_[^"]+)"/)?.[1];
+assert(onDemandActionName, 'On-demand Server Action identifier was not rendered');
+const onDemandActionBody = new FormData();
+onDemandActionBody.set(onDemandActionName, '');
+await request('/on-demand', {
+  method: 'POST',
+  headers: { origin: baseUrl },
+  body: onDemandActionBody,
+});
+const revalidatedOnDemandValue = await eventually(
+  'App Router on-demand revalidation',
+  async () =>
+    Number(token((await request('/on-demand', { headers: { 'cache-control': 'no-cache' } })).body, 'on-demand-value')),
+  (value) => value > initialOnDemandValue
+);
+assert.equal(revalidatedOnDemandValue, initialOnDemandValue + 1);
+
 if (!skipPlatformImage) {
   const imageAlias = await fetch(`${baseUrl}/_next/image?url=%2Fcanary.png&w=64&q=75`, {
     redirect: 'manual',
@@ -193,11 +223,14 @@ console.log(
         'edge-runtime',
         'after',
         'pages-router',
+        'generated-static-params',
+        'http-methods',
         'middleware',
         'rsc',
         'isr',
         'cache-components',
         'server-actions',
+        'on-demand-revalidation',
         ...(skipPlatformImage ? [] : ['image-optimization']),
         'ppr-streaming',
       ],

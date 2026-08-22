@@ -245,6 +245,54 @@ describe('parseGigadriveNextPrerenderManifest', () => {
     expect(parseGigadriveNextPrerenderManifest(JSON.stringify(manifest))).toEqual(manifest);
   });
 
+  it('accepts the explicit GET/HEAD seed method scope', () => {
+    const manifest = {
+      version: 1,
+      seedMethods: ['GET', 'HEAD'],
+      prerenders: standaloneV2().outputs.prerenders,
+    };
+    expect(parseGigadriveNextPrerenderManifest(JSON.stringify(manifest))).toEqual(manifest);
+  });
+
+  it('accepts complete Next 16.3 classification metadata and a distinct dynamic route', () => {
+    const prerender = {
+      ...standaloneV2().outputs.prerenders[0],
+      route: '/blog/[slug]',
+      pathname: '/blog/first',
+      routeType: 'page',
+      response: 'complete',
+      compute: 'static',
+      htmlSize: 2048,
+    };
+    const manifest = { version: 1, seedMethods: ['GET', 'HEAD'], prerenders: [prerender] };
+    expect(parseGigadriveNextPrerenderManifest(JSON.stringify(manifest))).toEqual(manifest);
+  });
+
+  it.each([
+    { routeType: 'page' },
+    { routeType: 'page', response: 'complete' },
+    { routeType: 'invalid', response: 'complete', compute: 'static' },
+    { routeType: 'page', response: 'invalid', compute: 'static' },
+    { routeType: 'page', response: 'complete', compute: 'invalid' },
+    { htmlSize: 42 },
+  ])('rejects partial or invalid Next 16.3 classification metadata %#', (classification) => {
+    const prerender = { ...standaloneV2().outputs.prerenders[0], ...classification };
+    expect(
+      parseGigadriveNextPrerenderManifest(JSON.stringify({ version: 1, prerenders: [prerender] }))
+    ).toBeUndefined();
+  });
+
+  it.each([['HEAD', 'GET'], ['GET'], ['GET', 'HEAD', 'OPTIONS'], ['GET', 'POST']])(
+    'rejects an invalid prerender seed method scope %#',
+    (seedMethods) => {
+      expect(
+        parseGigadriveNextPrerenderManifest(
+          JSON.stringify({ version: 1, seedMethods, prerenders: standaloneV2().outputs.prerenders })
+        )
+      ).toBeUndefined();
+    }
+  );
+
   it('rejects unsafe fallback paths', () => {
     const prerenders = standaloneV2().outputs.prerenders;
     prerenders[0].fallback.filePath = '../outside.html';

@@ -209,48 +209,14 @@ const serializeStaticFileAsset = async (
   };
 };
 
-const serializePrerenderAsset = (
-  projectDir: string,
-  repoRoot: string,
-  distDir: string,
-  output: GigadriveNextPrerenderOutput
-): StaticAssetManifestEntry | undefined => {
-  const { fallback } = output;
-  // `false` disables scheduled ISR. Bypass conditions are preserved in the
-  // prerender sidecar so matching requests still reach the runtime, while an
-  // ordinary GET/HEAD can use this immutable App Router response. Pages Router
-  // prerenders stay server-backed because they may be updated through
-  // on-demand ISR even without a time-based revalidation.
-  const hasNoTimeBasedRevalidation = fallback?.initialRevalidate === false;
-  if (
-    !fallback?.filePath ||
-    !hasNoTimeBasedRevalidation ||
-    fallback.postponedState !== undefined ||
-    output.pprChain !== undefined ||
-    isInsideDirectory(path.join(distDir, 'server', 'pages'), path.resolve(repoRoot, fallback.filePath)) ||
-    isDynamicRoutePathname(output.pathname)
-  ) {
-    return undefined;
-  }
-  const headers = fallback.initialHeaders ? getPublicStaticResponseHeaders(fallback.initialHeaders) : undefined;
-  return {
-    source: toPortableRelativePath(projectDir, path.join(repoRoot, fallback.filePath)),
-    path: output.pathname,
-    ...(fallback.initialStatus !== undefined ? { status: fallback.initialStatus } : {}),
-    ...(headers ? { headers } : {}),
-  };
-};
-
 async function serializeAssetManifest(
   projectDir: string,
   resolvedProjectDir: string,
-  repoRoot: string,
   distDir: string,
   basePath: string,
   rscContentType: string,
   locales: readonly string[],
-  staticFiles: NextStaticFileOutput[],
-  prerenders: GigadriveNextPrerenderOutput[]
+  staticFiles: NextStaticFileOutput[]
 ): Promise<StaticAssetManifestV1> {
   const staticDirectory = path.join(distDir, 'static');
   const staticEntries = await mapInBatches(
@@ -260,12 +226,8 @@ async function serializeAssetManifest(
     ),
     (output) => serializeStaticFileAsset(projectDir, resolvedProjectDir, basePath, rscContentType, locales, output)
   );
-  const entries = [
-    ...staticEntries,
-    ...prerenders.map((output) => serializePrerenderAsset(projectDir, repoRoot, distDir, output)),
-  ];
   const assetsByPath = new Map<string, StaticAssetManifestEntry>();
-  for (const entry of entries) {
+  for (const entry of staticEntries) {
     if (!entry) continue;
     if (assetsByPath.has(entry.path)) throw new Error(`Duplicate Next.js static asset path: ${entry.path}`);
     assetsByPath.set(entry.path, entry);
@@ -291,10 +253,11 @@ const serializePrerenderOutput = async (
   output: NextPrerenderOutput
 ): Promise<GigadriveNextPrerenderOutput> => {
   const { bypassFor, ...prerenderConfig } = output.config;
-  return {
+  const serializedOutput = {
     id: output.id,
-    type: 'PRERENDER',
+    type: 'PRERENDER' as const,
     pathname: output.pathname,
+    ...(output.route !== undefined ? { route: output.route } : {}),
     parentOutputId: output.parentOutputId,
     groupId: output.groupId,
     ...(output.pprChain ? { pprChain: output.pprChain } : {}),
@@ -322,6 +285,16 @@ const serializePrerenderOutput = async (
       ...(bypassFor ? { bypassFor: toJsonValue(bypassFor) as JsonValue[] } : {}),
     },
   };
+  if (output.routeType !== undefined) {
+    return {
+      ...serializedOutput,
+      routeType: output.routeType,
+      response: output.response,
+      compute: output.compute,
+      ...(output.htmlSize !== undefined ? { htmlSize: output.htmlSize } : {}),
+    };
+  }
+  return serializedOutput;
 };
 
 /**
@@ -596,15 +569,17 @@ const gigadriveNextAdapter: NextAdapter = {
     const assetManifest = await serializeAssetManifest(
       projectDir,
       resolvedProjectDir,
-      repoRoot,
       distDir,
       config.basePath,
       routing.rsc.contentTypeHeader ?? DEFAULT_RSC_CONTENT_TYPE,
       config.i18n?.locales ?? [],
-      outputs.staticFiles,
-      prerenders
+      outputs.staticFiles
     );
-    const prerenderManifest: GigadriveNextPrerenderManifestV1 = { version: 1, prerenders };
+    const prerenderManifest: GigadriveNextPrerenderManifestV1 = {
+      version: 1,
+      seedMethods: ['GET', 'HEAD'],
+      prerenders,
+    };
     await mkdir(path.join(metadataDirectory, 'assets'), { recursive: true });
     await Promise.all([
       writeFile(path.join(projectDir, NEXT_ASSET_MANIFEST_PATH), `${JSON.stringify(assetManifest)}\n`, 'utf8'),

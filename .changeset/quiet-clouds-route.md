@@ -2,4 +2,4 @@
 '@gigadrive/network-config': patch
 ---
 
-Promote safe App Router prerenders with runtime bypass conditions and export explicit Next.js middleware matcher metadata.
+Export mutable Next.js prerender build seeds with complete classification metadata and explicit GET/HEAD scope, plus middleware matcher discovery.
