@@ -98,6 +98,49 @@ describe('parseGigadriveNextBuildManifest', () => {
     expect(parse(manifest)).toEqual(manifest);
   });
 
+  it('accepts middleware present with exact matcher conditions', () => {
+    const middleware = {
+      present: true,
+      matchers: [
+        {
+          source: '/((?!api|_next).*)',
+          sourceRegex: '^/((?!api|_next).*)$',
+          has: [
+            { type: 'header', key: 'x-tenant', value: 'public' },
+            { type: 'host', value: 'example.com' },
+          ],
+          missing: [{ type: 'cookie', key: 'preview' }],
+        },
+      ],
+    };
+    const manifest = standaloneV2({ outputs: { ...standaloneV2().outputs, middleware } });
+    expect(parse(manifest)).toEqual(manifest);
+  });
+
+  it('accepts explicit middleware absence', () => {
+    const manifest = standaloneV2({
+      outputs: { ...standaloneV2().outputs, middleware: { present: false, matchers: [] } },
+    });
+    expect(parse(manifest)).toEqual(manifest);
+  });
+
+  it('keeps backward compatibility with manifests that predate middleware discovery', () => {
+    const manifest = standaloneV2();
+    expect(manifest.outputs).not.toHaveProperty('middleware');
+    expect(parse(manifest)).toEqual(manifest);
+  });
+
+  it.each([
+    { present: false, matchers: [{ source: '/:path*', sourceRegex: '^/.*$' }] },
+    { present: true, matchers: [{ source: '/:path*' }] },
+    {
+      present: true,
+      matchers: [{ source: '/:path*', sourceRegex: '^/.*$', has: [{ type: 'header', value: 'missing-key' }] }],
+    },
+  ])('rejects invalid middleware discovery metadata %#', (middleware) => {
+    expect(parse(standaloneV2({ outputs: { ...standaloneV2().outputs, middleware } }))).toBeUndefined();
+  });
+
   it('accepts a minimal export manifest', () => {
     const manifest = {
       version: 2,
@@ -201,6 +244,54 @@ describe('parseGigadriveNextPrerenderManifest', () => {
     const manifest = { version: 1, prerenders };
     expect(parseGigadriveNextPrerenderManifest(JSON.stringify(manifest))).toEqual(manifest);
   });
+
+  it('accepts the explicit GET/HEAD seed method scope', () => {
+    const manifest = {
+      version: 1,
+      seedMethods: ['GET', 'HEAD'],
+      prerenders: standaloneV2().outputs.prerenders,
+    };
+    expect(parseGigadriveNextPrerenderManifest(JSON.stringify(manifest))).toEqual(manifest);
+  });
+
+  it('accepts complete Next 16.3 classification metadata and a distinct dynamic route', () => {
+    const prerender = {
+      ...standaloneV2().outputs.prerenders[0],
+      route: '/blog/[slug]',
+      pathname: '/blog/first',
+      routeType: 'page',
+      response: 'complete',
+      compute: 'static',
+      htmlSize: 2048,
+    };
+    const manifest = { version: 1, seedMethods: ['GET', 'HEAD'], prerenders: [prerender] };
+    expect(parseGigadriveNextPrerenderManifest(JSON.stringify(manifest))).toEqual(manifest);
+  });
+
+  it.each([
+    { routeType: 'page' },
+    { routeType: 'page', response: 'complete' },
+    { routeType: 'invalid', response: 'complete', compute: 'static' },
+    { routeType: 'page', response: 'invalid', compute: 'static' },
+    { routeType: 'page', response: 'complete', compute: 'invalid' },
+    { htmlSize: 42 },
+  ])('rejects partial or invalid Next 16.3 classification metadata %#', (classification) => {
+    const prerender = { ...standaloneV2().outputs.prerenders[0], ...classification };
+    expect(
+      parseGigadriveNextPrerenderManifest(JSON.stringify({ version: 1, prerenders: [prerender] }))
+    ).toBeUndefined();
+  });
+
+  it.each([['HEAD', 'GET'], ['GET'], ['GET', 'HEAD', 'OPTIONS'], ['GET', 'POST']])(
+    'rejects an invalid prerender seed method scope %#',
+    (seedMethods) => {
+      expect(
+        parseGigadriveNextPrerenderManifest(
+          JSON.stringify({ version: 1, seedMethods, prerenders: standaloneV2().outputs.prerenders })
+        )
+      ).toBeUndefined();
+    }
+  );
 
   it('rejects unsafe fallback paths', () => {
     const prerenders = standaloneV2().outputs.prerenders;
