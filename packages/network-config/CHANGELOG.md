@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 4.6.1
+
+### Patch Changes
+
+- Export mutable Next.js prerender build seeds with complete classification metadata and explicit GET/HEAD scope, plus middleware matcher discovery. ([#473](https://github.com/Gigadrive/sdk/pull/473))
+
 ## 4.6.0
 
 ### Minor Changes
