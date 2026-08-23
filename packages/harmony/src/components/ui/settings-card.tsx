@@ -45,7 +45,7 @@ const SettingsCard = React.forwardRef<HTMLDivElement, SettingsCardProps>(
       {...props}
     >
       <div className={cn('p-5', children != null ? 'pb-1' : 'pb-4')}>
-        <h3 className={cn('text-sm font-medium leading-none tracking-tight', danger && 'text-danger')}>{title}</h3>
+        <h3 className={cn('text-sm leading-none tracking-tight', danger && 'text-danger')}>{title}</h3>
         {description != null && <div className="mt-1 text-xs text-muted-foreground">{description}</div>}
       </div>
       {children != null && <div className="divide-y divide-border/70 px-5 pb-1">{children}</div>}

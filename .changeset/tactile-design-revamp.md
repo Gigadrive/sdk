@@ -40,11 +40,12 @@ toward it.
 - `Toast`: redesigned as a raised neutral card with a semantic icon tile (styling
   deduplicated), and the Toaster now forces the theme font — Sonner's stylesheet
   hardcodes its own font-family, so toasts never rendered in Resist Sans.
-- Type weight scale reduced system-wide to two UI weights: normal for body and
-  controls, medium for headings/titles/labels. All `font-semibold`/`font-bold`
-  component usages became `font-medium`, and `font.css` now aliases weight 600
-  to the Medium faces — Resist Sans has no SemiBold cut, so `font-semibold`
-  previously resolved up to full Bold (the root cause of chronically heavy text).
+- Type weight scale reduced system-wide: headings, titles, body and controls
+  are normal weight (hierarchy via size and color); `font-medium` is reserved
+  for small functional emphasis (labels, badges, chips, tabs, toast titles).
+  `font.css` now aliases weight 600 to the Medium faces — Resist Sans has no
+  SemiBold cut, so `font-semibold` previously resolved up to full Bold (the
+  root cause of chronically heavy text).
 - `Dialog`/`AlertDialog`: overlay is `bg-black/80` (was gray-700/75); content is an
   elevated tactile card.
 - `Switch`, `Avatar`, `Tooltip`, `ActionPanel`, `Toolbar`, `EmptyState`,

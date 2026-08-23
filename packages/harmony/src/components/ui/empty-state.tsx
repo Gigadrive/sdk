@@ -58,7 +58,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
         )}
 
         <div>
-          <h2 className="text-foreground font-medium">{title}</h2>
+          <h2 className="text-foreground">{title}</h2>
           <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{description}</p>
         </div>
 

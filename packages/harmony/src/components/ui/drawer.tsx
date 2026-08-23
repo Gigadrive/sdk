@@ -51,9 +51,7 @@ const DrawerContent = React.forwardRef<React.ElementRef<typeof DrawerPrimitive.C
         {title && (
           <div className="grid gap-1.5 p-4 text-center sm:text-left">
             {typeof title === 'string' ? (
-              <DrawerPrimitive.Title className="text-lg font-medium leading-none tracking-tight">
-                {title}
-              </DrawerPrimitive.Title>
+              <DrawerPrimitive.Title className="text-lg leading-none tracking-tight">{title}</DrawerPrimitive.Title>
             ) : (
               title
             )}
