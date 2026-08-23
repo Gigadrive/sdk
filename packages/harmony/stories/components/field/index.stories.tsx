@@ -56,13 +56,14 @@ export const WithError: Story = {
 export const WrappingSelect: Story = {
   args: {
     label: 'Region',
+    htmlFor: 'region',
     hint: 'Where your application runs.',
   },
   render: (args) => (
     <div className="w-80">
       <Field {...args}>
         <Select defaultValue="eu-central">
-          <SelectTrigger className="w-full">
+          <SelectTrigger id="region" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

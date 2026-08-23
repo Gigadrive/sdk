@@ -7,7 +7,7 @@ pages = {}
 def app_row(name, host, status_color, commit, time, repo):
     return f'''<a class="group flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40">
       <div class="relative"><div class="size-8 rounded-lg bg-gradient-to-br from-zinc-500/40 to-zinc-700/40 border border-border grid place-items-center text-xs font-semibold">{name[0].upper()}</div>
-        <span class="absolute -bottom-0.5 -right-0.5 size-2 rounded-full border-2 border-card" style="background:hsl(var(--{status_color}))"></span></div>
+        <span class="absolute -bottom-0.5 -right-0.5 size-2 rounded-full border-2 border-card {'bg-muted-foreground/50' if status_color == 'muted' else ''}" style="{'' if status_color == 'muted' else f'background:hsl(var(--{status_color}))'}"></span></div>
       <div class="w-52 min-w-0 flex-shrink-0"><div class="text-sm font-medium truncate">{name}</div><div class="text-xs text-muted-foreground truncate">{host}</div></div>
       <div class="hidden min-w-0 flex-1 md:block"><div class="text-xs text-muted-foreground truncate">{commit}</div><div class="text-[11px] text-muted-foreground/70 mt-0.5">{time}</div></div>
       <div class="hidden max-w-44 flex-shrink lg:block"><span class="raised flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">{icon('github', 'size-3')}<span class="truncate">{repo}</span></span></div>
@@ -49,14 +49,14 @@ org_content = f'''
               <div><div class="flex justify-between text-xs"><span class="text-muted-foreground">Bandwidth</span><span class="tabular-nums">1.9 / 5 TB</span></div>
                 <div class="well mt-1.5 h-2 w-full rounded-full bg-muted"><div class="fill-gloss h-2 rounded-full" style="width:38%"></div></div></div>
               <div><div class="flex justify-between text-xs"><span class="text-muted-foreground">Storage</span><span class="tabular-nums">86.2 / 100 GB</span></div>
-                <div class="well mt-1.5 h-2 w-full rounded-full bg-muted"><div class="fill-gloss h-2 rounded-full" style="width:86%; background-color:hsl(var(--warning)); background-image:linear-gradient(to bottom, rgba(255,255,255,0.25), rgba(255,255,255,0.05) 55%, transparent)"></div></div></div>
+                <div class="well mt-1.5 h-2 w-full rounded-full bg-muted"><div class="fill-gloss h-2 rounded-full" style="width:86%; background-color: hsl(var(--warning-fill)); background-image:linear-gradient(to bottom, rgba(255,255,255,0.25), rgba(255,255,255,0.05) 55%, transparent)"></div></div></div>
             </div>
           </div>
           <div class="card-tactile rounded-xl border bg-card p-4">
             <h3 class="text-sm font-semibold">Recent deployments</h3>
             <div class="mt-2 -mx-1">
               <div class="flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-muted/40"><span class="size-1.5 rounded-full" style="background:hsl(var(--success)); box-shadow:0 0 5px hsl(var(--success)/0.6)"></span><span class="text-xs font-medium">gigadrive-api</span><span class="text-[11px] text-muted-foreground ml-auto">2 m</span></div>
-              <div class="flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-muted/40"><span class="size-1.5 rounded-full animate-pulse" style="background:hsl(var(--warning))"></span><span class="text-xs font-medium">mcskinhistory</span><span class="text-[11px] text-muted-foreground ml-auto">8 m</span></div>
+              <div class="flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-muted/40"><span class="size-1.5 rounded-full animate-pulse" style="background: hsl(var(--warning-fill))"></span><span class="text-xs font-medium">mcskinhistory</span><span class="text-[11px] text-muted-foreground ml-auto">8 m</span></div>
               <div class="flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-muted/40"><span class="size-1.5 rounded-full" style="background:hsl(var(--danger))"></span><span class="text-xs font-medium">console</span><span class="text-[11px] text-muted-foreground ml-auto">26 m</span></div>
               <div class="flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-muted/40"><span class="size-1.5 rounded-full" style="background:hsl(var(--success))"></span><span class="text-xs font-medium">idp</span><span class="text-[11px] text-muted-foreground ml-auto">3 h</span></div>
             </div>
@@ -390,7 +390,7 @@ pages['b-signin'] = f'''{HEAD}
       <div class="mt-6 space-y-4">
         <div>
           <label class="block text-sm font-medium mb-1.5">Email</label>
-          <input type="email" value="mehdi.baaboura@gigadrive.de" class="well flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground" />
+          <input type="email" value="you@example.com" class="well flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground" />
         </div>
         <div>
           <div class="flex items-center justify-between mb-1.5"><label class="text-sm font-medium">Password</label><a class="text-xs text-primary hover:underline">Forgot password?</a></div>

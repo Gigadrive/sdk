@@ -102,13 +102,13 @@ const AuditPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
       <div className="max-w-sm space-y-4">
         <Input label="Project name" defaultValue="gigadrive-api" helpText="Used in your deployment URLs." />
         <Input label="Email" defaultValue="not-an-email" error="Please enter a valid email address." />
-        <Field label="Field composite" hint="Field + plain Input.">
-          <Input placeholder="Composed input" />
+        <Field label="Field composite" htmlFor="audit-composed" hint="Field + plain Input.">
+          <Input id="audit-composed" placeholder="Composed input" />
         </Field>
         <Textarea label="Description" placeholder="Something about this project…" />
         <div className="flex items-center gap-3">
-          <Switch defaultChecked />
-          <Switch />
+          <Switch aria-label="Example switch, on" defaultChecked />
+          <Switch aria-label="Example switch, off" />
           <span className="text-sm text-muted-foreground">Switch on / off</span>
         </div>
       </div>
@@ -166,11 +166,19 @@ const AuditPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
           </>
         }
       >
-        <SettingsCardRow label="Application name" description="The display name used across the console.">
-          <Input defaultValue="gigadrive-api" className="h-8" />
+        <SettingsCardRow
+          label="Application name"
+          htmlFor="audit-app-name"
+          description="The display name used across the console."
+        >
+          <Input id="audit-app-name" defaultValue="gigadrive-api" className="h-8" />
         </SettingsCardRow>
-        <SettingsCardRow label="Always-warm residency" description="Keep at least one instance warm.">
-          <Switch defaultChecked />
+        <SettingsCardRow
+          label="Always-warm residency"
+          htmlFor="audit-warm"
+          description="Keep at least one instance warm."
+        >
+          <Switch id="audit-warm" defaultChecked />
         </SettingsCardRow>
       </SettingsCard>
     </Section>

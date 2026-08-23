@@ -175,10 +175,10 @@ export const harmonyPreset = {
   plugins: [forms, typography, animate, scrollFadePlugin],
   safelist: [
     {
-      pattern: /^to-(\w+-600|-\w+-700|-\w+-100)$/,
+      pattern: /^to-(\w+-600|\w+-700|\w+-100)$/,
     },
     {
-      pattern: /^from-(\w+-300|-\w+-700)$/,
+      pattern: /^from-(\w+-300|\w+-700)$/,
     },
   ],
 } satisfies Config;

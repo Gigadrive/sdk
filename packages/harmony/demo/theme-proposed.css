@@ -1,5 +1,5 @@
 /*
- * Harmony 2.0 — proposed token set ("Precision" direction)
+ * Harmony 5.0 — proposed token set ("Precision" direction)
  * Drop-in override of theme.css custom properties.
  *
  * Key ideas:
@@ -33,7 +33,8 @@
   --ring: 142.13 76.22% 36.27%;
   --success: 142 72% 29%;
   --success-soft: 141 60% 95%;
-  --warning: 36 90% 38%;
+  --warning: 36 90% 32%;
+  --warning-fill: 42 96% 50%;
   --warning-soft: 44 92% 94%;
   --danger: 0 72% 45%;
   --danger-soft: 0 80% 96.5%;
@@ -76,6 +77,7 @@
   --success: 142 65% 46%;
   --success-soft: 144 45% 10%;
   --warning: 43 92% 56%;
+  --warning-fill: 43 92% 56%;
   --warning-soft: 40 50% 10%;
   --danger: 0 78% 62%;
   --danger-soft: 0 45% 11%;

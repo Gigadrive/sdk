@@ -1,4 +1,4 @@
-# Harmony 2.0 — design exploration
+# Harmony 5.0 — design exploration
 
 Two competing proposals for a global design refresh of @gigadrive/harmony and the
 Gigadrive apps, prototyped as static HTML compiled against harmony's real Tailwind

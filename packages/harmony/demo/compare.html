@@ -76,6 +76,10 @@
       };
       window.addEventListener('DOMContentLoaded', () => {
         const cfg = SETS[set];
+        if (!cfg) {
+          document.getElementById('wrap').textContent = `Unknown set "${set}" — valid: ${Object.keys(SETS).join(', ')}`;
+          return;
+        }
         const wrap = document.getElementById('wrap');
         wrap.className = cfg.layout === 'row' ? 'row' : 'stack';
         for (const [label, src] of cfg.items) {

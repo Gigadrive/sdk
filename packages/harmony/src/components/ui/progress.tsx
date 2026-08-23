@@ -33,15 +33,18 @@ const TONE_CLASSES = {
  */
 const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
   ({ className, value = 0, max = 100, tone = 'primary', size = 'default', label, ...props }, ref) => {
-    const clamped = Math.min(Math.max(value, 0), max);
-    const percentage = max > 0 ? (clamped / max) * 100 : 0;
+    // Guard against NaN/Infinity and non-positive max so aria-valuenow stays valid.
+    const safeMax = Number.isFinite(max) && max > 0 ? max : 100;
+    const safeValue = Number.isFinite(value) ? value : 0;
+    const clamped = Math.min(Math.max(safeValue, 0), safeMax);
+    const percentage = (clamped / safeMax) * 100;
 
     return (
       <div
         ref={ref}
         role="progressbar"
         aria-valuemin={0}
-        aria-valuemax={max}
+        aria-valuemax={safeMax}
         aria-valuenow={clamped}
         aria-label={label}
         className={cn('well w-full overflow-hidden rounded-full bg-muted', SIZE_CLASSES[size], className)}

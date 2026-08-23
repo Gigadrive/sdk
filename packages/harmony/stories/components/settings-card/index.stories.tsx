@@ -41,14 +41,19 @@ export const WithFieldRows: Story = {
         </>
       }
     >
-      <SettingsCardRow label="Application name" description="The display name used across the console.">
-        <Input defaultValue="gigadrive-api" className="h-8" />
+      <SettingsCardRow
+        label="Application name"
+        htmlFor="app-name"
+        description="The display name used across the console."
+      >
+        <Input id="app-name" defaultValue="gigadrive-api" className="h-8" />
       </SettingsCardRow>
       <SettingsCardRow
         label="Always-warm residency"
         description="Keep at least one instance warm to avoid cold starts."
+        htmlFor="always-warm"
       >
-        <Switch defaultChecked />
+        <Switch id="always-warm" defaultChecked />
       </SettingsCardRow>
     </SettingsCard>
   ),
@@ -69,8 +74,8 @@ export const Saved: Story = {
         </>
       }
     >
-      <SettingsCardRow label="Root directory" description="Leave empty to use the repository root.">
-        <Input defaultValue="apps/api" className="h-8 font-mono text-xs" />
+      <SettingsCardRow label="Root directory" htmlFor="root-dir" description="Leave empty to use the repository root.">
+        <Input id="root-dir" defaultValue="apps/api" className="h-8 font-mono text-xs" />
       </SettingsCardRow>
     </SettingsCard>
   ),

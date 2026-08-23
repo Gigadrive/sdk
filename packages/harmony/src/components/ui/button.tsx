@@ -53,14 +53,29 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, wide, asChild = false, loading = false, disabled, children, ...props }, ref) => {
+  (
+    { className, variant, size, wide, asChild = false, loading = false, disabled, children, onClick, ...props },
+    ref
+  ) => {
     const Comp = asChild ? Slot : 'button';
+    // pointer-events-none only blocks pointer input; a focused child (asChild link)
+    // can still activate via keyboard, so clicks are cancelled while loading.
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (loading) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      onClick?.(event);
+    };
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, wide, className }), loading && 'pointer-events-none opacity-50')}
         ref={ref}
         disabled={asChild ? disabled : disabled || loading || undefined}
         aria-disabled={loading || undefined}
+        aria-busy={loading || undefined}
+        onClick={handleClick}
         {...props}
       >
         {loading && !asChild ? (

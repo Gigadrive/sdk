@@ -54,6 +54,7 @@ export const ToastContext = createContext<{
   removeToast: () => {},
 });
 
+// eslint-disable-next-line react/prop-types -- props come from Sonner's ToasterProps, not a local shape
 const Toaster: React.FC<ToasterProps> = ({ style, ...props }) => {
   const { theme = 'system' } = useTheme();
 
