@@ -31,8 +31,8 @@ toward it.
   (the floating label was broken — missing `peer` classes, hardcoded
   `bg-white dark:bg-stone-950`). The `label`/`error`/`helpText` props are unchanged;
   only the rendering differs. Error styles now use the `danger` tokens.
-- `Card`: `rounded-xl` + tactile elevation; `CardTitle` is `text-base font-semibold`
-  (was `text-2xl`).
+- `Card`: `rounded-xl` + tactile elevation; `CardTitle` is `text-base` normal
+  weight (was `text-2xl font-medium`).
 - `Tabs`: segmented style — recessed track, raised active thumb.
 - `Button`: deeper dark-mode shadow, `outline` sits on `bg-card`, `ghost` is neutral
   (no longer primary-colored).

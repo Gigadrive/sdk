@@ -224,7 +224,7 @@ const AuditPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
           <ActionPanelBody>Permanently remove this application and all deployments.</ActionPanelBody>
         </ActionPanel>
         <Avatar>
-          <AvatarFallback>Mehdi Baaboura</AvatarFallback>
+          <AvatarFallback>Jane Doe</AvatarFallback>
         </Avatar>
       </div>
     </Section>
