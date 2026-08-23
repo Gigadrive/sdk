@@ -131,6 +131,13 @@ All four must pass.
   ```
 - Packages output dual CJS (`.js`) + ESM (`.mjs`) via tsup with conditional exports.
 
+### Personal Data
+
+Never use real email addresses or real names anywhere in this repository's code —
+including tests, fixtures, stories, demo pages, and generated assets (screenshots
+count: regenerate them if their source contained real data). Use neutral
+placeholders instead, e.g. `you@example.com`, `jane@example.com`, "Jane Doe".
+
 ## Package Build Configuration
 
 Most packages use a shared tsup config from `@local/tsup`:
