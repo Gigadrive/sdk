@@ -85,7 +85,7 @@ def sidebar(items, layer_header=None, footer_meter=True):
       {meter}
       <div class="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
         <div class="size-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-700"></div>
-        <div class="min-w-0 flex-1"><div class="text-sm font-medium truncate">Mehdi Baaboura</div><div class="text-xs text-muted-foreground truncate">Pro plan</div></div>
+        <div class="min-w-0 flex-1"><div class="text-sm font-medium truncate">Jane Doe</div><div class="text-xs text-muted-foreground truncate">Pro plan</div></div>
       </div>
     </aside>'''
 
