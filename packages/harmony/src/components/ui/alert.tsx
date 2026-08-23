@@ -8,15 +8,12 @@ const alertVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-background text-foreground',
-        destructive: 'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
-        success:
-          'bg-green-50/50 border-green-500/20 text-green-800 dark:text-green-300 dark:bg-green-950/50 dark:border-green-500/20 [&>svg]:text-green-600 dark:[&>svg]:text-green-400',
-        warning:
-          'bg-yellow-50/50 border-yellow-500/20 text-yellow-800 dark:text-yellow-300 dark:bg-yellow-950/50 dark:border-yellow-500/20 [&>svg]:text-yellow-600 dark:[&>svg]:text-yellow-400',
-        error:
-          'bg-red-50/50 border-red-500/20 text-red-800 dark:text-red-300 dark:bg-red-950/50 dark:border-red-500/20 [&>svg]:text-red-600 dark:[&>svg]:text-red-400',
-        info: 'bg-blue-50/50 border-blue-500/20 text-blue-800 dark:text-blue-300 dark:bg-blue-950/50 dark:border-blue-500/20 [&>svg]:text-blue-600 dark:[&>svg]:text-blue-400',
+        default: 'bg-card text-foreground',
+        destructive: 'border-danger/50 text-danger [&>svg]:text-danger',
+        success: 'bg-success-soft border-success/25 text-foreground [&>svg]:text-success',
+        warning: 'bg-warning-soft border-warning/25 text-foreground [&>svg]:text-warning',
+        error: 'bg-danger-soft border-danger/25 text-foreground [&>svg]:text-danger',
+        info: 'bg-info-soft border-info/25 text-foreground [&>svg]:text-info',
       },
     },
     defaultVariants: {

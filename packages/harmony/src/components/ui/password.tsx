@@ -35,12 +35,12 @@ const Password = React.forwardRef<HTMLInputElement, PasswordProps>(
 
     const PasswordStrength = ({ score }: { score: ZXCVBNScore | -1 }) => {
       const colors: Record<ZXCVBNScore | -1, string> = {
-        0: 'bg-red-500',
-        1: 'bg-yellow-500',
-        2: 'bg-lime-500',
-        3: 'bg-green-500',
-        4: 'bg-green-500',
-        '-1': 'bg-gray-200 dark:bg-gray-700',
+        0: 'bg-danger',
+        1: 'bg-warning-fill',
+        2: 'bg-warning-fill',
+        3: 'bg-success',
+        4: 'bg-success',
+        '-1': 'bg-muted',
       };
 
       const scoreText: Record<ZXCVBNScore | -1, string> = {
@@ -66,7 +66,7 @@ const Password = React.forwardRef<HTMLInputElement, PasswordProps>(
               />
             ))}
           </div>
-          <div className="flex-1 text-right text-sm text-gray-500 dark:text-gray-400">{scoreText[score]}</div>
+          <div className="flex-1 text-right text-sm text-muted-foreground">{scoreText[score]}</div>
         </div>
       );
     };
@@ -80,7 +80,7 @@ const Password = React.forwardRef<HTMLInputElement, PasswordProps>(
           <button
             type="button"
             onClick={togglePasswordVisibility}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus:outline-none"
+            className="text-muted-foreground hover:text-foreground focus:outline-none"
             tabIndex={-1}
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

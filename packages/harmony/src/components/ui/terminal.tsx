@@ -76,7 +76,9 @@ const Terminal = React.forwardRef<HTMLDivElement, TerminalProps>(
 
     return (
       <div className={cn('space-y-4', className)} ref={ref} {...props}>
-        <div className="w-full min-w-[640px] max-w-3xl mx-auto rounded-lg overflow-hidden shadow-2xl dark:shadow-lg dark:shadow-gray-900/50">
+        {/* An inset .well would be hidden behind the opaque header/body children, so the
+            frame keeps a drop shadow; the body's shadow-inner supplies the recessed feel. */}
+        <div className="w-full min-w-[640px] max-w-3xl mx-auto rounded-xl border border-border overflow-hidden shadow-lg dark:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.6)]">
           <TerminalHeader theme={currentTheme} title={title} />
           <TerminalContent theme={currentTheme}>
             <TerminalPrompt theme={currentTheme} />
@@ -101,13 +103,14 @@ const TerminalHeader = React.forwardRef<HTMLDivElement, { theme: TerminalTheme; 
   ({ theme, title }, ref) => {
     const headers = {
       macos: (
-        <div className="bg-gray-200 dark:bg-gray-800 px-4 py-2 flex items-center">
+        // Traffic-light dots deliberately keep their macOS colors (OS imitation, not theme).
+        <div className="bg-muted px-4 py-2 flex items-center">
           <div className="flex space-x-2">
             <Circle className="h-3 w-3 text-red-500 fill-red-500" />
             <Circle className="h-3 w-3 text-yellow-500 fill-yellow-500" />
             <Circle className="h-3 w-3 text-green-500 fill-green-500" />
           </div>
-          <div className="mx-auto text-sm text-gray-600 dark:text-gray-300">{title}</div>
+          <div className="mx-auto text-sm text-muted-foreground">{title}</div>
         </div>
       ),
       windows: (
@@ -140,6 +143,8 @@ TerminalHeader.displayName = 'TerminalHeader';
 
 const TerminalContent = React.forwardRef<HTMLDivElement, React.PropsWithChildren<{ theme: TerminalTheme }>>(
   ({ theme, children }, ref) => {
+    // Terminal bodies stay near-black in both modes on purpose — a console surface,
+    // not a themed one. ANSI text colors below are likewise terminal semantics.
     const bgColor = theme === 'windows' ? 'bg-black' : theme === 'linux' ? 'bg-zinc-900 dark:bg-zinc-950' : 'bg-black';
 
     return (

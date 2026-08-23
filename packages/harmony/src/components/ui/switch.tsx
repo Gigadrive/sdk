@@ -9,7 +9,7 @@ const Switch = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SwitchPrimitives.Root
     className={cn(
-      'peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input data-[state=checked]:bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)] data-[state=checked]:shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2)]',
+      'peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input data-[state=unchecked]:shadow-[inset_0_1px_2px_rgba(20,30,25,0.15)] dark:data-[state=unchecked]:shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.45)] data-[state=checked]:bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)] data-[state=checked]:shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2)]',
       className
     )}
     {...props}
@@ -17,7 +17,7 @@ const Switch = React.forwardRef<
   >
     <SwitchPrimitives.Thumb
       className={cn(
-        'pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0'
+        'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-[inset_0_-1px_1px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.3)] ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0'
       )}
     />
   </SwitchPrimitives.Root>

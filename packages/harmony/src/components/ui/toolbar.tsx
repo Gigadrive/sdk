@@ -67,8 +67,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
     <div
       className={cn(
         'fixed z-50',
-        'border border-border shadow-lg',
-        'bg-sidebar backdrop-blur',
+        'card-tactile border border-border',
+        'bg-card/95 backdrop-blur',
         'transition-all',
         POSITION_CLASSES[position],
         direction === 'vertical' ? 'flex flex-col' : 'flex flex-row',
