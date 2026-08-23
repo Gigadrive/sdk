@@ -101,10 +101,18 @@ const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     // another Button and slotting via asChild crashes — Radix Slot requires a single
     // element child — so render the trigger directly, sized like a toolbar button.
     if (icon && React.isValidElement(icon) && isSidebarTriggerIcon) {
-      const iconProps = (icon as React.ReactElement<{ className?: string }>).props;
+      const iconProps = (
+        icon as React.ReactElement<{ className?: string; onClick?: React.MouseEventHandler<HTMLButtonElement> }>
+      ).props;
+      // cloneElement replaces props wholesale, so compose rather than overwrite any
+      // onClick the caller set on the trigger element itself.
+      const composedOnClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+        iconProps.onClick?.(event);
+        onClick?.(event);
+      };
       return React.cloneElement(icon as React.ReactElement<React.ComponentProps<typeof Button>>, {
         ref,
-        onClick,
+        onClick: composedOnClick,
         ...props,
         className: cn('h-10 w-10 [&_svg]:size-6', iconProps.className, className),
       });
