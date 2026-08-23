@@ -29,12 +29,17 @@ const TYPOGRAPHY_STYLES = {
   prose: {
     base: 'prose prose-slate dark:prose-invert max-w-none',
     headings: {
-      h1: 'prose-headings:h1:text-3xl prose-headings:h1:md:text-4xl prose-headings:h1:lg:text-5xl',
-      h2: 'prose-headings:h2:text-2xl prose-headings:h2:md:text-3xl prose-headings:h2:lg:text-4xl',
-      h3: 'prose-headings:h3:text-xl prose-headings:h3:md:text-2xl prose-headings:h3:lg:text-3xl',
-      h4: 'prose-headings:h4:text-lg prose-headings:h4:md:text-xl prose-headings:h4:lg:text-2xl',
-      h5: 'prose-headings:h5:text-base prose-headings:h5:md:text-lg prose-headings:h5:lg:text-xl',
-      h6: 'prose-headings:h6:text-sm prose-headings:h6:md:text-base prose-headings:h6:lg:text-lg',
+      // `prose-headings:h1:` is not a real variant (it silently emits nothing);
+      // the typography plugin exposes per-level `prose-h1:`…`prose-h6:` variants.
+      // The plugin's defaults set 600–800 weights, so weight/tracking are reset
+      // here to match the standalone Headline styles.
+      base: 'prose-headings:font-normal prose-headings:tracking-tight',
+      h1: 'prose-h1:text-3xl prose-h1:md:text-4xl prose-h1:lg:text-5xl',
+      h2: 'prose-h2:text-2xl prose-h2:md:text-3xl prose-h2:lg:text-4xl',
+      h3: 'prose-h3:text-xl prose-h3:md:text-2xl prose-h3:lg:text-3xl',
+      h4: 'prose-h4:text-lg prose-h4:md:text-xl prose-h4:lg:text-2xl',
+      h5: 'prose-h5:text-base prose-h5:md:text-lg prose-h5:lg:text-xl',
+      h6: 'prose-h6:text-sm prose-h6:md:text-base prose-h6:lg:text-lg',
     },
     paragraph: {
       base: 'prose-p:text-base prose-p:md:text-lg prose-p:leading-relaxed',
@@ -150,6 +155,7 @@ export const Prose = forwardRef<HTMLDivElement, ProseProps>(
         ref={ref}
         className={cn(
           TYPOGRAPHY_STYLES.prose.base,
+          TYPOGRAPHY_STYLES.prose.headings.base,
           TYPOGRAPHY_STYLES.prose.headings.h1,
           TYPOGRAPHY_STYLES.prose.headings.h2,
           TYPOGRAPHY_STYLES.prose.headings.h3,
