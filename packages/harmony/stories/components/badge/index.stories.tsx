@@ -222,7 +222,7 @@ const ShowcasePanel = ({ theme }: { theme: 'light' | 'dark' }) => (
     </div>
     <div className="mb-6 flex items-center gap-2 border-t border-border pt-5">
       <div className="size-7 rounded-full bg-muted" />
-      <span className="text-lg font-semibold">Northwind Labs</span>
+      <span className="text-lg font-medium">Northwind Labs</span>
       <Badge variant="soft">Pro</Badge>
     </div>
     <div className="divide-y divide-border border-t border-border">

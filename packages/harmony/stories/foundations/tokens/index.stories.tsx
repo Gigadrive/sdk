@@ -40,10 +40,10 @@ const Swatch = ({ token, soft = false }: { token: string; soft?: boolean }) => (
 
 const TokenPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
   <div className={`${theme} bg-background p-8 text-foreground`}>
-    <p className="mb-6 text-xs font-semibold uppercase tracking-widest text-muted-foreground">{theme}</p>
+    <p className="mb-6 text-xs font-medium uppercase tracking-widest text-muted-foreground">{theme}</p>
     <div className="space-y-8">
       <div>
-        <h3 className="mb-3 text-sm font-semibold">Surfaces</h3>
+        <h3 className="mb-3 text-sm font-medium">Surfaces</h3>
         <div className="grid grid-cols-2 gap-3">
           {SURFACE_TOKENS.map((t) => (
             <Swatch key={t} token={t} />
@@ -51,7 +51,7 @@ const TokenPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
         </div>
       </div>
       <div>
-        <h3 className="mb-3 text-sm font-semibold">Content &amp; chrome</h3>
+        <h3 className="mb-3 text-sm font-medium">Content &amp; chrome</h3>
         <div className="grid grid-cols-2 gap-3">
           {CONTENT_TOKENS.map((t) => (
             <Swatch key={t} token={t} />
@@ -59,7 +59,7 @@ const TokenPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
         </div>
       </div>
       <div>
-        <h3 className="mb-3 text-sm font-semibold">Semantic status (+ soft)</h3>
+        <h3 className="mb-3 text-sm font-medium">Semantic status (+ soft)</h3>
         <div className="grid grid-cols-2 gap-3">
           {SEMANTIC_TOKENS.map((t) => (
             <React.Fragment key={t}>
@@ -70,7 +70,7 @@ const TokenPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
         </div>
       </div>
       <div>
-        <h3 className="mb-3 text-sm font-semibold">Charts</h3>
+        <h3 className="mb-3 text-sm font-medium">Charts</h3>
         <div className="grid grid-cols-2 gap-3">
           {CHART_TOKENS.map((t) => (
             <Swatch key={t} token={t} />

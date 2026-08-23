@@ -43,7 +43,7 @@ const AvatarFallback = React.forwardRef<
     <AvatarPrimitive.Fallback
       ref={ref}
       className={cn(
-        'flex h-full w-full items-center justify-center rounded-[calc(var(--radius)*var(--squircle-radius-multiplier))] [corner-shape:squircle] bg-muted text-[length:35cqw] leading-none -tracking-[0.01em] font-semibold [text-box-trim:both] [text-box-edge:cap_alphabetic] raised',
+        'flex h-full w-full items-center justify-center rounded-[calc(var(--radius)*var(--squircle-radius-multiplier))] [corner-shape:squircle] bg-muted text-[length:35cqw] leading-none -tracking-[0.01em] font-medium [text-box-trim:both] [text-box-edge:cap_alphabetic] raised',
         className
       )}
       {...props}

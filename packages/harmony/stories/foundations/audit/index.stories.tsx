@@ -38,7 +38,7 @@ const Section = ({ label, children }: { label: string; children: React.ReactNode
 
 const AuditPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
   <div className={`${theme} space-y-8 bg-background p-8 text-foreground`}>
-    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Tactile · {theme}</p>
+    <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Tactile · {theme}</p>
 
     <Section label="Buttons">
       <div className="flex flex-wrap items-center gap-3">
@@ -144,7 +144,7 @@ const AuditPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
           <CardDescription>Compute hours across all projects.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-semibold tabular-nums tracking-tight">412.6 h</div>
+          <div className="text-3xl font-medium tabular-nums tracking-tight">412.6 h</div>
           <Progress className="mt-3" value={41} />
         </CardContent>
       </Card>

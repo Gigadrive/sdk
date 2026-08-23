@@ -119,7 +119,7 @@ export const WithContent: Story = {
         <div className="space-y-4">
           <div className="space-y-2">
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Balance</p>
-            <p className="text-2xl font-semibold">$2,500.00</p>
+            <p className="text-2xl font-medium">$2,500.00</p>
           </div>
           <div className="space-y-2">
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Recent Activity</p>

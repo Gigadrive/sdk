@@ -70,7 +70,10 @@ const Toaster: React.FC<ToasterProps> = ({ style, ...props }) => {
       toastOptions={{
         classNames: {
           toast: TOAST_BASE,
-          title: 'text-sm font-medium',
+          // No weight here: sonner wraps toast.custom content in its title slot, so this
+          // class leaks onto the whole custom toast. Native styled toasts get their
+          // title weight (500) from sonner's own stylesheet.
+          title: 'text-sm',
           description: 'text-sm text-muted-foreground',
           actionButton: 'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
           cancelButton: 'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
@@ -97,7 +100,9 @@ const TOAST_TYPE_ICONS: Record<NonNullable<Toast['type']>, typeof CheckCircle> =
 
 // Helper function to create toast content
 const createToastContent = (toastData: Omit<Toast, 'id'>) => {
-  const toastClass = `${TOAST_BASE} p-4`;
+  // The card chrome (raised, border, bg-card) is applied by the Toaster's
+  // classNames.toast to sonner's <li>; the custom element only lays out content.
+  const toastClass = 'w-full p-4';
 
   if (toastData.children) {
     return {

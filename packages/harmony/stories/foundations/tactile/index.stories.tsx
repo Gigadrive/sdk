@@ -31,17 +31,17 @@ type Story = StoryObj<typeof meta>;
 
 const PrimitivesPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
   <div className={`${theme} bg-background p-8 text-foreground`}>
-    <p className="mb-6 text-xs font-semibold uppercase tracking-widest text-muted-foreground">{theme}</p>
+    <p className="mb-6 text-xs font-medium uppercase tracking-widest text-muted-foreground">{theme}</p>
     <div className="space-y-6">
       <div className="card-tactile rounded-xl border bg-card p-5">
-        <div className="text-sm font-semibold">.card-tactile</div>
+        <div className="text-sm font-medium">.card-tactile</div>
         <div className="mt-0.5 text-xs text-muted-foreground">
           Raised surface — sheen, inset top highlight, layered soft shadow.
         </div>
       </div>
 
       <div className="well rounded-lg border border-input bg-background p-4">
-        <div className="text-sm font-semibold">.well</div>
+        <div className="text-sm font-medium">.well</div>
         <div className="mt-0.5 text-xs text-muted-foreground">
           Recessed well — inner shadow, sits below the surface.
         </div>
@@ -51,7 +51,7 @@ const PrimitivesPanel = ({ theme }: { theme: 'light' | 'dark' }) => (
         <span className="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium">
           .raised
         </span>
-        <span className="raised grid size-9 place-items-center rounded-lg border border-border bg-card text-xs font-semibold">
+        <span className="raised grid size-9 place-items-center rounded-lg border border-border bg-card text-xs font-medium">
           Aa
         </span>
       </div>

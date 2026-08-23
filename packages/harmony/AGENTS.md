@@ -375,6 +375,11 @@ deeper in dark) — that recipe predates the primitives and is the brand's signa
 
 Rules:
 
+- **Weight scale — exactly two UI weights.** Body text and controls are normal
+  (400); headings, titles, labels and small emphasis are `font-medium` (500).
+  Do not use `font-semibold` or `font-bold` in components: Resist Sans has no
+  SemiBold cut, so 600 used to resolve up to Bold (font.css now aliases 600 to
+  the Medium files as a safety net, making `font-semibold` render as Medium).
 - Component colors come from tokens (`bg-card`, `text-muted-foreground`,
   `text-success`, `bg-danger-soft`, …). The semantic status tokens
   (`success/warning/danger/info` + `-soft`) live in `theme.css` and are wired

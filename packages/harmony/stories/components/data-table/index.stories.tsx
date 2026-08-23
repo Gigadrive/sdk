@@ -127,7 +127,7 @@ export const Default: Story = {
       <div className="container mx-auto py-12 px-4">
         <div className="max-w-6xl mx-auto space-y-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Basic Example</h1>
+            <h1 className="text-3xl font-medium tracking-tight">Basic Example</h1>
             <p className="text-muted-foreground mt-2">Simple data table with server-side pagination and sorting</p>
           </div>
 

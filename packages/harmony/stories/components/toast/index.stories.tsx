@@ -236,7 +236,7 @@ const CustomToastDemo = () => {
     addToast({
       children: (
         <div className="p-2">
-          <h3 className="font-bold">Custom Toast</h3>
+          <h3 className="font-medium">Custom Toast</h3>
           <p className="text-sm">This is a toast with custom content</p>
           <div className="mt-2 flex justify-end">
             <Button size="sm" variant="outline">

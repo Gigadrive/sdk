@@ -28,7 +28,7 @@ ActionPanel.displayName = 'ActionPanel';
 
 const ActionPanelTitle = React.forwardRef<HTMLHeadingElement, ActionPanelTitleProps>(
   ({ className, children, ...props }, ref) => (
-    <h3 ref={ref} className={cn('text-base font-semibold leading-6 text-foreground', className)} {...props}>
+    <h3 ref={ref} className={cn('text-base font-medium leading-6 text-foreground', className)} {...props}>
       {children}
     </h3>
   )

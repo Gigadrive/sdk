@@ -237,7 +237,7 @@ export const WithCustomStyles: Story = {
           <ChevronRight className="h-4 w-4" />
         </BreadcrumbSeparator>
         <BreadcrumbItem>
-          <BreadcrumbPage className="font-bold">Breadcrumb</BreadcrumbPage>
+          <BreadcrumbPage className="font-medium">Breadcrumb</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>
