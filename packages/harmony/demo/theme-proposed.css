@@ -1,0 +1,135 @@
+/*
+ * Harmony 2.0 — proposed token set ("Precision" direction)
+ * Drop-in override of theme.css custom properties.
+ *
+ * Key ideas:
+ *  1. Layered surfaces: background < card < popover (both modes), hairline borders.
+ *  2. Refined brand green (deeper in light, luminous w/ dark text in dark mode).
+ *  3. Green-tinted neutrals instead of stock zinc (very low sat, reads neutral but warm to brand).
+ *  4. Real semantic tokens: success / warning / danger / info.
+ *  5. Slightly tighter radius for controls, larger for containers.
+ */
+
+.p2 {
+  --background: 160 10% 98.4%;
+  --foreground: 168 18% 8%;
+  --card: 0 0% 100%;
+  --card-foreground: 168 18% 8%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 168 18% 8%;
+  /* Brand green (unchanged) — only the pink-tinted foreground becomes pure white */
+  --primary: 142.13 76.22% 36.27%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 160 8% 94%;
+  --secondary-foreground: 168 12% 16%;
+  --muted: 160 8% 94.5%;
+  --muted-foreground: 163 6% 43%;
+  --accent: 160 8% 94.5%;
+  --accent-foreground: 168 12% 16%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 160 8% 89.5%;
+  --input: 160 7% 84%;
+  --ring: 142.13 76.22% 36.27%;
+  --success: 142 72% 29%;
+  --success-soft: 141 60% 95%;
+  --warning: 36 90% 38%;
+  --warning-soft: 44 92% 94%;
+  --danger: 0 72% 45%;
+  --danger-soft: 0 80% 96.5%;
+  --info: 205 85% 38%;
+  --info-soft: 206 90% 95.5%;
+  --sidebar: 160 9% 96.5%;
+  --sidebar-foreground: 168 12% 16%;
+  --sidebar-border: 160 8% 90%;
+  --sidebar-ring: 142.13 76.22% 36.27%;
+  --chart-1: 142 72% 36%;
+  --chart-2: 173 55% 36%;
+  --chart-3: 205 70% 45%;
+  --chart-4: 43 80% 48%;
+  --chart-5: 271 50% 55%;
+  --radius: 0.5rem;
+}
+
+.dark .p2,
+.dark.p2 {
+  --background: 168 10% 4.7%;
+  --foreground: 150 8% 96%;
+  --card: 168 8% 7%;
+  --card-foreground: 150 8% 96%;
+  --popover: 168 8% 8.8%;
+  --popover-foreground: 150 8% 96%;
+  /* Brand green (unchanged) */
+  --primary: 142.13 76.22% 36.27%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 166 7% 12.5%;
+  --secondary-foreground: 150 8% 92%;
+  --muted: 166 7% 11%;
+  --muted-foreground: 158 6% 60%;
+  --accent: 166 7% 13%;
+  --accent-foreground: 150 8% 96%;
+  --destructive: 0 68% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 166 8% 13.5%;
+  --input: 166 7% 18%;
+  --ring: 142.13 76.22% 36.27%;
+  --success: 142 65% 46%;
+  --success-soft: 144 45% 10%;
+  --warning: 43 92% 56%;
+  --warning-soft: 40 50% 10%;
+  --danger: 0 78% 62%;
+  --danger-soft: 0 45% 11%;
+  --info: 203 90% 60%;
+  --info-soft: 207 55% 11%;
+  --sidebar: 166 8% 8%;
+  --sidebar-foreground: 150 8% 92%;
+  --sidebar-border: 166 8% 13.5%;
+  --sidebar-ring: 142.13 76.22% 36.27%;
+  --chart-1: 142 65% 46%;
+  --chart-2: 173 55% 42%;
+  --chart-3: 203 75% 55%;
+  --chart-4: 43 85% 58%;
+  --chart-5: 271 55% 62%;
+}
+
+/* Utility shims for demo pages (would become real tailwind tokens) */
+.p2 .text-success {
+  color: hsl(var(--success));
+}
+.p2 .text-warning {
+  color: hsl(var(--warning));
+}
+.p2 .text-danger {
+  color: hsl(var(--danger));
+}
+.p2 .text-info {
+  color: hsl(var(--info));
+}
+.p2 .bg-success-soft {
+  background-color: hsl(var(--success-soft));
+}
+.p2 .bg-warning-soft {
+  background-color: hsl(var(--warning-soft));
+}
+.p2 .bg-danger-soft {
+  background-color: hsl(var(--danger-soft));
+}
+.p2 .bg-info-soft {
+  background-color: hsl(var(--info-soft));
+}
+.p2 .font-display {
+  font-family: 'Resist Sans Display', 'Resist Sans Text', system-ui, sans-serif;
+}
+
+/* Card top-highlight in dark mode: hairline lighter than border on the top edge */
+.dark .p2 .card-elevated,
+.dark.p2 .card-elevated {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px 0 rgba(0, 0, 0, 0.4);
+}
+.p2 .card-elevated {
+  box-shadow:
+    0 1px 2px 0 rgba(16, 24, 20, 0.04),
+    0 1px 1px 0 rgba(16, 24, 20, 0.03);
+}

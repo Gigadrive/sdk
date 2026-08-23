@@ -1,0 +1,784 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://static-cdn.gigadrivegroup.com/resist-sans/stylesheet.css?v2" />
+    <link rel="stylesheet" href="demo.css" />
+    <link rel="stylesheet" href="theme-b.css" />
+    <style>
+      body {
+        margin: 0;
+      }
+      html.dark,
+      .dark {
+        color-scheme: dark;
+      }
+    </style>
+    <script>
+      if (location.search.includes('dark')) document.documentElement.classList.add('dark');
+    </script>
+  </head>
+  <body class="pb bg-background font-sans text-foreground antialiased">
+    <div class="flex h-screen w-screen flex-col overflow-hidden bg-muted/40">
+      <nav class="flex h-12 shrink-0 items-center gap-2 px-4">
+        <div class="grid size-6 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+          G
+        </div>
+        <div class="flex items-center gap-1 text-sm">
+          <button class="flex items-center gap-1.5 rounded-md px-2 py-1 font-medium hover:bg-muted">
+            Gigadrive GmbH<svg
+              class="size-3 text-muted-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m7 15 5 5 5-5" />
+              <path d="m7 9 5-5 5 5" />
+            </svg></button
+          ><span class="text-muted-foreground/50">/</span
+          ><button class="flex items-center gap-1.5 rounded-md px-2 py-1 font-medium hover:bg-muted">
+            gigadrive-api<svg
+              class="size-3 text-muted-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m7 15 5 5 5-5" />
+              <path d="m7 9 5-5 5 5" />
+            </svg></button
+          ><span class="text-muted-foreground/50">/</span
+          ><button class="flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-muted">
+            <span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span>Production<svg
+              class="size-3 text-muted-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m7 15 5 5 5-5" />
+              <path d="m7 9 5-5 5 5" />
+            </svg>
+          </button>
+        </div>
+        <div class="flex flex-1 items-center justify-end gap-2">
+          <button
+            class="raised inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-input bg-card px-3 text-sm font-medium hover:bg-accent"
+          >
+            Feedback
+          </button>
+          <div class="size-7 rounded-full bg-gradient-to-br from-green-400 to-emerald-700"></div>
+        </div>
+      </nav>
+      <div class="flex min-h-0 flex-1">
+        <aside class="flex w-60 shrink-0 flex-col px-2 pb-2">
+          <nav class="flex-1 space-y-0.5 pt-1">
+            <button
+              class="mb-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <svg
+                class="size-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m15 18-6-6 6-6" /></svg
+              >Gigadrive GmbH
+            </button>
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              ><span class="flex items-center gap-2"
+                ><svg
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" /></svg
+                >Overview</span
+              ></a
+            >
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              ><span class="flex items-center gap-2"
+                ><svg
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+                  <path
+                    d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+                  /></svg
+                >Deployments</span
+              ><span class="ml-auto text-[11px] tabular-nums text-muted-foreground">12</span></a
+            >
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              ><span class="flex items-center gap-2"
+                ><svg
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg
+                >Observability</span
+              ></a
+            >
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              ><span class="flex items-center gap-2"
+                ><svg
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="4 17 10 11 4 5" />
+                  <line x1="12" y1="19" x2="20" y2="19" /></svg
+                >Logs</span
+              ></a
+            >
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              ><span class="flex items-center gap-2"
+                ><svg
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+                  /></svg
+                >Storage</span
+              ></a
+            >
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg bg-primary/10 py-2 pl-3 pr-3 text-sm font-medium text-primary"
+              ><span
+                class="pointer-events-none absolute inset-y-0 left-0 my-auto h-5 w-[3px] rounded-r-full bg-primary"
+              ></span
+              ><span class="flex items-center gap-2"
+                ><svg
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                  /></svg
+                >Settings</span
+              ></a
+            >
+          </nav>
+          <div class="mx-0.5 mb-2 rounded-lg border border-border bg-card/60 p-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-medium">Compute usage</span
+              ><span class="text-[11px] tabular-nums text-muted-foreground">41%</span>
+            </div>
+            <div class="well mt-1.5 h-1.5 w-full rounded-full bg-muted">
+              <div class="fill-gloss h-1.5 rounded-full" style="width: 41%"></div>
+            </div>
+            <div class="mt-1 text-[11px] text-muted-foreground">412.6 of 1,000 h</div>
+          </div>
+          <div class="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
+            <div class="size-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-700"></div>
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-sm font-medium">Mehdi Baaboura</div>
+              <div class="truncate text-xs text-muted-foreground">Pro plan</div>
+            </div>
+          </div>
+        </aside>
+        <main
+          class="my-2 flex min-w-0 flex-1 flex-col overflow-auto rounded-xl border border-border/60 bg-background shadow-[0_1px_3px_0_rgb(0_0_0/0.06),0_0_0_1px_rgb(0_0_0/0.02)]"
+          id="panel"
+        >
+          <div class="max-w-4xl space-y-4 px-4 py-3">
+            <div class="card-tactile overflow-hidden rounded-xl border bg-card">
+              <div class="p-5 pb-3">
+                <h3 class="text-sm font-semibold leading-none tracking-tight">Add environment variable</h3>
+                <div class="mt-1 text-xs text-muted-foreground">
+                  Available to your application at build- and runtime. Values are encrypted at rest.
+                </div>
+              </div>
+              <div class="flex items-end gap-2 px-5 pb-4">
+                <div class="w-56">
+                  <label class="mb-1.5 block text-xs font-medium">Key</label
+                  ><input
+                    placeholder="DATABASE_URL"
+                    class="well flex h-8 w-full rounded-lg border border-input bg-background px-2.5 font-mono"
+                    style="font-size: 12px"
+                  />
+                </div>
+                <div class="flex-1">
+                  <label class="mb-1.5 block text-xs font-medium">Value</label
+                  ><input
+                    placeholder="postgres://…"
+                    class="well flex h-8 w-full rounded-lg border border-input bg-background px-2.5 font-mono"
+                    style="font-size: 12px"
+                  />
+                </div>
+                <button
+                  class="raised inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-card px-3 text-[13px] font-medium hover:bg-accent"
+                >
+                  Production
+                  <svg
+                    class="size-3 text-muted-foreground"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m7 15 5 5 5-5" />
+                    <path d="m7 9 5-5 5 5" />
+                  </svg>
+                </button>
+                <button
+                  class="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)] px-3 text-[13px] font-medium text-primary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_2px_4px_0_rgba(0,0,0,0.25)] hover:bg-primary/90"
+                >
+                  <svg
+                    class="size-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="M12 5v14" /></svg
+                  >Add
+                </button>
+              </div>
+            </div>
+            <div class="card-tactile overflow-hidden rounded-xl border bg-card">
+              <div class="flex items-center justify-between p-5 pb-3">
+                <div>
+                  <h3 class="text-sm font-semibold leading-none tracking-tight">Environment variables</h3>
+                  <div class="mt-1 text-xs text-muted-foreground">8 variables · last change 2 days ago</div>
+                </div>
+                <div class="relative">
+                  <svg
+                    class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" /></svg
+                  ><input
+                    class="well flex h-8 w-52 rounded-lg border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground"
+                    placeholder="Search…"
+                  />
+                </div>
+              </div>
+              <div class="divide-y divide-border/70 border-t">
+                <div class="grid grid-cols-[220px_1fr_auto_90px_auto] items-center gap-4 px-5 py-2.5 hover:bg-muted/40">
+                  <span class="truncate font-mono text-[12px] font-medium">DATABASE_URL</span>
+                  <span class="flex min-w-0 items-center gap-2"
+                    ><span class="font-mono text-[12px] tracking-wider text-muted-foreground">••••••••••••</span
+                    ><button class="text-muted-foreground hover:text-foreground">
+                      <svg
+                        class="size-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg></button
+                  ></span>
+                  <span class="flex gap-1.5"
+                    ><span
+                      class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                      ><span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span
+                      >Production</span
+                    >
+                    <span
+                      class="raised inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                      >Preview</span
+                    ></span
+                  >
+                  <span class="text-right text-[11px] text-muted-foreground">2 d ago</span>
+                  <span class="text-muted-foreground"
+                    ><svg
+                      class="size-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" /></svg
+                  ></span>
+                </div>
+                <div class="grid grid-cols-[220px_1fr_auto_90px_auto] items-center gap-4 px-5 py-2.5 hover:bg-muted/40">
+                  <span class="truncate font-mono text-[12px] font-medium">REDIS_URL</span>
+                  <span class="flex min-w-0 items-center gap-2"
+                    ><span class="font-mono text-[12px] tracking-wider text-muted-foreground">••••••••••••</span
+                    ><button class="text-muted-foreground hover:text-foreground">
+                      <svg
+                        class="size-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg></button
+                  ></span>
+                  <span class="flex gap-1.5"
+                    ><span
+                      class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                      ><span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span
+                      >Production</span
+                    >
+                    <span
+                      class="raised inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                      >Preview</span
+                    ></span
+                  >
+                  <span class="text-right text-[11px] text-muted-foreground">2 d ago</span>
+                  <span class="text-muted-foreground"
+                    ><svg
+                      class="size-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" /></svg
+                  ></span>
+                </div>
+                <div class="grid grid-cols-[220px_1fr_auto_90px_auto] items-center gap-4 px-5 py-2.5 hover:bg-muted/40">
+                  <span class="truncate font-mono text-[12px] font-medium">STRIPE_SECRET_KEY</span>
+                  <span class="flex min-w-0 items-center gap-2"
+                    ><span class="font-mono text-[12px] tracking-wider text-muted-foreground">••••••••••••</span
+                    ><button class="text-muted-foreground hover:text-foreground">
+                      <svg
+                        class="size-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg></button
+                  ></span>
+                  <span class="flex gap-1.5"
+                    ><span
+                      class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                      ><span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span
+                      >Production</span
+                    ></span
+                  >
+                  <span class="text-right text-[11px] text-muted-foreground">9 d ago</span>
+                  <span class="text-muted-foreground"
+                    ><svg
+                      class="size-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" /></svg
+                  ></span>
+                </div>
+                <div class="grid grid-cols-[220px_1fr_auto_90px_auto] items-center gap-4 px-5 py-2.5 hover:bg-muted/40">
+                  <span class="truncate font-mono text-[12px] font-medium">STRIPE_WEBHOOK_SECRET</span>
+                  <span class="flex min-w-0 items-center gap-2"
+                    ><span class="font-mono text-[12px] tracking-wider text-muted-foreground">••••••••••••</span
+                    ><button class="text-muted-foreground hover:text-foreground">
+                      <svg
+                        class="size-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg></button
+                  ></span>
+                  <span class="flex gap-1.5"
+                    ><span
+                      class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                      ><span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span
+                      >Production</span
+                    ></span
+                  >
+                  <span class="text-right text-[11px] text-muted-foreground">9 d ago</span>
+                  <span class="text-muted-foreground"
+                    ><svg
+                      class="size-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" /></svg
+                  ></span>
+                </div>
+                <div class="grid grid-cols-[220px_1fr_auto_90px_auto] items-center gap-4 px-5 py-2.5 hover:bg-muted/40">
+                  <span class="truncate font-mono text-[12px] font-medium">GITHUB_APP_PRIVATE_KEY</span>
+                  <span class="flex min-w-0 items-center gap-2"
+                    ><span class="font-mono text-[12px] tracking-wider text-muted-foreground">••••••••••••</span
+                    ><button class="text-muted-foreground hover:text-foreground">
+                      <svg
+                        class="size-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg></button
+                  ></span>
+                  <span class="flex gap-1.5"
+                    ><span
+                      class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                      ><span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span
+                      >Production</span
+                    >
+                    <span
+                      class="raised inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                      >Preview</span
+                    ></span
+                  >
+                  <span class="text-right text-[11px] text-muted-foreground">3 w ago</span>
+                  <span class="text-muted-foreground"
+                    ><svg
+                      class="size-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" /></svg
+                  ></span>
+                </div>
+                <div class="grid grid-cols-[220px_1fr_auto_90px_auto] items-center gap-4 px-5 py-2.5 hover:bg-muted/40">
+                  <span class="truncate font-mono text-[12px] font-medium">POSTHOG_API_KEY</span>
+                  <span class="flex min-w-0 items-center gap-2"
+                    ><span class="font-mono text-[12px] tracking-wider text-muted-foreground">••••••••••••</span
+                    ><button class="text-muted-foreground hover:text-foreground">
+                      <svg
+                        class="size-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg></button
+                  ></span>
+                  <span class="flex gap-1.5"
+                    ><span
+                      class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                      ><span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span
+                      >Production</span
+                    >
+                    <span
+                      class="raised inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                      >Preview</span
+                    ></span
+                  >
+                  <span class="text-right text-[11px] text-muted-foreground">1 mo ago</span>
+                  <span class="text-muted-foreground"
+                    ><svg
+                      class="size-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" /></svg
+                  ></span>
+                </div>
+                <div class="grid grid-cols-[220px_1fr_auto_90px_auto] items-center gap-4 px-5 py-2.5 hover:bg-muted/40">
+                  <span class="truncate font-mono text-[12px] font-medium">SMTP_PASSWORD</span>
+                  <span class="flex min-w-0 items-center gap-2"
+                    ><span class="font-mono text-[12px] tracking-wider text-muted-foreground">••••••••••••</span
+                    ><button class="text-muted-foreground hover:text-foreground">
+                      <svg
+                        class="size-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg></button
+                  ></span>
+                  <span class="flex gap-1.5"
+                    ><span
+                      class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                      ><span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span
+                      >Production</span
+                    ></span
+                  >
+                  <span class="text-right text-[11px] text-muted-foreground">2 mo ago</span>
+                  <span class="text-muted-foreground"
+                    ><svg
+                      class="size-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" /></svg
+                  ></span>
+                </div>
+                <div class="grid grid-cols-[220px_1fr_auto_90px_auto] items-center gap-4 px-5 py-2.5 hover:bg-muted/40">
+                  <span class="truncate font-mono text-[12px] font-medium">SENTRY_DSN</span>
+                  <span class="flex min-w-0 items-center gap-2"
+                    ><span class="font-mono text-[12px] tracking-wider text-muted-foreground">••••••••••••</span
+                    ><button class="text-muted-foreground hover:text-foreground">
+                      <svg
+                        class="size-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg></button
+                  ></span>
+                  <span class="flex gap-1.5"
+                    ><span
+                      class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                      ><span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span
+                      >Production</span
+                    >
+                    <span
+                      class="raised inline-flex items-center rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                      >Preview</span
+                    ></span
+                  >
+                  <span class="text-right text-[11px] text-muted-foreground">2 mo ago</span>
+                  <span class="text-muted-foreground"
+                    ><svg
+                      class="size-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" /></svg
+                  ></span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between border-t bg-muted/40 px-5 py-2.5">
+                <span class="text-xs text-muted-foreground">Changes apply on the next deployment.</span>
+                <button
+                  class="raised inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-card px-3 text-[13px] font-medium hover:bg-accent"
+                >
+                  <svg
+                    class="size-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" /></svg
+                  >Export .env
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+        <aside class="flex w-[3.25rem] shrink-0 flex-col items-center gap-1 pb-3 pt-2">
+          <button
+            class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+              />
+            </svg>
+          </button>
+          <button
+            class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          </button>
+          <button
+            class="relative grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg
+            ><span class="absolute right-2 top-2 size-1.5 rounded-full" style="background: hsl(var(--danger))"></span>
+          </button>
+          <button
+            class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+            </svg>
+          </button>
+          <div class="mt-auto"></div>
+          <button
+            class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <path d="M12 17h.01" />
+            </svg>
+          </button>
+        </aside>
+      </div>
+    </div>
+    <script>
+      if (document.documentElement.classList.contains('dark')) {
+        var p = document.getElementById('panel');
+        if (p)
+          p.style.boxShadow =
+            'inset 0 1px 0 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.45), 0 12px 32px -16px rgba(0,0,0,0.6)';
+      }
+    </script>
+  </body>
+</html>
