@@ -5,7 +5,7 @@ import { forwardRef, type ReactNode } from 'react';
 // When updating sizes or anything similar, make sure to update the styles for the standalone components, as well as the Prose component
 const TYPOGRAPHY_STYLES = {
   headings: {
-    h1: 'text-3xl md:text-4xl lg:text-5xl font-bold',
+    h1: 'text-3xl md:text-4xl lg:text-5xl font-semibold',
     h2: 'text-2xl md:text-3xl lg:text-4xl font-semibold',
     h3: 'text-xl md:text-2xl lg:text-3xl font-semibold',
     h4: 'text-lg md:text-xl lg:text-2xl font-medium',
@@ -29,7 +29,7 @@ const TYPOGRAPHY_STYLES = {
   prose: {
     base: 'prose prose-slate dark:prose-invert max-w-none',
     headings: {
-      h1: 'prose-headings:h1:text-3xl prose-headings:h1:md:text-4xl prose-headings:h1:lg:text-5xl prose-headings:h1:font-bold',
+      h1: 'prose-headings:h1:text-3xl prose-headings:h1:md:text-4xl prose-headings:h1:lg:text-5xl prose-headings:h1:font-semibold',
       h2: 'prose-headings:h2:text-2xl prose-headings:h2:md:text-3xl prose-headings:h2:lg:text-4xl prose-headings:h2:font-semibold',
       h3: 'prose-headings:h3:text-xl prose-headings:h3:md:text-2xl prose-headings:h3:lg:text-3xl prose-headings:h3:font-semibold',
       h4: 'prose-headings:h4:text-lg prose-headings:h4:md:text-xl prose-headings:h4:lg:text-2xl prose-headings:h4:font-medium',

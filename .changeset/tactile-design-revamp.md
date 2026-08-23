@@ -34,10 +34,14 @@ toward it.
 - `Card`: `rounded-xl` + tactile elevation; `CardTitle` is `text-base font-semibold`
   (was `text-2xl`).
 - `Tabs`: segmented style — recessed track, raised active thumb.
-- `Button`: `font-medium`, deeper dark-mode shadow, `outline` sits on `bg-card`,
-  `ghost` is neutral (no longer primary-colored).
-- `Alert`, `Toast`: hardcoded green/yellow/red/blue palettes replaced with the
-  semantic tokens; toast styling deduplicated.
+- `Button`: deeper dark-mode shadow, `outline` sits on `bg-card`, `ghost` is neutral
+  (no longer primary-colored).
+- `Alert`: hardcoded green/yellow/red/blue palettes replaced with the semantic tokens.
+- `Toast`: redesigned as a raised neutral card with a semantic icon tile (styling
+  deduplicated), and the Toaster now forces the theme font — Sonner's stylesheet
+  hardcodes its own font-family, so toasts never rendered in Resist Sans.
+- `Headline`/`Prose` h1: `font-bold` → `font-semibold` — headlines top out at
+  semibold across the system.
 - `Dialog`/`AlertDialog`: overlay is `bg-black/80` (was gray-700/75); content is an
   elevated tactile card.
 - `Switch`, `Avatar`, `Tooltip`, `ActionPanel`, `Toolbar`, `EmptyState`,
