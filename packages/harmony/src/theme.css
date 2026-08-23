@@ -68,47 +68,74 @@
   }
 }
 
+/*
+ * Harmony "Tactile" theme (5.0)
+ *
+ * Depth is the design language: raised elements carry gloss + soft shadows
+ * (.raised, .card-tactile, .fill-gloss and the Button gloss recipe), sunken
+ * elements are recessed wells (.well). Surfaces are layered — card and popover
+ * sit above the page background in both modes — and the dark background is
+ * lifted enough for shadows and inset highlights to read.
+ *
+ * Brand green (#16A34A) is --primary in both modes.
+ */
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.92%;
+  /* `.light` allows nested light panels inside a dark page (e.g. side-by-side
+     theme comparisons in Storybook) — custom properties inherit, so without a
+     scoped light block a `.light` wrapper under `html.dark` would stay dark. */
+  :root,
+  .light {
+    --background: 150 14% 96.8%;
+    --foreground: 170 15% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.92%;
+    --card-foreground: 170 15% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.92%;
+    --popover-foreground: 170 15% 9%;
     --primary: 142.13 76.22% 36.27%;
-    --primary-foreground: 355.71 100% 97.25%;
-    --secondary: 240 4.76% 95.88%;
-    --secondary-foreground: 240 5.88% 10%;
-    --muted: 240 4.76% 95.88%;
-    --muted-foreground: 240 3.83% 46.08%;
-    --accent: 240 4.76% 95.88%;
-    --accent-foreground: 240 5.88% 10%;
-    --destructive: 0 84.24% 60.2%;
-    --destructive-foreground: 0 0% 98.04%;
-    --border: 240 5.88% 90%;
-    --input: 240 5.88% 90%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 10% 92.5%;
+    --secondary-foreground: 168 12% 16%;
+    --muted: 150 10% 93%;
+    --muted-foreground: 160 6% 40%;
+    --accent: 150 10% 92%;
+    --accent-foreground: 168 12% 16%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 9% 87.5%;
+    --input: 150 8% 82%;
     --ring: 142.13 76.22% 36.27%;
-    --chart-1: 11.92 75.88% 60.98%;
-    --chart-2: 173.22 57.79% 39.02%;
-    --chart-3: 197.33 36.59% 24.12%;
-    --chart-4: 43.13 73.56% 65.88%;
-    --chart-5: 27.12 86.9% 67.06%;
-    --sidebar: 0 0% 98.5%;
-    --sidebar-foreground: 0 0% 14.5%;
-    --sidebar-primary: 0 0% 20.5%;
-    --sidebar-primary-foreground: 0 0% 98.5%;
-    --sidebar-accent: 0 0% 97%;
-    --sidebar-accent-foreground: 0 0% 20.5%;
-    --sidebar-border: 0 0% 92.2%;
-    --sidebar-ring: 0 0% 70.8%;
+    --success: 142 72% 29%;
+    --success-soft: 141 60% 95%;
+    /* 32% lightness keeps text-warning ≥ 4.5:1 (WCAG AA) on white and on --warning-soft.
+       That value reads as ochre when used as a solid fill, so dots/meters/bars use
+       --warning-fill (vivid amber, matching the dark-mode hue) instead. */
+    --warning: 36 90% 32%;
+    --warning-fill: 42 96% 50%;
+    --warning-soft: 44 92% 94%;
+    --danger: 0 72% 45%;
+    --danger-soft: 0 80% 96.5%;
+    --info: 205 85% 38%;
+    --info-soft: 206 90% 95.5%;
+    --chart-1: 142 72% 36%;
+    --chart-2: 173 55% 36%;
+    --chart-3: 205 70% 45%;
+    --chart-4: 43 80% 48%;
+    --chart-5: 271 50% 55%;
+    --sidebar: 150 12% 94.5%;
+    --sidebar-foreground: 168 12% 16%;
+    --sidebar-primary: 142.13 76.22% 36.27%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 150 10% 92%;
+    --sidebar-accent-foreground: 168 12% 16%;
+    --sidebar-border: 150 9% 88%;
+    --sidebar-ring: 142.13 76.22% 36.27%;
     --font-sans:
       'Resist Sans Text', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
       'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
       'Noto Color Emoji';
     --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-    --radius: 0.7rem;
+    --radius: 0.75rem;
     --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
     --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
     --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
@@ -117,43 +144,114 @@
     --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
     --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+    /* Tactile recipe vars — inherit and flip with the theme (incl. nested .light). */
+    --tactile-card-shadow: 0 1px 2px rgba(20, 30, 25, 0.05), 0 8px 20px -12px rgba(20, 30, 25, 0.18);
+    --tactile-card-sheen: none;
+    --tactile-well-shadow: inset 0 1px 2px rgba(20, 30, 25, 0.07);
+    --tactile-raised-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(20, 30, 25, 0.12);
+    --tactile-raised-sheen: none;
   }
 
   .dark,
   :root[class~='dark'] {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --background: 170 8% 6.7%;
+    --foreground: 150 10% 96%;
+    --card: 168 8% 10%;
+    --card-foreground: 150 10% 96%;
+    --popover: 168 8% 12%;
+    --popover-foreground: 150 10% 96%;
     --primary: 142.13 76.22% 36.27%;
-    --primary-foreground: 355.71 100% 97.25%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84.24% 60.2%;
-    --destructive-foreground: 0 0% 98.04%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 166 7% 15.5%;
+    --secondary-foreground: 150 8% 92%;
+    --muted: 166 7% 13.5%;
+    --muted-foreground: 158 6% 62%;
+    --accent: 166 7% 16%;
+    --accent-foreground: 150 10% 96%;
+    --destructive: 0 68% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 165 7% 17%;
+    --input: 165 6% 22%;
     --ring: 142.13 76.22% 36.27%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar: 240 5.9% 10%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --success: 142 65% 46%;
+    --success-soft: 144 45% 10%;
+    --warning: 43 92% 56%;
+    --warning-fill: 43 92% 56%;
+    --warning-soft: 40 50% 10%;
+    --danger: 0 78% 62%;
+    --danger-soft: 0 45% 11%;
+    --info: 203 90% 60%;
+    --info-soft: 207 55% 11%;
+    --chart-1: 142 65% 46%;
+    --chart-2: 173 55% 42%;
+    --chart-3: 203 75% 55%;
+    --chart-4: 43 85% 58%;
+    --chart-5: 271 55% 62%;
+    --sidebar: 170 9% 5%;
+    --sidebar-foreground: 150 8% 92%;
+    --sidebar-primary: 142.13 76.22% 36.27%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    --radius: 0.7rem;
+    --sidebar-accent: 166 7% 13.5%;
+    --sidebar-accent-foreground: 150 8% 92%;
+    --sidebar-border: 165 7% 15%;
+    --sidebar-ring: 142.13 76.22% 36.27%;
+    --radius: 0.75rem;
+    --tactile-card-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 20px -12px rgba(0, 0, 0, 0.6);
+    --tactile-card-sheen: linear-gradient(to bottom, rgba(255, 255, 255, 0.045), transparent 45%);
+    --tactile-well-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.45);
+    --tactile-raised-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 1px 2px rgba(0, 0, 0, 0.45);
+    --tactile-raised-sheen: linear-gradient(to bottom, rgba(255, 255, 255, 0.08), transparent 60%);
   }
+}
+
+/*
+ * Tactile depth primitives.
+ *
+ * Plain (unlayered) classes on purpose: they must reach every consumer of
+ * theme.css, including apps that do not run harmony's Tailwind preset, and
+ * Tailwind v3 cannot reliably emit these via a plugin for external content.
+ *
+ * The recipes live in --tactile-* custom properties defined in the token
+ * blocks above, so they inherit and flip with the theme exactly like color
+ * tokens — including nested `.light` panels under a dark root.
+ *
+ * Selectors are wrapped in :where(...) for ZERO specificity: any Tailwind
+ * utility (`shadow-none`, `shadow-inner`, `focus-visible:ring-*` — all
+ * ≥ (0,1,0)) beats them deterministically, regardless of stylesheet order.
+ * The one exception is the raised sheen (see below).
+ *
+ *   .card-tactile — raised surface: sheen + inset top highlight + layered soft shadow
+ *   .well         — recessed well: inputs, selects, segmented tracks, progress tracks
+ *   .raised       — small raised control: segment thumbs, chips, avatar/tooltip surfaces
+ *   .fill-gloss   — glossy brand fill for progress bars / meters
+ */
+:where(.card-tactile) {
+  background-image: var(--tactile-card-sheen, none);
+  box-shadow: var(--tactile-card-shadow);
+}
+
+:where(.well) {
+  box-shadow: var(--tactile-well-shadow);
+}
+
+/* .raised-on-active applies the raised recipe only while Radix marks the element active
+   (segmented tab thumbs, button-group segments) — a custom class can't be targeted with
+   Tailwind's data-[state=active]: variant. */
+:where(.raised, .raised-on-active[data-state='active']) {
+  box-shadow: var(--tactile-raised-shadow);
+}
+/* The sheen is kept at class specificity (0,1,0): Preflight's
+   `button { background-image: none }` (0,0,1) would strip it from button-based
+   segments (TabsTrigger) if it were zero-specificity like the shadows above. */
+.raised,
+.raised-on-active[data-state='active'] {
+  background-image: var(--tactile-raised-sheen, none);
+}
+
+/* Identical in both modes — no vars needed. */
+:where(.fill-gloss) {
+  background-color: hsl(var(--primary));
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.05) 55%, transparent);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25);
 }

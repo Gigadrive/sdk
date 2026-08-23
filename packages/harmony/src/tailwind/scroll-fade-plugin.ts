@@ -1,4 +1,5 @@
-import plugin from 'tailwindcss/plugin';
+// .js extension: tailwindcss@3 has no `exports` map; see preset.ts.
+import plugin from 'tailwindcss/plugin.js';
 
 /**
  * Tailwind v3 port of shadcn's CSS-only `scroll-fade` utilities.
