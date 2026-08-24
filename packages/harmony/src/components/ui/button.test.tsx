@@ -1,8 +1,19 @@
+import type { ForwardedRef, ReactElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { Button } from './button';
+import { Button, type ButtonProps } from './button';
+
+const renderButton = Button as typeof Button & {
+  render: (props: ButtonProps, ref: ForwardedRef<HTMLButtonElement>) => ReactElement;
+};
 
 describe('Button', () => {
+  it('should not add an onClick handler without onClick or loading', () => {
+    const button = renderButton.render({ children: 'Billing' }, null);
+
+    expect(button.props.onClick).toBeUndefined();
+  });
+
   it('should render a button element with its text', () => {
     const html = renderToString(<Button variant="outline">Billing</Button>);
     expect(html).toContain('<button');

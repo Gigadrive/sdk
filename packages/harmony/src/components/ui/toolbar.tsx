@@ -1,3 +1,5 @@
+'use client';
+
 import { cn } from '@/lib/utils';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import type { ButtonHTMLAttributes, ComponentProps, CSSProperties, ReactNode } from 'react';

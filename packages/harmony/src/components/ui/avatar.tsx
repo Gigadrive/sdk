@@ -30,14 +30,8 @@ const AvatarFallback = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Fallback>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
 >(({ className, children, ...props }, ref) => {
-  const compute = React.useCallback((value: string) => getInitials(value), []);
-
-  const content = React.useMemo(() => {
-    if (typeof children === 'string' || typeof children === 'number') {
-      return compute(String(children));
-    }
-    return children;
-  }, [children, compute]);
+  const content =
+    typeof children === 'string' || typeof children === 'number' ? getInitials(String(children)) : children;
 
   return (
     <AvatarPrimitive.Fallback
