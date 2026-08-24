@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 5.0.1
+
+### Patch Changes
+
+- Keep non-interactive Button and Avatar usages compatible with React Server Components, and mark intrinsically interactive components as client components. ([#481](https://github.com/Gigadrive/sdk/pull/481))
+
 ## 5.0.0
 
 ### Major Changes
