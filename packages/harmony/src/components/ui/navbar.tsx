@@ -1,3 +1,5 @@
+'use client';
+
 import { SidebarTrigger, useSidebarOptional } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
