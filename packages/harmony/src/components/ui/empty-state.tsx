@@ -7,6 +7,7 @@ export interface EmptyStateProps extends React.ComponentProps<'div'> {
   title: string;
   description: string;
   icons?: LucideIcon[];
+  /** Callback actions require EmptyState to be rendered within a Client Component. */
   action?: {
     label: string;
     onClick: () => void;

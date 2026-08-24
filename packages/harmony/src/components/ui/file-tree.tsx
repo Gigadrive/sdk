@@ -1,3 +1,5 @@
+'use client';
+
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { FileIcon, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import React, { createContext, forwardRef, useCallback, useContext, useEffect, useState } from 'react';

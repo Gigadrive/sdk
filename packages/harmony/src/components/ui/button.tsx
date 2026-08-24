@@ -48,6 +48,10 @@ export interface ButtonProps
    * With `asChild`, the child may not support `disabled` (e.g. a link), so the
    * button is instead inerted via `aria-disabled` + `pointer-events-none`, and
    * no spinner is injected (Slot requires a single child).
+   *
+   * Loading buttons intercept clicks and therefore require a Client Component
+   * boundary. Server Components can render buttons that omit `loading` and
+   * `onClick` without adding Button JavaScript to the client bundle.
    */
   loading?: boolean;
 }
@@ -75,7 +79,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={asChild ? disabled : disabled || loading || undefined}
         aria-disabled={loading || undefined}
         aria-busy={loading || undefined}
-        onClick={handleClick}
+        onClick={loading || onClick ? handleClick : undefined}
         {...props}
       >
         {loading && !asChild ? (
