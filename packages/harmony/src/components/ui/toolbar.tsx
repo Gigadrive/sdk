@@ -67,8 +67,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
     <div
       className={cn(
         'fixed z-50',
-        'border border-border shadow-lg',
-        'bg-sidebar backdrop-blur',
+        'card-tactile border border-border',
+        'bg-card/95 backdrop-blur',
         'transition-all',
         POSITION_CLASSES[position],
         direction === 'vertical' ? 'flex flex-col' : 'flex flex-row',
@@ -92,37 +92,38 @@ interface ToolbarButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
   ({ icon, className, onClick, ...props }, ref) => {
-    const sidebar = useSidebarOptional();
-
     const isSidebarTriggerIcon =
       React.isValidElement(icon) &&
       (icon.type === SidebarTrigger ||
         (icon as React.ReactElement & { type?: { displayName?: string } }).type?.displayName === 'SidebarTrigger');
 
-    const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
-      onClick?.(event);
-      if (event.defaultPrevented) return;
-      if (isSidebarTriggerIcon) {
-        // If the click originated on the outer button (not the inner icon),
-        // toggle here. Otherwise, let the inner SidebarTrigger handle it.
-        if (event.target === event.currentTarget) {
-          sidebar?.toggleSidebar();
-        }
-        return;
-      }
-    };
+    // SidebarTrigger is itself a full Button (icon + sr-only label). Wrapping it in
+    // another Button and slotting via asChild crashes — Radix Slot requires a single
+    // element child — so render the trigger directly, sized like a toolbar button.
+    if (icon && React.isValidElement(icon) && isSidebarTriggerIcon) {
+      const iconProps = (
+        icon as React.ReactElement<{ className?: string; onClick?: React.MouseEventHandler<HTMLButtonElement> }>
+      ).props;
+      // cloneElement replaces props wholesale, so compose rather than overwrite any
+      // onClick the caller set on the trigger element itself.
+      const composedOnClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+        iconProps.onClick?.(event);
+        onClick?.(event);
+      };
+      return React.cloneElement(icon as React.ReactElement<React.ComponentProps<typeof Button>>, {
+        ref,
+        onClick: composedOnClick,
+        ...props,
+        className: cn('h-10 w-10 [&_svg]:size-6', iconProps.className, className),
+      });
+    }
 
     return (
-      <Button ref={ref} variant="ghost" size="icon" className={className} onClick={handleClick} {...props}>
+      <Button ref={ref} variant="ghost" size="icon" className={className} onClick={onClick} {...props}>
         {icon && React.isValidElement(icon)
-          ? isSidebarTriggerIcon
-            ? React.cloneElement(icon as React.ReactElement<{ className?: string; asChild?: boolean }>, {
-                asChild: true,
-                className: cn('w-6 h-6', (icon as React.ReactElement<{ className?: string }>).props.className),
-              })
-            : React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
-                className: cn('w-6 h-6', (icon as React.ReactElement<{ className?: string }>).props.className),
-              })
+          ? React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
+              className: cn('w-6 h-6', (icon as React.ReactElement<{ className?: string }>).props.className),
+            })
           : icon}
       </Button>
     );

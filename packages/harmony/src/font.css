@@ -391,3 +391,40 @@ h6 {
   descent-override: 26.5%;
   line-gap-override: 0%;
 }
+
+/*
+ * WEIGHT 600 ALIASES
+ *
+ * Resist Sans ships no SemiBold cut. Without these faces, CSS font matching
+ * resolves a requested weight 600 (`font-semibold`) UPWARD to Bold (700), so
+ * every "semibold" rendered fully bold — the source of chronically heavy text.
+ * Aliasing 600 to the Medium files makes stray `font-semibold` (e.g. in
+ * consumer apps) degrade gracefully to Medium instead.
+ */
+@font-face {
+  font-family: 'Resist Sans Text';
+  src:
+    local('Resist Sans Text Medium'),
+    local('ResistSansText-Medium'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  /* see METRIC OVERRIDES note at top of file */
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Resist Sans Display';
+  src:
+    local('Resist Sans Display Medium'),
+    local('ResistSansDisplay-Medium'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.woff2') format('woff2'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.woff') format('woff'),
+    url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  /* no metric overrides — matches the Display Medium (500) face */
+}

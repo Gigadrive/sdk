@@ -757,7 +757,7 @@ const SidebarGroup = React.forwardRef<
         className={cn('px-3 pb-1.5 pt-5 first:pt-3 select-none', 'group-data-[collapsible=icon]:hidden')}
       >
         {typeof label === 'string' || typeof label === 'number' ? (
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">{label}</span>
+          <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">{label}</span>
         ) : (
           label
         )}
@@ -797,9 +797,7 @@ function CollapsedLayerFlyout({ item }: { item: SidebarNavItem }) {
 
   return (
     <div className="min-w-[180px] py-2">
-      <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {item.title}
-      </div>
+      <div className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.title}</div>
       {item.layer.sections.map((section) => (
         <div key={section.id}>
           {section.items.map((subItem) =>

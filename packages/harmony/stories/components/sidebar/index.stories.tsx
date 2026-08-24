@@ -80,7 +80,7 @@ function DefaultDemo() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
                 <Zap className="h-4 w-4 text-background" />
               </div>
-              <span className="text-sm font-semibold tracking-tight">Acme Inc</span>
+              <span className="text-sm font-medium tracking-tight">Acme Inc</span>
             </div>
           </SidebarHeader>
           <SidebarContent>
@@ -108,7 +108,7 @@ function DefaultDemo() {
           </SidebarFooter>
         </Sidebar>
         <main className="flex-1 p-8 bg-background">
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Dashboard</h1>
           <p className="mt-1.5 text-muted-foreground">Welcome back, Jane.</p>
         </main>
       </div>
@@ -132,7 +132,7 @@ function WithLayersDemo() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
                 <Zap className="h-4 w-4 text-background" />
               </div>
-              <span className="text-sm font-semibold tracking-tight">Acme Inc</span>
+              <span className="text-sm font-medium tracking-tight">Acme Inc</span>
             </div>
           </SidebarHeader>
           <SidebarContent>
@@ -184,7 +184,7 @@ function WithLayersDemo() {
           </SidebarFooter>
         </Sidebar>
         <main className="flex-1 p-8 bg-background">
-          <h1 className="text-2xl font-bold tracking-tight">Layer Navigation</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Layer Navigation</h1>
           <p className="mt-1.5 text-muted-foreground">
             Click &ldquo;Account&rdquo;, &ldquo;Security&rdquo;, or &ldquo;Billing&rdquo; to navigate into sub-layers.
             &ldquo;Appearance&rdquo; inside Account goes three levels deep.
@@ -381,7 +381,7 @@ function DeclarativeLayersDemo({ initialPath = '/app' }: { initialPath?: string 
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
                 <Zap className="h-4 w-4 text-background" />
               </div>
-              <span className="text-sm font-semibold tracking-tight">Acme Inc</span>
+              <span className="text-sm font-medium tracking-tight">Acme Inc</span>
             </div>
           </SidebarHeader>
           <SidebarContent rootLayer={rootLayer} pathname={pathname} linkAs={DemoLink} />
@@ -399,7 +399,7 @@ function DeclarativeLayersDemo({ initialPath = '/app' }: { initialPath?: string 
         </Sidebar>
         <SidebarInset>
           <div className="p-8">
-            <h1 className="text-2xl font-bold tracking-tight">Declarative Layers</h1>
+            <h1 className="text-2xl font-medium tracking-tight">Declarative Layers</h1>
             <p className="mt-1.5 text-muted-foreground">
               Pass a <code className="rounded bg-muted px-1.5 py-0.5 text-sm">rootLayer</code> tree and{' '}
               <code className="rounded bg-muted px-1.5 py-0.5 text-sm">pathname</code> to drive nested navigation — the
@@ -455,7 +455,7 @@ function CollapsibleIconContent() {
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-foreground">
               <Zap className="h-4 w-4 text-background" />
             </div>
-            <span className="text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">Acme</span>
+            <span className="text-sm font-medium tracking-tight group-data-[collapsible=icon]:hidden">Acme</span>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -485,7 +485,7 @@ function CollapsibleIconContent() {
         <Button onClick={toggleSidebar} variant="outline" size="sm" className="mb-6">
           {state === 'collapsed' ? 'Expand Sidebar' : 'Collapse Sidebar'}
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">Icon Collapse</h1>
+        <h1 className="text-2xl font-medium tracking-tight">Icon Collapse</h1>
         <p className="mt-1.5 text-muted-foreground">
           Collapse the sidebar to icon-only mode. Tooltips appear on hover.
         </p>
@@ -518,7 +518,7 @@ function WithBadgesDemo() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
                 <Zap className="h-4 w-4 text-background" />
               </div>
-              <span className="text-sm font-semibold tracking-tight">Acme Inc</span>
+              <span className="text-sm font-medium tracking-tight">Acme Inc</span>
             </div>
           </SidebarHeader>
           <SidebarContent>
@@ -537,7 +537,7 @@ function WithBadgesDemo() {
           </SidebarContent>
         </Sidebar>
         <main className="flex-1 p-8 bg-background">
-          <h1 className="text-2xl font-bold tracking-tight">Badges</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Badges</h1>
           <p className="mt-1.5 text-muted-foreground">
             Items can display text badges, counts, or custom badge content like status dots.
           </p>
@@ -558,7 +558,7 @@ function RightSideDemo() {
     <SidebarProvider>
       <div className="flex h-screen w-full">
         <main className="flex-1 p-8 bg-background">
-          <h1 className="text-2xl font-bold tracking-tight">Right-Side Sidebar</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Right-Side Sidebar</h1>
           <p className="mt-1.5 text-muted-foreground">
             The sidebar is positioned on the right. Layer animations adjust direction accordingly.
           </p>
@@ -566,7 +566,7 @@ function RightSideDemo() {
         <Sidebar side="right">
           <SidebarHeader>
             <div className="flex items-center gap-2.5 px-2 py-1">
-              <span className="text-sm font-semibold tracking-tight">Inspector</span>
+              <span className="text-sm font-medium tracking-tight">Inspector</span>
             </div>
           </SidebarHeader>
           <SidebarContent>
@@ -623,7 +623,7 @@ function LoadingDemo() {
           </SidebarFooter>
         </Sidebar>
         <main className="flex-1 p-8 bg-background">
-          <h1 className="text-2xl font-bold tracking-tight">Loading State</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Loading State</h1>
           <p className="mt-1.5 text-muted-foreground">SidebarSkeleton provides realistic loading placeholders.</p>
         </main>
       </div>
@@ -647,7 +647,7 @@ function DeepNestingDemo() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
                 <Zap className="h-4 w-4 text-background" />
               </div>
-              <span className="text-sm font-semibold tracking-tight">Deep Nav</span>
+              <span className="text-sm font-medium tracking-tight">Deep Nav</span>
             </div>
           </SidebarHeader>
           <SidebarContent>
@@ -676,7 +676,7 @@ function DeepNestingDemo() {
           </SidebarContent>
         </Sidebar>
         <main className="flex-1 p-8 bg-background">
-          <h1 className="text-2xl font-bold tracking-tight">Deep Nesting</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Deep Nesting</h1>
           <p className="mt-1.5 text-muted-foreground">
             Only &ldquo;Theme&rdquo; has isActive set. Settings, Profile, and Appearance automatically show as active
             because they contain an active descendant.
@@ -703,7 +703,7 @@ function WithTriggerContent() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
                 <Zap className="h-4 w-4 text-background" />
               </div>
-              <span className="text-sm font-semibold tracking-tight">Acme</span>
+              <span className="text-sm font-medium tracking-tight">Acme</span>
             </div>
             <SidebarTrigger />
           </div>
@@ -717,7 +717,7 @@ function WithTriggerContent() {
         </SidebarContent>
       </Sidebar>
       <main className="flex-1 p-8 bg-background">
-        <h1 className="text-2xl font-bold tracking-tight">With Trigger</h1>
+        <h1 className="text-2xl font-medium tracking-tight">With Trigger</h1>
         <p className="mt-1.5 text-muted-foreground">
           The sidebar trigger button is placed in the header. You can also toggle with Ctrl+B / Cmd+B.
         </p>
@@ -750,7 +750,7 @@ function DualSidebarDemo() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground">
                 <Zap className="h-4 w-4 text-background" />
               </div>
-              <span className="text-sm font-semibold tracking-tight">Workspace</span>
+              <span className="text-sm font-medium tracking-tight">Workspace</span>
             </div>
           </SidebarHeader>
           <SidebarContent>
@@ -783,7 +783,7 @@ function DualSidebarDemo() {
           </SidebarFooter>
         </Sidebar>
         <main className="flex-1 p-8 bg-background">
-          <h1 className="text-2xl font-bold tracking-tight">Dual Sidebar</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Dual Sidebar</h1>
           <p className="mt-1.5 text-muted-foreground">
             Full navigation sidebar on the left, icon-only toolbar sidebar on the right.
           </p>
@@ -821,7 +821,7 @@ function AppLayoutDemo() {
             <div className="flex h-6 w-6 items-center justify-center rounded-md bg-foreground">
               <Zap className="h-3.5 w-3.5 text-background" />
             </div>
-            <span className="text-sm font-semibold tracking-tight">Acme Inc</span>
+            <span className="text-sm font-medium tracking-tight">Acme Inc</span>
           </div>
         }
       >
@@ -872,20 +872,20 @@ function AppLayoutDemo() {
         </Sidebar>
 
         <main className="flex-1 p-6 overflow-y-auto bg-background">
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Dashboard</h1>
           <p className="mt-1.5 text-muted-foreground">Welcome back, Jane.</p>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border bg-card p-5">
               <p className="text-sm font-medium text-muted-foreground">Total Users</p>
-              <p className="mt-1 text-2xl font-bold">2,847</p>
+              <p className="mt-1 text-2xl font-medium">2,847</p>
             </div>
             <div className="rounded-xl border bg-card p-5">
               <p className="text-sm font-medium text-muted-foreground">Revenue</p>
-              <p className="mt-1 text-2xl font-bold">$48,290</p>
+              <p className="mt-1 text-2xl font-medium">$48,290</p>
             </div>
             <div className="rounded-xl border bg-card p-5">
               <p className="text-sm font-medium text-muted-foreground">Active Now</p>
-              <p className="mt-1 text-2xl font-bold">342</p>
+              <p className="mt-1 text-2xl font-medium">342</p>
             </div>
           </div>
           <div className="mt-4 rounded-xl border bg-card p-5 min-h-[300px]">
@@ -926,7 +926,7 @@ function InsetLayoutDemo() {
             <div className="flex h-6 w-6 items-center justify-center rounded-md bg-foreground">
               <Zap className="h-3.5 w-3.5 text-background" />
             </div>
-            <span className="text-sm font-semibold tracking-tight">Acme Inc</span>
+            <span className="text-sm font-medium tracking-tight">Acme Inc</span>
           </div>
         }
       >
@@ -977,20 +977,20 @@ function InsetLayoutDemo() {
         </Sidebar>
 
         <SidebarInset className="p-6">
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Dashboard</h1>
           <p className="mt-1.5 text-muted-foreground">Welcome back, Jane.</p>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border bg-card p-5">
               <p className="text-sm font-medium text-muted-foreground">Total Users</p>
-              <p className="mt-1 text-2xl font-bold">2,847</p>
+              <p className="mt-1 text-2xl font-medium">2,847</p>
             </div>
             <div className="rounded-xl border bg-card p-5">
               <p className="text-sm font-medium text-muted-foreground">Revenue</p>
-              <p className="mt-1 text-2xl font-bold">$48,290</p>
+              <p className="mt-1 text-2xl font-medium">$48,290</p>
             </div>
             <div className="rounded-xl border bg-card p-5">
               <p className="text-sm font-medium text-muted-foreground">Active Now</p>
-              <p className="mt-1 text-2xl font-bold">342</p>
+              <p className="mt-1 text-2xl font-medium">342</p>
             </div>
           </div>
           <div className="mt-4 rounded-xl border bg-card p-5 min-h-[300px]">

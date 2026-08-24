@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://static-cdn.gigadrivegroup.com/resist-sans/stylesheet.css?v2" />
+    <link rel="stylesheet" href="demo.css" />
+    <style>
+      body {
+        margin: 0;
+      }
+      html.dark,
+      .dark {
+        color-scheme: dark;
+      }
+    </style>
+    <script>
+      if (location.search.includes('dark')) document.documentElement.classList.add('dark');
+    </script>
+  </head>
+  <body class="bg-background font-sans text-foreground antialiased">
+    <div class="mx-auto max-w-3xl space-y-4 px-4 py-6">
+      <div class="overflow-hidden rounded-lg border bg-card text-card-foreground">
+        <div class="space-y-1 p-4">
+          <h3 class="text-base font-semibold leading-none tracking-tight">Application Details</h3>
+          <div class="text-xs text-muted-foreground">Basic information about your application.</div>
+        </div>
+        <div class="space-y-4 px-4 pb-4 pt-0">
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Application Name</label>
+            <input
+              value="gigadrive-api"
+              class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm"
+            />
+            <p class="text-xs text-muted-foreground">The display name used across the console.</p>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Slug</label>
+            <input
+              value="gigadrive-api"
+              class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm"
+            />
+            <p class="text-xs text-muted-foreground">Used in URLs. Changing this will break existing links.</p>
+          </div>
+        </div>
+        <div class="flex items-center border-t bg-muted/50 px-4 py-2.5">
+          <div class="flex w-full items-center justify-end">
+            <button
+              class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)] px-3 text-sm text-primary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_2px_4px_0_rgba(0,0,0,0.1)]"
+            >
+              <svg
+                class="-ml-1 mr-2 size-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-hidden rounded-lg border bg-card text-card-foreground">
+        <div class="space-y-1 p-4">
+          <h3 class="text-base font-semibold leading-none tracking-tight">Root Directory</h3>
+          <div class="text-xs text-muted-foreground">The directory within your repository where your app lives.</div>
+        </div>
+        <div class="px-4 pb-4 pt-0">
+          <div class="space-y-2">
+            <input
+              value="apps/api"
+              class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm"
+            />
+            <p class="text-xs text-muted-foreground">Leave empty to use the repository root.</p>
+          </div>
+        </div>
+        <div class="flex items-center border-t bg-muted/50 px-4 py-2.5">
+          <div class="flex w-full items-center justify-end">
+            <button
+              class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)] px-3 text-sm text-primary-foreground opacity-50 shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_2px_4px_0_rgba(0,0,0,0.1)]"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-hidden rounded-lg border border-destructive/50 bg-card text-card-foreground">
+        <div class="space-y-1 p-4">
+          <h3 class="text-base font-semibold leading-none tracking-tight text-destructive">Delete Application</h3>
+          <div class="text-xs text-muted-foreground">Permanently remove this application and all deployments.</div>
+        </div>
+        <div class="flex items-center border-t bg-muted/50 px-4 py-2.5">
+          <div class="flex w-full items-center justify-end">
+            <button
+              class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-destructive bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)] px-3 text-sm text-destructive-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_2px_4px_0_rgba(0,0,0,0.1)]"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

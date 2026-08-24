@@ -117,6 +117,8 @@ export interface DataTableProps<TData> {
   isLoading?: boolean;
   /** Optional: Size variant */
   size?: 'sm' | 'md' | 'lg';
+  /** Optional: Row/header density, forwarded to the underlying Table. */
+  density?: 'default' | 'compact';
   /** Optional: Custom empty state */
   emptyState?: React.ReactNode;
   /** Optional: Custom loading state */
@@ -201,6 +203,7 @@ export function DataTable<TData>({
   totalRows,
   isLoading = false,
   size = 'md',
+  density = 'default',
   emptyState,
   loadingState,
   className,
@@ -353,9 +356,9 @@ export function DataTable<TData>({
       )}
 
       {/* Table */}
-      <div className="rounded-md border">
+      <div className="card-tactile overflow-hidden rounded-xl border bg-card">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <Table className={sizeClasses[size]}>
+          <Table density={density} className={sizeClasses[size]}>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>

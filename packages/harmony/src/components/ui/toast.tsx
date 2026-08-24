@@ -21,6 +21,29 @@ export interface Toast {
   onAutoClose?: () => void;
 }
 
+/* Shared toast chrome — single source for both the Sonner classNames map and the
+   custom-rendered toasts in createToastContent. Tactile: a raised neutral card;
+   the semantic tone lives in the icon tile, not a tinted background. */
+const TOAST_BASE =
+  'group toast raised group-[.toaster]:bg-card group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:border-border rounded-xl w-[380px]';
+
+/* Sonner-native type toasts (toast.success() etc.) can't render our icon tile,
+   so they get the Alert-style soft treatment instead. */
+const TOAST_TYPE_CLASSES: Record<NonNullable<Toast['type']>, string> = {
+  success: 'group-[.toast]:border-success/25 group-[.toast]:bg-success-soft',
+  error: 'group-[.toast]:border-danger/25 group-[.toast]:bg-danger-soft',
+  info: 'group-[.toast]:border-info/25 group-[.toast]:bg-info-soft',
+  warning: 'group-[.toast]:border-warning/25 group-[.toast]:bg-warning-soft',
+};
+
+/* Icon tile per type — the status-tile pattern shared with deployment headers. */
+const TOAST_TILE_CLASSES: Record<NonNullable<Toast['type']>, string> = {
+  success: 'bg-success-soft text-success',
+  error: 'bg-danger-soft text-danger',
+  info: 'bg-info-soft text-info',
+  warning: 'bg-warning-soft text-warning',
+};
+
 export const ToastContext = createContext<{
   toasts: Toast[];
   addToast: (toast: Omit<Toast, 'id'>) => string;
@@ -31,7 +54,8 @@ export const ToastContext = createContext<{
   removeToast: () => {},
 });
 
-const Toaster: React.FC<ToasterProps> = ({ ...props }) => {
+// eslint-disable-next-line react/prop-types -- props come from Sonner's ToasterProps, not a local shape
+const Toaster: React.FC<ToasterProps> = ({ style, ...props }) => {
   const { theme = 'system' } = useTheme();
 
   return (
@@ -39,24 +63,27 @@ const Toaster: React.FC<ToasterProps> = ({ ...props }) => {
       theme={theme as ToasterProps['theme']}
       className="toaster group"
       richColors
+      // Sonner's stylesheet hardcodes its own font-family on [data-sonner-toaster],
+      // so toasts never inherit the page font. An inline style is the only override
+      // that wins regardless of stylesheet load order.
+      style={{ fontFamily: 'var(--font-sans)', ...style }}
       toastOptions={{
         classNames: {
-          toast:
-            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.1),0_4px_6px_-1px_rgba(0,0,0,0.1)] group-[.toaster]:bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.06),transparent_50%)] rounded-lg w-[380px]',
-          title: 'text-base',
+          toast: TOAST_BASE,
+          // No weight here: sonner wraps toast.custom content in its title slot, so this
+          // class leaks onto the whole custom toast. Native styled toasts get their
+          // title weight (500) from sonner's own stylesheet.
+          title: 'text-sm',
           description: 'text-sm text-muted-foreground',
           actionButton: 'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
           cancelButton: 'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
-          success:
-            'group-[.toast]:border-green-500 group-[.toast]:border-l-4 group-[.toast]:bg-green-50 dark:group-[.toast]:bg-green-950/20',
-          error:
-            'group-[.toast]:border-red-500 group-[.toast]:border-l-4 group-[.toast]:bg-red-50 dark:group-[.toast]:bg-red-950/20',
-          info: 'group-[.toast]:border-blue-500 group-[.toast]:border-l-4 group-[.toast]:bg-blue-50 dark:group-[.toast]:bg-blue-950/20',
-          warning:
-            'group-[.toast]:border-yellow-500 group-[.toast]:border-l-4 group-[.toast]:bg-yellow-50 dark:group-[.toast]:bg-yellow-950/20',
-          icon: 'text-foreground dark:text-white',
-          closeButton: 'text-foreground/50 hover:text-foreground dark:text-white/50 dark:hover:text-white',
-          loader: 'text-muted-foreground dark:text-muted-foreground',
+          success: TOAST_TYPE_CLASSES.success,
+          error: TOAST_TYPE_CLASSES.error,
+          info: TOAST_TYPE_CLASSES.info,
+          warning: TOAST_TYPE_CLASSES.warning,
+          icon: 'text-foreground',
+          closeButton: 'text-foreground/50 hover:text-foreground',
+          loader: 'text-muted-foreground',
         },
       }}
       {...props}
@@ -64,32 +91,18 @@ const Toaster: React.FC<ToasterProps> = ({ ...props }) => {
   );
 };
 
+const TOAST_TYPE_ICONS: Record<NonNullable<Toast['type']>, typeof CheckCircle> = {
+  success: CheckCircle,
+  error: AlertCircle,
+  info: Info,
+  warning: AlertTriangle,
+};
+
 // Helper function to create toast content
 const createToastContent = (toastData: Omit<Toast, 'id'>) => {
-  let toastClass =
-    'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.1),0_4px_6px_-1px_rgba(0,0,0,0.1)] group-[.toaster]:bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.06),transparent_50%)] rounded-lg p-4 w-[380px]';
-
-  // Add type-specific styling
-  if (toastData.type) {
-    switch (toastData.type) {
-      case 'success':
-        toastClass +=
-          ' group-[.toast]:border-green-500 group-[.toast]:border-l-4 group-[.toast]:bg-green-50 dark:group-[.toast]:bg-green-950/20';
-        break;
-      case 'error':
-        toastClass +=
-          ' group-[.toast]:border-red-500 group-[.toast]:border-l-4 group-[.toast]:bg-red-50 dark:group-[.toast]:bg-red-950/20';
-        break;
-      case 'info':
-        toastClass +=
-          ' group-[.toast]:border-blue-500 group-[.toast]:border-l-4 group-[.toast]:bg-blue-50 dark:group-[.toast]:bg-blue-950/20';
-        break;
-      case 'warning':
-        toastClass +=
-          ' group-[.toast]:border-yellow-500 group-[.toast]:border-l-4 group-[.toast]:bg-yellow-50 dark:group-[.toast]:bg-yellow-950/20';
-        break;
-    }
-  }
+  // The card chrome (raised, border, bg-card) is applied by the Toaster's
+  // classNames.toast to sonner's <li>; the custom element only lays out content.
+  const toastClass = 'w-full p-4';
 
   if (toastData.children) {
     return {
@@ -101,21 +114,22 @@ const createToastContent = (toastData: Omit<Toast, 'id'>) => {
       },
     };
   } else {
+    const TypeIcon = toastData.type ? TOAST_TYPE_ICONS[toastData.type] : null;
+
     return {
       element: () => (
         <div className={toastClass}>
           <div className="flex items-start gap-3">
-            {toastData.type && (
-              <div className="flex-shrink-0 mt-0.5">
-                {toastData.type === 'success' && <CheckCircle className="h-5 w-5 text-green-500" />}
-                {toastData.type === 'error' && <AlertCircle className="h-5 w-5 text-red-500" />}
-                {toastData.type === 'info' && <Info className="h-5 w-5 text-blue-500" />}
-                {toastData.type === 'warning' && <AlertTriangle className="h-5 w-5 text-yellow-500" />}
+            {toastData.type && TypeIcon && (
+              <div
+                className={`grid size-8 flex-shrink-0 place-items-center rounded-lg ${TOAST_TILE_CLASSES[toastData.type]}`}
+              >
+                <TypeIcon aria-hidden className="size-4" />
               </div>
             )}
-            <div className="flex-1">
-              {toastData.title && <div className="text-base font-medium">{toastData.title}</div>}
-              {toastData.message && <div className="text-sm text-muted-foreground">{toastData.message}</div>}
+            <div className="min-w-0 flex-1 py-0.5">
+              {toastData.title && <div className="text-sm font-medium">{toastData.title}</div>}
+              {toastData.message && <div className="mt-0.5 text-sm text-muted-foreground">{toastData.message}</div>}
               {(toastData.action || toastData.cancel) && (
                 <div className="mt-2 flex gap-2">
                   {toastData.action && (

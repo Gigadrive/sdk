@@ -1,0 +1,172 @@
+/*
+ * Harmony 5.0 — Proposal B: "Tactile" (gloss-forward)
+ *
+ * Keeps the current glossy button finish and extends its dimensional language to the
+ * rest of the system:
+ *  - Raised elements (buttons, cards, active segments) carry gloss + inset top
+ *    highlight + soft drop shadow.
+ *  - Sunken elements (inputs, segmented tracks, progress tracks) are recessed wells
+ *    with inner shadows.
+ *  - Dark surfaces are lifted slightly (bg ~6.7% instead of ~4%) so shadows and
+ *    highlights have room to read; elevation = lightness + shadow, not hairlines.
+ *  - Brand green (#16A34A) unchanged. Semantic status tokens shared with Proposal A.
+ *  - Radius stays generous (0.75rem) to match the soft, tactile feel.
+ */
+
+.pb {
+  --background: 150 14% 96.8%;
+  --foreground: 170 15% 9%;
+  --card: 0 0% 100%;
+  --card-foreground: 170 15% 9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 170 15% 9%;
+  --primary: 142.13 76.22% 36.27%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 150 10% 92.5%;
+  --secondary-foreground: 168 12% 16%;
+  --muted: 150 10% 93%;
+  --muted-foreground: 160 6% 40%;
+  --accent: 150 10% 92%;
+  --accent-foreground: 168 12% 16%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 150 9% 87.5%;
+  --input: 150 8% 82%;
+  --ring: 142.13 76.22% 36.27%;
+  --success: 142 72% 29%;
+  --success-soft: 141 60% 95%;
+  --warning: 36 90% 32%;
+  --warning-fill: 42 96% 50%;
+  --warning-soft: 44 92% 94%;
+  --danger: 0 72% 45%;
+  --danger-soft: 0 80% 96.5%;
+  --info: 205 85% 38%;
+  --info-soft: 206 90% 95.5%;
+  --sidebar: 150 12% 94.5%;
+  --sidebar-foreground: 168 12% 16%;
+  --sidebar-border: 150 9% 88%;
+  --sidebar-ring: 142.13 76.22% 36.27%;
+  --chart-1: 142 72% 36%;
+  --chart-2: 173 55% 36%;
+  --chart-3: 205 70% 45%;
+  --chart-4: 43 80% 48%;
+  --chart-5: 271 50% 55%;
+  --radius: 0.75rem;
+}
+
+.dark .pb,
+.dark.pb {
+  --background: 170 8% 6.7%;
+  --foreground: 150 10% 96%;
+  --card: 168 8% 10%;
+  --card-foreground: 150 10% 96%;
+  --popover: 168 8% 12%;
+  --popover-foreground: 150 10% 96%;
+  --primary: 142.13 76.22% 36.27%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 166 7% 15.5%;
+  --secondary-foreground: 150 8% 92%;
+  --muted: 166 7% 13.5%;
+  --muted-foreground: 158 6% 62%;
+  --accent: 166 7% 16%;
+  --accent-foreground: 150 10% 96%;
+  --destructive: 0 68% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 165 7% 17%;
+  --input: 165 6% 22%;
+  --ring: 142.13 76.22% 36.27%;
+  --success: 142 65% 46%;
+  --success-soft: 144 45% 10%;
+  --warning: 43 92% 56%;
+  --warning-fill: 43 92% 56%;
+  --warning-soft: 40 50% 10%;
+  --danger: 0 78% 62%;
+  --danger-soft: 0 45% 11%;
+  --info: 203 90% 60%;
+  --info-soft: 207 55% 11%;
+  --sidebar: 170 9% 5%;
+  --sidebar-foreground: 150 8% 92%;
+  --sidebar-border: 165 7% 15%;
+  --sidebar-ring: 142.13 76.22% 36.27%;
+  --chart-1: 142 65% 46%;
+  --chart-2: 173 55% 42%;
+  --chart-3: 203 75% 55%;
+  --chart-4: 43 85% 58%;
+  --chart-5: 271 55% 62%;
+}
+
+/* Semantic utility shims (same API as Proposal A) */
+.pb .text-success {
+  color: hsl(var(--success));
+}
+.pb .text-warning {
+  color: hsl(var(--warning));
+}
+.pb .text-danger {
+  color: hsl(var(--danger));
+}
+.pb .text-info {
+  color: hsl(var(--info));
+}
+.pb .bg-success-soft {
+  background-color: hsl(var(--success-soft));
+}
+.pb .bg-warning-soft {
+  background-color: hsl(var(--warning-soft));
+}
+.pb .bg-danger-soft {
+  background-color: hsl(var(--danger-soft));
+}
+.pb .bg-info-soft {
+  background-color: hsl(var(--info-soft));
+}
+.pb .font-display {
+  font-family: 'Resist Sans Display', 'Resist Sans Text', system-ui, sans-serif;
+}
+
+/* ── Tactile primitives ─────────────────────────────────────────────────── */
+
+/* Raised card: gloss sheen + inset top highlight + layered soft shadow */
+.pb .card-tactile {
+  box-shadow:
+    0 1px 2px rgba(20, 30, 25, 0.05),
+    0 8px 20px -12px rgba(20, 30, 25, 0.18);
+}
+.dark .pb .card-tactile,
+.dark.pb .card-tactile {
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.045), transparent 45%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 8px 20px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* Recessed well: inputs, segmented tracks, progress tracks */
+.pb .well {
+  box-shadow: inset 0 1px 2px rgba(20, 30, 25, 0.07);
+}
+.dark .pb .well,
+.dark.pb .well {
+  box-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.45);
+}
+
+/* Raised segment thumb / small raised control (matches outline-button finish) */
+.pb .raised {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 1px 2px rgba(20, 30, 25, 0.12);
+}
+.dark .pb .raised,
+.dark.pb .raised {
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.08), transparent 60%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+/* Glossy progress fill (green bevel like the primary button) */
+.pb .fill-gloss {
+  background-color: hsl(var(--primary));
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.05) 55%, transparent);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25);
+}

@@ -1,0 +1,414 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://static-cdn.gigadrivegroup.com/resist-sans/stylesheet.css?v2" />
+    <link rel="stylesheet" href="demo.css" />
+    <link rel="stylesheet" href="theme-proposed.css" />
+    <style>
+      body {
+        margin: 0;
+      }
+      html.dark,
+      .dark {
+        color-scheme: dark;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid grid-cols-2 font-sans">
+      <!-- ══════════ LIGHT · PROPOSED ══════════ -->
+      <div class="p2 space-y-8 bg-background p-10 text-foreground">
+        <div class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Proposed · Light</div>
+
+        <!-- Buttons -->
+        <div class="space-y-3">
+          <div class="text-sm font-medium">Buttons</div>
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-[0_1px_2px_rgba(10,30,20,0.25),inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-primary/90"
+            >
+              Deploy project
+            </button>
+            <button
+              class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-secondary px-4 text-sm font-medium text-secondary-foreground hover:bg-secondary/75"
+            >
+              Secondary
+            </button>
+            <button
+              class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-input bg-card px-4 text-sm font-medium text-foreground shadow-[0_1px_2px_rgba(16,24,20,0.05)] hover:bg-muted"
+            >
+              Outline
+            </button>
+            <button
+              class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Ghost
+            </button>
+            <button
+              class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground shadow-[0_1px_2px_rgba(60,10,10,0.25),inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-destructive/90"
+            >
+              Delete
+            </button>
+            <button
+              class="inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground shadow-[0_1px_2px_rgba(10,30,20,0.25),inset_0_1px_0_rgba(255,255,255,0.12)]"
+            >
+              Small
+            </button>
+          </div>
+        </div>
+
+        <!-- Status chips -->
+        <div class="space-y-3">
+          <div class="text-sm font-medium">Status (dot chips + soft badges)</div>
+          <div class="flex flex-wrap items-center gap-3">
+            <div
+              class="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium"
+            >
+              <span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span>Running
+            </div>
+            <div
+              class="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium"
+            >
+              <span class="size-1.5 rounded-full" style="background: hsl(var(--warning-fill))"></span>Queued
+            </div>
+            <div
+              class="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+            >
+              <span class="size-1.5 rounded-full bg-muted-foreground/50"></span>Stopped
+            </div>
+            <div
+              class="inline-flex items-center gap-1.5 rounded-full border bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success"
+              style="border-color: hsl(var(--success) / 0.25)"
+            >
+              Soft
+            </div>
+            <div
+              class="inline-flex items-center gap-1.5 rounded-full border bg-danger-soft px-2.5 py-0.5 text-xs font-medium text-danger"
+              style="border-color: hsl(var(--danger) / 0.25)"
+            >
+              Failed
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="space-y-3">
+          <div class="text-sm font-medium">Tabs (underline)</div>
+          <div class="flex gap-1 border-b border-border">
+            <button
+              class="-mb-px border-b-2 px-3 py-2 text-sm font-medium text-foreground"
+              style="border-color: hsl(var(--primary))"
+            >
+              Overview
+            </button>
+            <button
+              class="-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Deployments
+            </button>
+            <button
+              class="-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Logs
+            </button>
+            <button
+              class="-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Settings
+            </button>
+          </div>
+        </div>
+
+        <!-- Inputs -->
+        <div class="max-w-sm space-y-4">
+          <div class="text-sm font-medium">Input (top label)</div>
+          <div>
+            <label class="mb-1.5 block text-sm font-medium">Project name</label>
+            <input
+              type="text"
+              value="gigadrive-api"
+              class="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-[0_1px_2px_rgba(16,24,20,0.04)] placeholder:text-muted-foreground"
+            />
+            <div class="mt-1.5 text-xs text-muted-foreground">Used in your deployment URLs.</div>
+          </div>
+          <div>
+            <label class="mb-1.5 block text-sm font-medium text-danger">Email</label>
+            <input
+              type="text"
+              value="not-an-email"
+              class="flex h-9 w-full rounded-md border bg-card px-3 text-sm"
+              style="border-color: hsl(var(--danger)); box-shadow: 0 0 0 3px hsl(var(--danger) / 0.12)"
+            />
+            <div class="mt-1.5 text-xs text-danger">Please enter a valid email address.</div>
+          </div>
+        </div>
+
+        <!-- Alerts -->
+        <div class="max-w-xl space-y-3">
+          <div class="text-sm font-medium">Alerts (token-driven)</div>
+          <div class="relative w-full rounded-lg border bg-info-soft p-4" style="border-color: hsl(var(--info) / 0.25)">
+            <div class="flex gap-2.5">
+              <svg
+                class="mt-0.5 size-4 shrink-0 text-info"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4" />
+                <path d="M12 8h.01" />
+              </svg>
+              <div>
+                <div class="text-sm font-medium">Scheduled maintenance</div>
+                <div class="mt-0.5 text-sm text-muted-foreground">
+                  The EU region will be under maintenance on Sunday at 02:00 UTC.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="relative w-full rounded-lg border bg-success-soft p-4"
+            style="border-color: hsl(var(--success) / 0.25)"
+          >
+            <div class="flex gap-2.5">
+              <svg
+                class="mt-0.5 size-4 shrink-0 text-success"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <path d="m9 11 3 3L22 4" />
+              </svg>
+              <div>
+                <div class="text-sm font-medium">Deployment successful</div>
+                <div class="mt-0.5 text-sm text-muted-foreground">
+                  Your project is live at gigadrive-api.gigadrive.app.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card -->
+        <div class="max-w-xl">
+          <div class="mb-3 text-sm font-medium">Card</div>
+          <div class="card-elevated rounded-xl border bg-card text-card-foreground">
+            <div class="flex flex-col space-y-1 p-5">
+              <h3 class="text-base font-semibold leading-none tracking-tight">Usage this month</h3>
+              <div class="text-sm text-muted-foreground">Compute hours across all projects.</div>
+            </div>
+            <div class="px-5 pb-5">
+              <div class="font-display text-3xl font-semibold tabular-nums tracking-tight">412.6 h</div>
+              <div class="mt-1 text-sm">
+                <span class="font-medium text-success">↑ 18%</span>
+                <span class="text-muted-foreground">from last month</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════ DARK · PROPOSED ══════════ -->
+      <div class="dark">
+        <div class="p2 space-y-8 bg-background p-10 text-foreground">
+          <div class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Proposed · Dark</div>
+
+          <div class="space-y-3">
+            <div class="text-sm font-medium">Buttons</div>
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-[0_0_0_1px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.5)] hover:bg-primary/90"
+              >
+                Deploy project
+              </button>
+              <button
+                class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-secondary px-4 text-sm font-medium text-secondary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:bg-secondary/75"
+              >
+                Secondary
+              </button>
+              <button
+                class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-input bg-card px-4 text-sm font-medium text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:bg-muted"
+              >
+                Outline
+              </button>
+              <button
+                class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Ghost
+              </button>
+              <button
+                class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </button>
+              <button
+                class="inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground shadow-[0_0_0_1px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.5)]"
+              >
+                Small
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="text-sm font-medium">Status (dot chips + soft badges)</div>
+            <div class="flex flex-wrap items-center gap-3">
+              <div
+                class="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium"
+              >
+                <span
+                  class="size-1.5 rounded-full"
+                  style="background: hsl(var(--success)); box-shadow: 0 0 6px hsl(var(--success) / 0.8)"
+                ></span
+                >Running
+              </div>
+              <div
+                class="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium"
+              >
+                <span class="size-1.5 rounded-full" style="background: hsl(var(--warning-fill))"></span>Queued
+              </div>
+              <div
+                class="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+              >
+                <span class="size-1.5 rounded-full bg-muted-foreground/50"></span>Stopped
+              </div>
+              <div
+                class="inline-flex items-center gap-1.5 rounded-full border bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success"
+                style="border-color: hsl(var(--success) / 0.3)"
+              >
+                Soft
+              </div>
+              <div
+                class="inline-flex items-center gap-1.5 rounded-full border bg-danger-soft px-2.5 py-0.5 text-xs font-medium text-danger"
+                style="border-color: hsl(var(--danger) / 0.3)"
+              >
+                Failed
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="text-sm font-medium">Tabs (underline)</div>
+            <div class="flex gap-1 border-b border-border">
+              <button
+                class="-mb-px border-b-2 px-3 py-2 text-sm font-medium text-foreground"
+                style="border-color: hsl(var(--primary))"
+              >
+                Overview
+              </button>
+              <button
+                class="-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Deployments
+              </button>
+              <button
+                class="-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Logs
+              </button>
+              <button
+                class="-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Settings
+              </button>
+            </div>
+          </div>
+
+          <div class="max-w-sm space-y-4">
+            <div class="text-sm font-medium">Input (top label)</div>
+            <div>
+              <label class="mb-1.5 block text-sm font-medium">Project name</label>
+              <input
+                type="text"
+                value="gigadrive-api"
+                class="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] placeholder:text-muted-foreground"
+              />
+              <div class="mt-1.5 text-xs text-muted-foreground">Used in your deployment URLs.</div>
+            </div>
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-danger">Email</label>
+              <input
+                type="text"
+                value="not-an-email"
+                class="flex h-9 w-full rounded-md border bg-card px-3 text-sm"
+                style="border-color: hsl(var(--danger)); box-shadow: 0 0 0 3px hsl(var(--danger) / 0.15)"
+              />
+              <div class="mt-1.5 text-xs text-danger">Please enter a valid email address.</div>
+            </div>
+          </div>
+
+          <div class="max-w-xl space-y-3">
+            <div class="text-sm font-medium">Alerts (token-driven)</div>
+            <div
+              class="relative w-full rounded-lg border bg-info-soft p-4"
+              style="border-color: hsl(var(--info) / 0.3)"
+            >
+              <div class="flex gap-2.5">
+                <svg
+                  class="mt-0.5 size-4 shrink-0 text-info"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" />
+                </svg>
+                <div>
+                  <div class="text-sm font-medium">Scheduled maintenance</div>
+                  <div class="mt-0.5 text-sm text-muted-foreground">
+                    The EU region will be under maintenance on Sunday at 02:00 UTC.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              class="relative w-full rounded-lg border bg-success-soft p-4"
+              style="border-color: hsl(var(--success) / 0.3)"
+            >
+              <div class="flex gap-2.5">
+                <svg
+                  class="mt-0.5 size-4 shrink-0 text-success"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <path d="m9 11 3 3L22 4" />
+                </svg>
+                <div>
+                  <div class="text-sm font-medium">Deployment successful</div>
+                  <div class="mt-0.5 text-sm text-muted-foreground">
+                    Your project is live at gigadrive-api.gigadrive.app.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="max-w-xl">
+            <div class="mb-3 text-sm font-medium">Card</div>
+            <div class="card-elevated rounded-xl border bg-card text-card-foreground">
+              <div class="flex flex-col space-y-1 p-5">
+                <h3 class="text-base font-semibold leading-none tracking-tight">Usage this month</h3>
+                <div class="text-sm text-muted-foreground">Compute hours across all projects.</div>
+              </div>
+              <div class="px-5 pb-5">
+                <div class="font-display text-3xl font-semibold tabular-nums tracking-tight">412.6 h</div>
+                <div class="mt-1 text-sm">
+                  <span class="font-medium text-success">↑ 18%</span>
+                  <span class="text-muted-foreground">from last month</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

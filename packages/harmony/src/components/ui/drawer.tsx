@@ -41,7 +41,7 @@ const DrawerContent = React.forwardRef<React.ElementRef<typeof DrawerPrimitive.C
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(
-          'fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background',
+          'fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-card',
           className
         )}
         style={{ maxHeight }}
@@ -51,9 +51,7 @@ const DrawerContent = React.forwardRef<React.ElementRef<typeof DrawerPrimitive.C
         {title && (
           <div className="grid gap-1.5 p-4 text-center sm:text-left">
             {typeof title === 'string' ? (
-              <DrawerPrimitive.Title className="text-lg font-semibold leading-none tracking-tight">
-                {title}
-              </DrawerPrimitive.Title>
+              <DrawerPrimitive.Title className="text-lg leading-none tracking-tight">{title}</DrawerPrimitive.Title>
             ) : (
               title
             )}

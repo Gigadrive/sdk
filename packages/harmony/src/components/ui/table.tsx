@@ -2,23 +2,30 @@
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div data-slot="table-wrapper" className="relative w-full overflow-auto">
-      <table
-        ref={ref}
-        data-slot="table"
-        className={cn('w-full caption-bottom text-foreground text-sm', className)}
-        {...props}
-      />
-    </div>
-  )
-);
+export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  /**
+   * `compact` tightens header and cell chrome for operational data tables
+   * (36px header band on `bg-muted/30`, tighter cell padding, smaller header text).
+   */
+  density?: 'default' | 'compact';
+}
+
+const Table = React.forwardRef<HTMLTableElement, TableProps>(({ className, density = 'default', ...props }, ref) => (
+  <div data-slot="table-wrapper" className="relative w-full overflow-auto">
+    <table
+      ref={ref}
+      data-slot="table"
+      data-density={density}
+      className={cn('group/table w-full caption-bottom text-foreground text-sm', className)}
+      {...props}
+    />
+  </div>
+));
 Table.displayName = 'Table';
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
   ({ className, ...props }, ref) => (
-    <thead ref={ref} data-slot="table-header" className={cn('[&_tr]:border-b', className)} {...props} />
+    <thead ref={ref} data-slot="table-header" className={cn('bg-muted/30 [&_tr]:border-b', className)} {...props} />
   )
 );
 TableHeader.displayName = 'TableHeader';
@@ -64,6 +71,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
       data-slot="table-head"
       className={cn(
         'h-12 px-4 text-left rtl:text-right align-middle font-normal text-muted-foreground [&:has([role=checkbox])]:pe-0',
+        'group-data-[density=compact]/table:h-9 group-data-[density=compact]/table:px-3 group-data-[density=compact]/table:py-0 group-data-[density=compact]/table:text-xs group-data-[density=compact]/table:font-medium',
         className
       )}
       {...props}
@@ -77,7 +85,11 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
     <td
       ref={ref}
       data-slot="table-cell"
-      className={cn('p-4 align-middle [&:has([role=checkbox])]:pe-0', className)}
+      className={cn(
+        'p-4 align-middle [&:has([role=checkbox])]:pe-0',
+        'group-data-[density=compact]/table:px-3 group-data-[density=compact]/table:py-2',
+        className
+      )}
       {...props}
     />
   )

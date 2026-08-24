@@ -19,7 +19,7 @@ export interface ActionPanelFooterProps extends React.HTMLAttributes<HTMLDivElem
 
 const ActionPanel = React.forwardRef<HTMLDivElement, ActionPanelProps>(({ className, children, ...props }, ref) => {
   return (
-    <div ref={ref} className={cn('bg-card border rounded-lg shadow-sm', className)} {...props}>
+    <div ref={ref} className={cn('card-tactile bg-card border rounded-xl', className)} {...props}>
       <div className="px-4 py-5 sm:p-6">{children}</div>
     </div>
   );
@@ -28,7 +28,7 @@ ActionPanel.displayName = 'ActionPanel';
 
 const ActionPanelTitle = React.forwardRef<HTMLHeadingElement, ActionPanelTitleProps>(
   ({ className, children, ...props }, ref) => (
-    <h3 ref={ref} className={cn('text-base font-medium leading-6 text-gray-900 dark:text-white', className)} {...props}>
+    <h3 ref={ref} className={cn('text-base leading-6 text-foreground', className)} {...props}>
       {children}
     </h3>
   )
@@ -37,7 +37,7 @@ ActionPanelTitle.displayName = 'ActionPanelTitle';
 
 const ActionPanelBody = React.forwardRef<HTMLDivElement, ActionPanelBodyProps>(
   ({ className, children, ...props }, ref) => (
-    <div ref={ref} className={cn('mt-2 max-w-xl text-sm text-gray-500 dark:text-gray-300', className)} {...props}>
+    <div ref={ref} className={cn('mt-2 max-w-xl text-sm text-muted-foreground', className)} {...props}>
       {children}
     </div>
   )

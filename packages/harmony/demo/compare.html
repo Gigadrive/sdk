@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        margin: 0;
+        background: #101214;
+        font-family: system-ui, sans-serif;
+        padding: 24px;
+      }
+      .label {
+        color: #9aa4ae;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin: 0 0 8px 2px;
+      }
+      .label b {
+        color: #fff;
+      }
+      img {
+        width: 100%;
+        display: block;
+        border-radius: 10px;
+        border: 1px solid #2a2f34;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 20px;
+      }
+    </style>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const set = params.get('set') || 'console-dark';
+      const SETS = {
+        'console-dark': {
+          layout: 'stack',
+          items: [
+            ['Current — console (dark)', 'console-current-dark.png'],
+            ['Proposal A — Precision: flat, layered (dark)', 'console-proposed-dark.png'],
+            ['Proposal B — Tactile: gloss-forward (dark)', 'console-b-dark.png'],
+          ],
+        },
+        'console-light': {
+          layout: 'stack',
+          items: [
+            ['Current — console (light)', 'console-current-light.png'],
+            ['Proposal A — Precision: flat, layered (light)', 'console-proposed-light.png'],
+            ['Proposal B — Tactile: gloss-forward (light)', 'console-b-light.png'],
+          ],
+        },
+        settings: {
+          layout: 'row',
+          items: [
+            ['Current — settings (dark)', 'settings-current-dark.png'],
+            ['Proposal A — Precision (dark)', 'settings-proposed-dark.png'],
+            ['Proposal B — Tactile (dark)', 'settings-b-dark.png'],
+          ],
+        },
+        sheets: {
+          layout: 'stack',
+          items: [
+            ['Current — components', 'sheet-current.png'],
+            ['Proposal A — Precision', 'sheet-proposed.png'],
+            ['Proposal B — Tactile', 'sheet-b.png'],
+          ],
+        },
+      };
+      window.addEventListener('DOMContentLoaded', () => {
+        const cfg = SETS[set];
+        if (!cfg) {
+          document.getElementById('wrap').textContent = `Unknown set "${set}" — valid: ${Object.keys(SETS).join(', ')}`;
+          return;
+        }
+        const wrap = document.getElementById('wrap');
+        wrap.className = cfg.layout === 'row' ? 'row' : 'stack';
+        for (const [label, src] of cfg.items) {
+          const d = document.createElement('div');
+          d.innerHTML = `<p class="label">${label}</p><img src="${src}">`;
+          wrap.appendChild(d);
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="wrap"></div>
+  </body>
+</html>

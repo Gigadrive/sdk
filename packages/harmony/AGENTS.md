@@ -354,3 +354,44 @@ followed by **consumers** of `@gigadrive/harmony` in their applications:
 - React: `react-in-jsx-scope` off (JSX transform), `react-hooks/rules-of-hooks` off.
 - Test files (`*.test.ts`, `*.test.tsx`) excluded entirely.
 - Storybook plugin rules apply to `*.stories.*` files.
+
+## Tactile Design Language (5.0)
+
+Depth is harmony's design language: **raised things are glossy, sunken things are
+recessed.** A small set of CSS primitives in `src/theme.css` implements it (four
+recipes, plus an activation variant of `.raised`) — never re-derive their
+shadow/gradient recipes inline:
+
+| Primitive           | Recipe                                                    | Use on                                                                                                                                           |
+| ------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.card-tactile`     | sheen + inset top highlight + layered soft shadow         | Card, Dialog/AlertDialog content, SettingsCard, ActionPanel, floating Toolbar                                                                    |
+| `.well`             | inner shadow, sits below the surface                      | Input, Textarea, Select trigger, TabsList track, Progress track (not Terminal — its opaque children would hide the inset; see the comment there) |
+| `.raised`           | inset top highlight + small drop shadow (+ sheen in dark) | StatusBadge chips, Avatar fallback, Tooltip, Toast                                                                                               |
+| `.raised-on-active` | `.raised`, but only while `data-state="active"`           | TabsTrigger, segmented controls                                                                                                                  |
+| `.fill-gloss`       | glossy brand-green fill                                   | Progress fill, meters, Switch checked track (via inline recipe)                                                                                  |
+
+Buttons keep their own inline gloss recipe (gradient + inset highlight + drop shadow,
+deeper in dark) — that recipe predates the primitives and is the brand's signature.
+
+Rules:
+
+- **Weight scale.** Resist Sans is a heavy grotesk — its Medium already reads
+  like other fonts' semibold. Headings, titles and body text are therefore all
+  normal (400); hierarchy comes from size and color (foreground vs
+  muted-foreground), not weight. `font-medium` (500) is reserved for small
+  functional emphasis only: form labels, badges, status chips, tab triggers,
+  toast titles, active nav items, compact table headers. Never use
+  `font-semibold` or `font-bold` in components — the family has no SemiBold
+  cut, so 600 used to resolve up to Bold (font.css now aliases 600 to the
+  Medium files as a safety net).
+- Component colors come from tokens (`bg-card`, `text-muted-foreground`,
+  `text-success`, `bg-danger-soft`, …). The semantic status tokens
+  (`success/warning/danger/info` + `-soft`) live in `theme.css` and are wired
+  into Tailwind via `src/tailwind/preset.ts`.
+- Hardcoded palette classes (`gray-*`, `zinc-*`, `stone-*`, raw `green-*` for
+  status) are forbidden except where imitating something external (Terminal OS
+  chrome, ANSI colors) — justify those with a comment.
+- Consumers share the Tailwind config via `@gigadrive/harmony/tailwind-preset`;
+  never copy the config into an app.
+- Visual reference: `demo/` mockups (`b-*.png`) and the
+  `Foundations/Audit` Storybook story (all components, light + dark).

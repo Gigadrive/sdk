@@ -1,0 +1,518 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://static-cdn.gigadrivegroup.com/resist-sans/stylesheet.css?v2" />
+    <link rel="stylesheet" href="demo.css" />
+    <link rel="stylesheet" href="theme-b.css" />
+    <style>
+      body {
+        margin: 0;
+      }
+      html.dark,
+      .dark {
+        color-scheme: dark;
+      }
+    </style>
+    <script>
+      if (location.search.includes('dark')) document.documentElement.classList.add('dark');
+    </script>
+  </head>
+  <body class="pb bg-background font-sans text-foreground antialiased">
+    <!-- Proposal B "Tactile": same faithful console shell, gloss-forward styling -->
+    <div class="flex h-screen w-screen flex-col overflow-hidden bg-muted/40">
+      <!-- Navbar -->
+      <nav class="flex h-12 shrink-0 items-center gap-2 px-4">
+        <div class="grid size-6 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+          G
+        </div>
+        <div class="flex items-center gap-1 text-sm">
+          <button class="flex items-center gap-1.5 rounded-md px-2 py-1 font-medium hover:bg-muted">
+            Gigadrive GmbH
+            <svg
+              class="size-3 text-muted-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="m7 15 5 5 5-5" />
+              <path d="m7 9 5-5 5 5" />
+            </svg>
+          </button>
+          <span class="text-muted-foreground/50">/</span>
+          <button class="flex items-center gap-1.5 rounded-md px-2 py-1 font-medium hover:bg-muted">
+            gigadrive-api
+            <svg
+              class="size-3 text-muted-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="m7 15 5 5 5-5" />
+              <path d="m7 9 5-5 5 5" />
+            </svg>
+          </button>
+          <span class="text-muted-foreground/50">/</span>
+          <button class="flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-muted">
+            <span class="size-1.5 rounded-full" style="background: hsl(var(--success))"></span>Production
+            <svg
+              class="size-3 text-muted-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="m7 15 5 5 5-5" />
+              <path d="m7 9 5-5 5 5" />
+            </svg>
+          </button>
+        </div>
+        <div class="flex flex-1 items-center justify-end gap-2">
+          <button
+            class="raised inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-input bg-card px-3 text-sm font-medium hover:bg-accent"
+          >
+            Feedback
+          </button>
+          <div class="size-7 rounded-full bg-gradient-to-br from-green-400 to-emerald-700"></div>
+        </div>
+      </nav>
+
+      <div class="flex min-h-0 flex-1">
+        <!-- Layered sidebar -->
+        <aside class="flex w-60 shrink-0 flex-col px-2 pb-2">
+          <nav class="flex-1 space-y-0.5 pt-1">
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg bg-primary/10 py-2 pl-3 pr-3 text-sm font-medium text-primary"
+            >
+              <span
+                class="pointer-events-none absolute inset-y-0 left-0 my-auto h-5 w-[3px] rounded-r-full bg-primary"
+              ></span>
+              <span class="flex items-center gap-2"
+                ><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" /></svg
+                >Overview</span
+              >
+            </a>
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <span class="flex items-center gap-2"
+                ><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+                  <path
+                    d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+                  /></svg
+                >Deployments</span
+              >
+              <span class="ml-auto text-[11px] tabular-nums text-muted-foreground">12</span>
+            </a>
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <span class="flex items-center gap-2"
+                ><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <ellipse cx="12" cy="5" rx="9" ry="3" />
+                  <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+                  <path d="M3 12A9 3 0 0 0 21 12" /></svg
+                >Databases</span
+              >
+            </a>
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <span class="flex items-center gap-2"
+                ><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path
+                    d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+                  /></svg
+                >Storage</span
+              >
+            </a>
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <span class="flex items-center gap-2"
+                ><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg
+                >Observability</span
+              >
+            </a>
+            <div class="px-3 pb-2 pt-4 text-xs font-medium text-muted-foreground">Account</div>
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <span class="flex items-center gap-2"
+                ><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <line x1="2" y1="10" x2="22" y2="10" /></svg
+                >Billing</span
+              >
+            </a>
+            <a
+              class="relative flex w-full items-center justify-between rounded-lg py-2 pl-3 pr-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <span class="flex items-center gap-2"
+                ><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                  /></svg
+                >Settings</span
+              >
+            </a>
+          </nav>
+          <div class="mx-0.5 mb-2 rounded-lg border border-border bg-card/60 p-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-medium">Compute usage</span>
+              <span class="text-[11px] tabular-nums text-muted-foreground">41%</span>
+            </div>
+            <div class="well mt-1.5 h-1.5 w-full rounded-full bg-muted">
+              <div class="fill-gloss h-1.5 rounded-full" style="width: 41%"></div>
+            </div>
+            <div class="mt-1 text-[11px] text-muted-foreground">412.6 of 1,000 h</div>
+          </div>
+          <div class="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
+            <div class="size-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-700"></div>
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-sm font-medium">Jane Doe</div>
+              <div class="truncate text-xs text-muted-foreground">Pro plan</div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- SidebarInset panel (adds dark top-highlight) -->
+        <main
+          class="my-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-background shadow-[0_1px_3px_0_rgb(0_0_0/0.06),0_0_0_1px_rgb(0_0_0/0.02)]"
+          id="panel"
+        >
+          <!-- Toolbar -->
+          <div class="flex items-center gap-2 px-4 py-3">
+            <div class="relative">
+              <svg
+                class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                class="well flex h-8 w-64 rounded-lg border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground"
+                placeholder="Search deployments..."
+              />
+            </div>
+            <!-- Segmented control (new component) -->
+            <div class="well inline-flex h-8 items-center rounded-lg bg-muted p-0.5">
+              <button class="raised rounded-md bg-card px-2.5 py-0.5 text-xs font-medium">All</button>
+              <button class="rounded px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+                Production
+              </button>
+              <button class="rounded px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+                Preview
+              </button>
+            </div>
+            <div class="flex flex-1 justify-end gap-2">
+              <button
+                class="raised inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-card px-3 text-sm font-medium hover:bg-accent"
+              >
+                <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18" />
+                  <path d="M7 12h10" />
+                  <path d="M10 18h4" /></svg
+                >Filter
+              </button>
+              <button
+                class="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary bg-[image:linear-gradient(to_bottom,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_40%,transparent_60%)] px-3 text-sm font-medium text-primary-foreground shadow-[inset_0_1px_2px_0_rgba(255,255,255,0.2),0_2px_4px_0_rgba(0,0,0,0.25)] hover:bg-primary/90"
+              >
+                <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" /></svg
+                >New deployment
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI cards (layered surface + tabular numerals + semantic tokens) -->
+          <div class="grid grid-cols-4 gap-3 px-4 pb-3">
+            <div class="card-tactile rounded-xl border bg-card p-4 text-card-foreground">
+              <div class="text-xs text-muted-foreground">Requests (24 h)</div>
+              <div class="flex items-end justify-between">
+                <div class="mt-1 text-xl font-semibold tabular-nums tracking-tight">1.24 M</div>
+                <svg class="h-7 w-14 text-success" viewBox="0 0 64 32" fill="none">
+                  <path
+                    d="M0 26 L8 24 L16 25 L24 20 L32 21 L40 16 L48 17 L56 10 L64 8"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M0 26 L8 24 L16 25 L24 20 L32 21 L40 16 L48 17 L56 10 L64 8 V32 H0 Z"
+                    fill="currentColor"
+                    opacity="0.1"
+                  />
+                </svg>
+              </div>
+              <div class="mt-0.5 text-xs">
+                <span class="font-medium text-success">↑ 12.4%</span>
+                <span class="text-muted-foreground">vs. yesterday</span>
+              </div>
+            </div>
+            <div class="card-tactile rounded-xl border bg-card p-4 text-card-foreground">
+              <div class="text-xs text-muted-foreground">P95 latency</div>
+              <div class="flex items-end justify-between">
+                <div class="mt-1 text-xl font-semibold tabular-nums tracking-tight">184 ms</div>
+                <svg class="h-7 w-14 text-muted-foreground/50" viewBox="0 0 64 32" fill="none">
+                  <path
+                    d="M0 14 L8 16 L16 13 L24 18 L32 16 L40 20 L48 19 L56 22 L64 21"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                </svg>
+              </div>
+              <div class="mt-0.5 text-xs">
+                <span class="font-medium text-success">↓ 8 ms</span>
+                <span class="text-muted-foreground">vs. yesterday</span>
+              </div>
+            </div>
+            <div class="card-tactile rounded-xl border bg-card p-4 text-card-foreground">
+              <div class="text-xs text-muted-foreground">Error rate</div>
+              <div class="flex items-end justify-between">
+                <div class="mt-1 text-xl font-semibold tabular-nums tracking-tight">0.02%</div>
+                <svg class="h-7 w-14 text-muted-foreground/50" viewBox="0 0 64 32" fill="none">
+                  <path
+                    d="M0 20 L8 20 L16 21 L24 19 L32 20 L40 20 L48 21 L56 20 L64 20"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                </svg>
+              </div>
+              <div class="mt-0.5 text-xs text-muted-foreground">unchanged</div>
+            </div>
+            <div class="card-tactile rounded-xl border bg-card p-4 text-card-foreground">
+              <div class="text-xs text-muted-foreground">Uptime (30 d)</div>
+              <div class="flex items-end justify-between">
+                <div class="mt-1 text-xl font-semibold tabular-nums tracking-tight">99.98%</div>
+                <div class="flex h-7 items-end gap-[2px]">
+                  <div class="w-1 rounded-sm" style="height: 75%; background: hsl(var(--success) / 0.65)"></div>
+                  <div class="w-1 rounded-sm" style="height: 85%; background: hsl(var(--success) / 0.65)"></div>
+                  <div class="w-1 rounded-sm" style="height: 80%; background: hsl(var(--success) / 0.65)"></div>
+                  <div class="w-1 rounded-sm" style="height: 45%; background: hsl(var(--warning-fill))"></div>
+                  <div class="w-1 rounded-sm" style="height: 85%; background: hsl(var(--success) / 0.65)"></div>
+                  <div class="w-1 rounded-sm" style="height: 90%; background: hsl(var(--success) / 0.65)"></div>
+                  <div class="w-1 rounded-sm" style="height: 82%; background: hsl(var(--success) / 0.65)"></div>
+                </div>
+              </div>
+              <div class="mt-0.5 text-xs text-muted-foreground">2 incidents</div>
+            </div>
+          </div>
+
+          <!-- Dense table (proposed compact variant: muted header band, mono IDs, tabular numerals) -->
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-t bg-muted/30">
+                <th class="h-8 px-3 pl-4 text-left align-middle text-xs font-medium text-muted-foreground">
+                  Deployment
+                </th>
+                <th class="h-8 px-3 text-left align-middle text-xs font-medium text-muted-foreground">Status</th>
+                <th class="h-8 px-3 text-left align-middle text-xs font-medium text-muted-foreground">Branch</th>
+                <th class="h-8 px-3 text-left align-middle text-xs font-medium text-muted-foreground">Commit</th>
+                <th class="h-8 px-3 text-left align-middle text-xs font-medium text-muted-foreground">Duration</th>
+                <th class="h-8 px-3 text-left align-middle text-xs font-medium text-muted-foreground">Created</th>
+                <th class="h-8 w-8 px-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b hover:bg-muted/40">
+                <td class="px-3 py-1.5 pl-4 align-middle">
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono text-[13px]">dpl_8f2ac91b</span
+                    ><span class="rounded-full border border-border px-1.5 text-[10px] text-muted-foreground"
+                      >current</span
+                    >
+                  </div>
+                </td>
+                <td class="px-3 py-1.5 align-middle">
+                  <span
+                    class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                    ><span
+                      class="size-1.5 rounded-full"
+                      style="background: hsl(var(--success)); box-shadow: 0 0 5px hsl(var(--success) / 0.6)"
+                    ></span
+                    >Ready</span
+                  >
+                </td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">main</td>
+                <td class="max-w-40 truncate px-3 py-1.5 align-middle text-muted-foreground">
+                  fix: cache invalidation on env promote
+                </td>
+                <td class="px-3 py-1.5 align-middle tabular-nums text-muted-foreground">42 s</td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">2 m ago</td>
+                <td class="px-3 py-1.5 align-middle">
+                  <svg class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="5" cy="12" r="1.6" />
+                    <circle cx="12" cy="12" r="1.6" />
+                    <circle cx="19" cy="12" r="1.6" />
+                  </svg>
+                </td>
+              </tr>
+              <tr class="border-b hover:bg-muted/40">
+                <td class="px-3 py-1.5 pl-4 align-middle"><span class="font-mono text-[13px]">dpl_11c07be4</span></td>
+                <td class="px-3 py-1.5 align-middle">
+                  <span
+                    class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                    ><span
+                      class="size-1.5 animate-pulse rounded-full"
+                      style="background: hsl(var(--warning-fill))"
+                    ></span
+                    >Building</span
+                  >
+                </td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">feat/edge-cache</td>
+                <td class="max-w-40 truncate px-3 py-1.5 align-middle text-muted-foreground">
+                  feat: edge cache warm-up
+                </td>
+                <td class="px-3 py-1.5 align-middle tabular-nums text-muted-foreground">—</td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">8 m ago</td>
+                <td class="px-3 py-1.5 align-middle">
+                  <svg class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="5" cy="12" r="1.6" />
+                    <circle cx="12" cy="12" r="1.6" />
+                    <circle cx="19" cy="12" r="1.6" />
+                  </svg>
+                </td>
+              </tr>
+              <tr class="border-b hover:bg-muted/40">
+                <td class="px-3 py-1.5 pl-4 align-middle"><span class="font-mono text-[13px]">dpl_c3d94a02</span></td>
+                <td class="px-3 py-1.5 align-middle">
+                  <span
+                    class="inline-flex items-center gap-1.5 rounded-full border bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger"
+                    style="border-color: hsl(var(--danger) / 0.3)"
+                    ><span class="size-1.5 rounded-full" style="background: hsl(var(--danger))"></span>Failed</span
+                  >
+                </td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">feat/edge-cache</td>
+                <td class="max-w-40 truncate px-3 py-1.5 align-middle text-muted-foreground">wip: cache adapter</td>
+                <td class="px-3 py-1.5 align-middle tabular-nums text-muted-foreground">1 m 12 s</td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">26 m ago</td>
+                <td class="px-3 py-1.5 align-middle">
+                  <svg class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="5" cy="12" r="1.6" />
+                    <circle cx="12" cy="12" r="1.6" />
+                    <circle cx="19" cy="12" r="1.6" />
+                  </svg>
+                </td>
+              </tr>
+              <tr class="border-b hover:bg-muted/40">
+                <td class="px-3 py-1.5 pl-4 align-middle"><span class="font-mono text-[13px]">dpl_77e1f009</span></td>
+                <td class="px-3 py-1.5 align-middle">
+                  <span
+                    class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                    ><span class="size-1.5 rounded-full bg-muted-foreground/50"></span>Stopped</span
+                  >
+                </td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">main</td>
+                <td class="max-w-40 truncate px-3 py-1.5 align-middle text-muted-foreground">chore: bump deps</td>
+                <td class="px-3 py-1.5 align-middle tabular-nums text-muted-foreground">38 s</td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">1 h ago</td>
+                <td class="px-3 py-1.5 align-middle">
+                  <svg class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="5" cy="12" r="1.6" />
+                    <circle cx="12" cy="12" r="1.6" />
+                    <circle cx="19" cy="12" r="1.6" />
+                  </svg>
+                </td>
+              </tr>
+              <tr class="border-b hover:bg-muted/40">
+                <td class="px-3 py-1.5 pl-4 align-middle"><span class="font-mono text-[13px]">dpl_5b8e2d11</span></td>
+                <td class="px-3 py-1.5 align-middle">
+                  <span
+                    class="raised inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium"
+                    ><span
+                      class="size-1.5 rounded-full"
+                      style="background: hsl(var(--success)); box-shadow: 0 0 5px hsl(var(--success) / 0.6)"
+                    ></span
+                    >Ready</span
+                  >
+                </td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">main</td>
+                <td class="max-w-40 truncate px-3 py-1.5 align-middle text-muted-foreground">feat: request tracing</td>
+                <td class="px-3 py-1.5 align-middle tabular-nums text-muted-foreground">51 s</td>
+                <td class="px-3 py-1.5 align-middle text-muted-foreground">3 h ago</td>
+                <td class="px-3 py-1.5 align-middle">
+                  <svg class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="5" cy="12" r="1.6" />
+                    <circle cx="12" cy="12" r="1.6" />
+                    <circle cx="19" cy="12" r="1.6" />
+                  </svg>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="mt-auto flex items-center justify-between border-t px-4 py-2 text-[11px] text-muted-foreground">
+            <span>Showing 5 of 12 deployments</span>
+            <span class="tabular-nums">Updated 5 s ago</span>
+          </div>
+        </main>
+
+        <!-- Right icon rail -->
+        <aside class="flex w-[3.25rem] shrink-0 flex-col items-center gap-1 pb-3 pt-2">
+          <button
+            class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path
+                d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+              />
+            </svg>
+          </button>
+          <button
+            class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          </button>
+          <button
+            class="relative grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg
+            ><span class="absolute right-2 top-2 size-1.5 rounded-full" style="background: hsl(var(--danger))"></span>
+          </button>
+          <button
+            class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+            </svg>
+          </button>
+          <div class="mt-auto"></div>
+          <button
+            class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <path d="M12 17h.01" />
+            </svg>
+          </button>
+        </aside>
+      </div>
+    </div>
+    <script>
+      // Dark-mode panel top-highlight (matches proposed card-elevated treatment)
+      if (document.documentElement.classList.contains('dark')) {
+        document.getElementById('panel').style.boxShadow =
+          'inset 0 1px 0 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.45), 0 12px 32px -16px rgba(0,0,0,0.6)';
+      }
+    </script>
+  </body>
+</html>
