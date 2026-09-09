@@ -1,5 +1,5 @@
 ---
-'@gigadrive/network-config': minor
+'@gigadrive/network-config': major
 ---
 
 Publish a detected framework's `assetsDir` as real static assets.
@@ -27,5 +27,9 @@ with no Gigadrive build manifest) no longer declares `assetsDir` at all, since
 `.next/static` answers `/_next/static/...` and only the manifest-driven configs
 map those URLs.
 
-`generateConfig` takes the project folder as its third argument and now
-requires a `FileSystem` layer.
+BREAKING: `generateConfig` is publicly exported, and it takes the project folder
+as a new third argument and now requires a `FileSystem`/`Path` layer, so its
+effect no longer runs on its own. Backward compatibility is not available even
+with an optional argument, because the layer requirement changes the effect's
+type either way. `detectFramework`, its only in-tree caller, already provides
+both.
