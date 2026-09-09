@@ -19,5 +19,13 @@ Static-only output (no entrypoint and no routes) additionally serves directory
 index files at their extensionless path, so a prerendered
 `dist/about/index.html` answers `/about` the way static hosts serve it.
 
+Two directories are deliberately not enumerated. A PHP framework's `public/`
+document root skips `.php`, `.phtml` and `.phar`, because an exact-path asset
+route outranks the front controller's wildcard and would serve the script's
+source instead of running it. The Next.js fallback default (a standalone build
+with no Gigadrive build manifest) no longer declares `assetsDir` at all, since
+`.next/static` answers `/_next/static/...` and only the manifest-driven configs
+map those URLs.
+
 `generateConfig` takes the project folder as its third argument and now
 requires a `FileSystem` layer.

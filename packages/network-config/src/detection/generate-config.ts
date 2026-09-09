@@ -110,6 +110,12 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
     const assetsDir = defaults.assetsDir;
     if (assetsDir && !defaults.assetPaths && !defaults.assetPrefixes && !defaults.assetManifests) {
       for (const file of yield* collectAssetFiles(projectFolder, assetsDir)) {
+        // A PHP framework's asset directory is its document root, so it also
+        // holds the scripts the runtime executes. An exact-path asset route
+        // outranks the front controller's wildcard, so publishing one would
+        // serve its source instead of running it.
+        if (framework.language === 'php' && /\.(php|phtml|phar)$/i.test(file)) continue;
+
         paths.push(`${assetsDir}/${file}`);
 
         // Overrides are keyed by the prefix-stripped path, which is the key
