@@ -115,7 +115,7 @@ export const detectFramework = Effect.fn('detectFramework')(function* (projectFo
       const refinedDefaults = framework.refineDefaultConfig
         ? yield* framework.refineDefaultConfig(defaults, projectFolder)
         : defaults;
-      const config = yield* generateConfig(framework, packageManager, refinedDefaults);
+      const config = yield* generateConfig(framework, packageManager, projectFolder, refinedDefaults);
 
       return { framework, packageManager, config };
     }
