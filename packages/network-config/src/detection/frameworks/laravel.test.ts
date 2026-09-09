@@ -21,6 +21,26 @@ describe('Laravel framework detection', () => {
     expect(result.config.commands[0]).toBe('composer install');
   });
 
+  it('should publish the public directory without exposing PHP sources', async () => {
+    const result = await detectProject({
+      '/project/composer.json': composerJson({ php: '^8.3', 'laravel/framework': '^11.0' }),
+      '/project/artisan': '#!/usr/bin/env php',
+      '/project/composer.lock': '',
+      '/project/public/index.php': '<?php',
+      '/project/public/info.php': '<?php phpinfo();',
+      '/project/public/.htaccess': 'RewriteEngine On',
+      '/project/public/build/assets/app.css': 'body{}',
+      '/project/public/favicon.ico': 'icon',
+      '/project/app/Models/User.php': 'ignored',
+    });
+
+    expect(result.config.assets?.paths).toEqual(['public/build/assets/app.css', 'public/favicon.ico']);
+    expect(result.config.assets?.prefixToStrip).toBe('public/');
+    // The front controller stays a function, and the wildcard route runs every
+    // other PHP file rather than serving it.
+    expect(result.config.entrypoints).toEqual([expect.objectContaining({ path: 'public/index.php' })]);
+  });
+
   it('should detect Laravel and generate public PHP entrypoint config', async () => {
     const result = await detectProject({
       '/project/composer.json': composerJson({ php: '^8.3', 'laravel/framework': '^11.0' }),

@@ -94,11 +94,11 @@ describe('Next.js framework detection', () => {
     expect(result.config.routes).toEqual([
       expect.objectContaining({ path: '/*', destination: '.next/standalone/server.js' }),
     ]);
-    expect(result.config.assets).toMatchObject({
-      prefixToStrip: '.next/static/',
-      dynamicRoutes: true,
-      populateCache: true,
-    });
+    // Without a Gigadrive build manifest the fallback declares no asset
+    // directory: `.next/static` answers `/_next/static/...`, which only the
+    // manifest-driven configs map. Publishing it under its own stripped prefix
+    // would serve every chunk from the wrong URL.
+    expect(result.config.assets).toBeUndefined();
     expect(result.config.environmentVariables).toEqual({ NODE_ENV: 'production' });
   });
 

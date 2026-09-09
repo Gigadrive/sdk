@@ -1,8 +1,8 @@
-import { FileSystem, Path } from '@effect/platform';
 import { getFilesForPattern } from '@gigadrive/build-utils';
 import { Effect } from 'effect';
 import { minimatch } from 'minimatch';
 import safeRegex from 'safe-regex2';
+import { collectAssetFiles } from '../collect-asset-files';
 import { FunctionConfigError } from '../errors';
 import {
   DEFAULT_FUNCTION_DURATION_SECONDS,
@@ -14,15 +14,6 @@ import {
 } from '../normalized-config';
 import { AVAILABLE_REGIONS, type Region } from '../regions';
 import type { ConfigV4, ConfigV4FunctionSettings } from '../v4';
-
-/**
- * Maximum directory nesting depth for asset collection.
- * Guards against symlink-induced infinite recursion where constructed paths
- * grow monotonically (e.g. `/assets/link/link/link/...`).
- */
-const MAX_ASSET_DEPTH = 100;
-
-const DISALLOWED_ASSET_EXTENSIONS = ['.htaccess', '.htpasswd'];
 
 const DEFAULT_FUNCTION_SETTINGS: Required<Pick<ConfigV4FunctionSettings, 'memory' | 'max_duration'>> &
   Pick<ConfigV4FunctionSettings, 'schedule' | 'symlinks' | 'excludeFiles' | 'includeFiles'> = {
@@ -264,66 +255,12 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
 const collectAssets = Effect.fn('collectAssets')(function* (config: ConfigV4, projectFolder: string) {
   if (config.assets == null) return [] as string[];
 
-  const fs = yield* FileSystem.FileSystem;
-  const pathService = yield* Path.Path;
+  const assetNames = yield* collectAssetFiles(projectFolder, config.assets);
 
-  const assetsPath = pathService.join(projectFolder, config.assets);
-  const assetsExist = yield* fs.exists(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(false)));
-  if (!assetsExist) return [] as string[];
-
-  const stat = yield* fs.stat(assetsPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
-  if (!stat || stat.type !== 'Directory') return [] as string[];
-
-  const allFiles = yield* collectFilesRecursively(assetsPath);
-  const assets: string[] = [];
-
-  for (const assetName of allFiles) {
-    if (DISALLOWED_ASSET_EXTENSIONS.some((ext) => assetName.toLowerCase().endsWith(ext.toLowerCase()))) continue;
-    if (getFunctionSettings(`${config.assets}/${assetName}`, config) != null) continue;
-
-    assets.push(`${config.assets}/${assetName}`);
-  }
-
-  return assets;
+  return assetNames
+    .filter((assetName) => getFunctionSettings(`${config.assets}/${assetName}`, config) == null)
+    .map((assetName) => `${config.assets}/${assetName}`);
 });
-
-/**
- * Recursively collects all file paths relative to the base directory.
- */
-const collectFilesRecursively: (
-  basePath: string,
-  relativePath?: string,
-  depth?: number
-) => Effect.Effect<string[], never, FileSystem.FileSystem | Path.Path> = Effect.fn('collectFilesRecursively')(
-  function* (basePath: string, relativePath: string = '', depth: number = 0) {
-    if (depth > MAX_ASSET_DEPTH) return [] as string[];
-
-    const fs = yield* FileSystem.FileSystem;
-    const pathSvc = yield* Path.Path;
-
-    const currentPath = relativePath ? pathSvc.join(basePath, relativePath) : basePath;
-
-    const entries = yield* fs.readDirectory(currentPath).pipe(Effect.catchAll(() => Effect.succeed([] as string[])));
-    const result: string[] = [];
-
-    for (const name of entries) {
-      const fullPath = pathSvc.join(currentPath, name);
-      const entryRelative = relativePath ? pathSvc.join(relativePath, name) : name;
-      const stat = yield* fs.stat(fullPath).pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-      if (!stat) continue;
-
-      if (stat.type === 'Directory') {
-        const nested = yield* collectFilesRecursively(basePath, entryRelative, depth + 1);
-        result.push(...nested);
-      } else {
-        result.push(entryRelative);
-      }
-    }
-
-    return result;
-  }
-);
 
 // -- Service ----------------------------------------------------------------------------------
 

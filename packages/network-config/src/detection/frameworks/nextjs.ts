@@ -281,7 +281,12 @@ export const nextjs: FrameworkDefinition = {
     streaming: true,
     commands: ['next build'],
     entrypoint: '.next/standalone/server.js',
-    assetsDir: '.next/static',
+    // No `assetsDir`: this is only the fallback for a standalone build whose
+    // Gigadrive manifest is missing, and `.next/static` answers
+    // `/_next/static/...` rather than its own stripped prefix. Every path that
+    // resolves a real Next.js build (`refineDefaultConfig`) maps those chunks
+    // itself, so declaring the directory here would publish them at the wrong
+    // URLs.
     populateAssetCache: true,
     routes: [{ source: '/*', destination: '.next/standalone/server.js' }],
     environmentVariables: { NODE_ENV: 'production' },
