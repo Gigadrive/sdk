@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 5.0.3
+
+### Patch Changes
+
+- Prevent bundled Resist Sans faces from selecting locally installed fonts. ([#507](https://github.com/Gigadrive/sdk/pull/507))
+
 ## 5.0.2
 
 ### Patch Changes
