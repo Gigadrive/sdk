@@ -1,5 +1,11 @@
 # @gigadrive/harmony
 
+## 5.0.2
+
+### Patch Changes
+
+- Align the bundled Resist Sans stylesheet with the canonical CDN declarations. ([#505](https://github.com/Gigadrive/sdk/pull/505))
+
 ## 5.0.1
 
 ### Patch Changes
