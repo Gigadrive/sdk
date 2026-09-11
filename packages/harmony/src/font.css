@@ -30,19 +30,32 @@
  * Note this moves text on macOS/iOS too, not just Windows — the earlier 75.6%/24.4%
  * values preserved macOS exactly but kept the 1px optical offset everywhere.
  *
- * Only the Text family is overridden here; the Display family carries identical
- * metrics and is handled where those faces are declared.
+ * The overrides are applied to every Text and Display face below so every weight
+ * and style uses the same line-box metrics.
  */
 
 :root {
-  --font-sans-text: 'Resist Sans Text', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-  --font-sans-display: 'Resist Sans Display', var(--font-sans-text);
+  --font-resist-sans-text: 'Resist Sans Text', var(--font-sans, system-ui, sans-serif);
+  --font-resist-sans-display: 'Resist Sans Display', var(--font-sans, system-ui, sans-serif);
+  --font-sans-text: var(--font-resist-sans-text);
+  --font-sans-display: var(--font-resist-sans-display);
 }
 
 html {
-  font-family: var(--font-sans-text);
   line-height: 1.4; /* important for cross-OS consistency */
   font-synthesis: none; /* prevents faux styles, stabilizes metrics */
+}
+
+*,
+html,
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-resist-sans-text) !important;
 }
 
 h1,
@@ -51,16 +64,15 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-sans-display);
   line-height: 1.15;
 }
 
 @font-face {
-  font-family: 'Resist Sans Display Light Oblique';
+  font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.eot');
   src:
-    local('Resist Sans Display Light Oblique'),
-    local('ResistSansDisplay-LightOblique'),
+    /* local('Resist Sans Display Light Oblique'), */
+    /* local('ResistSansDisplay-LightOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.woff2') format('woff2'),
@@ -68,14 +80,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-LightOblique.ttf') format('truetype');
   font-weight: 300;
   font-style: italic;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
   font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.eot');
   src:
-    local('Resist Sans Display Bold'),
-    local('ResistSansDisplay-Bold'),
+    /* local('Resist Sans Display Bold'), */
+    /* local('ResistSansDisplay-Bold'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.woff2') format('woff2'),
@@ -83,14 +98,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Bold.ttf') format('truetype');
   font-weight: bold;
   font-style: normal;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
   font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.eot');
   src:
-    local('Resist Sans Display Light'),
-    local('ResistSansDisplay-Light'),
+    /* local('Resist Sans Display Light'), */
+    /* local('ResistSansDisplay-Light'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.woff2') format('woff2'),
@@ -98,14 +116,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Light.ttf') format('truetype');
   font-weight: 300;
   font-style: normal;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
   font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.eot');
   src:
-    local('Resist Sans Display Medium'),
-    local('ResistSansDisplay-Medium'),
+    /* local('Resist Sans Display Medium'), */
+    /* local('ResistSansDisplay-Medium'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.woff2') format('woff2'),
@@ -113,14 +134,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Medium.ttf') format('truetype');
   font-weight: 500;
   font-style: normal;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
-  font-family: 'Resist Sans Display Bold Oblique';
+  font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.eot');
   src:
-    local('Resist Sans Display Bold Oblique'),
-    local('ResistSansDisplay-BoldOblique'),
+    /* local('Resist Sans Display Bold Oblique'), */
+    /* local('ResistSansDisplay-BoldOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.woff2') format('woff2'),
@@ -128,14 +152,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-BoldOblique.ttf') format('truetype');
   font-weight: bold;
   font-style: italic;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
-  font-family: 'Resist Sans Display Medium Oblique';
+  font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.eot');
   src:
-    local('Resist Sans Display Medium Oblique'),
-    local('ResistSansDisplay-MediumOblique'),
+    /* local('Resist Sans Display Medium Oblique'), */
+    /* local('ResistSansDisplay-MediumOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.woff2') format('woff2'),
@@ -143,14 +170,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-MediumOblique.ttf') format('truetype');
   font-weight: 500;
   font-style: italic;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
   font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.eot');
   src:
-    local('Resist Sans Text Medium'),
-    local('ResistSansText-Medium'),
+    /* local('Resist Sans Text Medium'), */
+    /* local('ResistSansText-Medium'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Medium.woff2') format('woff2'),
@@ -165,11 +195,11 @@ h6 {
 }
 
 @font-face {
-  font-family: 'Resist Sans Text Light Oblique';
+  font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.eot');
   src:
-    local('Resist Sans Text Light Oblique'),
-    local('ResistSansText-LightOblique'),
+    /* local('Resist Sans Text Light Oblique'), */
+    /* local('ResistSansText-LightOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-LightOblique.woff2') format('woff2'),
@@ -184,11 +214,11 @@ h6 {
 }
 
 @font-face {
-  font-family: 'Resist Sans Text Medium Oblique';
+  font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.eot');
   src:
-    local('Resist Sans Text Medium Oblique'),
-    local('ResistSansText-MediumOblique'),
+    /* local('Resist Sans Text Medium Oblique'), */
+    /* local('ResistSansText-MediumOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-MediumOblique.woff2') format('woff2'),
@@ -203,11 +233,11 @@ h6 {
 }
 
 @font-face {
-  font-family: 'Resist Sans Display Thin Oblique';
+  font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.eot');
   src:
-    local('Resist Sans Display Thin Oblique'),
-    local('ResistSansDisplay-ThinOblique'),
+    /* local('Resist Sans Display Thin Oblique'), */
+    /* local('ResistSansDisplay-ThinOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.woff2') format('woff2'),
@@ -215,14 +245,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-ThinOblique.ttf') format('truetype');
   font-weight: 100;
   font-style: italic;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
   font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.eot');
   src:
-    local('Resist Sans Display Thin'),
-    local('ResistSansDisplay-Thin'),
+    /* local('Resist Sans Display Thin'), */
+    /* local('ResistSansDisplay-Thin'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.woff2') format('woff2'),
@@ -230,14 +263,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Thin.ttf') format('truetype');
   font-weight: 100;
   font-style: normal;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
   font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.eot');
   src:
-    local('Resist Sans Text Bold'),
-    local('ResistSansText-Bold'),
+    /* local('Resist Sans Text Bold'), */
+    /* local('ResistSansText-Bold'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.eot?#iefix') format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.woff2') format('woff2'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Bold.woff') format('woff'),
@@ -254,8 +290,8 @@ h6 {
   font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.eot');
   src:
-    local('Resist Sans Display'),
-    local('ResistSansDisplay-Regular'),
+    /* local('Resist Sans Display'), */
+    /* local('ResistSansDisplay-Regular'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.woff2') format('woff2'),
@@ -263,14 +299,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-Regular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
   font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.eot');
   src:
-    local('Resist Sans Text Light'),
-    local('ResistSansText-Light'),
+    /* local('Resist Sans Text Light'), */
+    /* local('ResistSansText-Light'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.eot?#iefix') format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.woff2') format('woff2'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Light.woff') format('woff'),
@@ -284,11 +323,11 @@ h6 {
 }
 
 @font-face {
-  font-family: 'Resist Sans Text Bold Oblique';
+  font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.eot');
   src:
-    local('Resist Sans Text Bold Oblique'),
-    local('ResistSansText-BoldOblique'),
+    /* local('Resist Sans Text Bold Oblique'), */
+    /* local('ResistSansText-BoldOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-BoldOblique.woff2') format('woff2'),
@@ -303,11 +342,11 @@ h6 {
 }
 
 @font-face {
-  font-family: 'Resist Sans Display Oblique';
+  font-family: 'Resist Sans Display';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.eot');
   src:
-    local('Resist Sans Display Oblique'),
-    local('ResistSansDisplay-RegularOblique'),
+    /* local('Resist Sans Display Oblique'), */
+    /* local('ResistSansDisplay-RegularOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.woff2') format('woff2'),
@@ -315,14 +354,17 @@ h6 {
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansDisplay-RegularOblique.ttf') format('truetype');
   font-weight: normal;
   font-style: italic;
+  ascent-override: 96%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
 }
 
 @font-face {
-  font-family: 'Resist Sans Text Oblique';
+  font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.eot');
   src:
-    local('Resist Sans Text Oblique'),
-    local('ResistSansText-RegularOblique'),
+    /* local('Resist Sans Text Oblique'), */
+    /* local('ResistSansText-RegularOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-RegularOblique.woff2') format('woff2'),
@@ -340,8 +382,8 @@ h6 {
   font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.eot');
   src:
-    local('Resist Sans Text Thin'),
-    local('ResistSansText-Thin'),
+    /* local('Resist Sans Text Thin'), */
+    /* local('ResistSansText-Thin'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.eot?#iefix') format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.woff2') format('woff2'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Thin.woff') format('woff'),
@@ -355,11 +397,11 @@ h6 {
 }
 
 @font-face {
-  font-family: 'Resist Sans Text Thin Oblique';
+  font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.eot');
   src:
-    local('Resist Sans Text Thin Oblique'),
-    local('ResistSansText-ThinOblique'),
+    /* local('Resist Sans Text Thin Oblique'), */
+    /* local('ResistSansText-ThinOblique'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-ThinOblique.woff2') format('woff2'),
@@ -377,8 +419,8 @@ h6 {
   font-family: 'Resist Sans Text';
   src: url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.eot');
   src:
-    local('Resist Sans Text'),
-    local('ResistSansText-Regular'),
+    /* local('Resist Sans Text'), */
+    /* local('ResistSansText-Regular'), */
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.eot?#iefix')
       format('embedded-opentype'),
     url('https://static-cdn.gigadrivegroup.com/resist-sans/ResistSansText-Regular.woff2') format('woff2'),
