@@ -169,7 +169,8 @@ export const NarrowContainer: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'In a narrow container the padding scales down so nothing overflows.',
+        story:
+          'The empty state fills a narrow container without overflowing. Its padding responds to the viewport, not to the width of the container.',
       },
     },
   },
