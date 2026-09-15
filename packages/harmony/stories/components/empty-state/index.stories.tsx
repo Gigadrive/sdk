@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FileText, Folder, Search } from 'lucide-react';
 
+import { DataTable } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 
 const meta = {
@@ -15,6 +16,8 @@ const meta = {
 An empty state component used to communicate a lack of content and guide users toward the next action.
 
 ## Features
+- Fills the width of its container by default (the title and description keep a
+  readable measure, so long copy never stretches edge to edge)
 - Simple, focused visual design
 - Optional single or three-icon layout
 - Action button for recovery/next step
@@ -29,11 +32,12 @@ An empty state component used to communicate a lack of content and guide users t
 - \`className\`: string — Additional classes for custom styling
 
 ## Usage Guidelines
-1. Keep the message concise and actionable
-2. Prefer offering a clear next step via \`action\`
-3. Use one icon for simple states, three for richer visual emphasis
-4. Ensure the title communicates the core issue (e.g., “No results”)
-5. Consider adding helpful context in the description
+1. The box spans its container. Pass a \`max-w-*\` class when you deliberately want to cap it
+2. Keep the message concise and actionable
+3. Prefer offering a clear next step via \`action\`
+4. Use one icon for simple states, three for richer visual emphasis
+5. Ensure the title communicates the core issue (e.g., “No results”)
+6. Consider adding helpful context in the description
 
 ## Accessibility
 - Semantic structure for headings and content
@@ -132,4 +136,107 @@ export const WithAction: Story = {
       },
     },
   },
+};
+
+export const FullWidthContainer: Story = {
+  args: {
+    title: 'No deployments yet',
+    description: 'Deployments will appear here once your first build finishes.',
+    icons: [Folder],
+  },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        story:
+          'The empty state fills its container. In a container wider than 620px the dashed border reaches both edges instead of stopping partway across.',
+      },
+    },
+  },
+  render: (args) => (
+    <div className="w-[1100px] max-w-full p-6">
+      <EmptyState {...args} />
+    </div>
+  ),
+};
+
+export const NarrowContainer: Story = {
+  args: {
+    title: 'No results found',
+    description: 'Try adjusting your filters or search terms to find what you need.',
+    icons: [Search],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The empty state fills a narrow container without overflowing. Its padding responds to the viewport, not to the width of the container.',
+      },
+    },
+  },
+  render: (args) => (
+    <div className="w-[400px] max-w-full">
+      <EmptyState {...args} />
+    </div>
+  ),
+};
+
+export const LongDescription: Story = {
+  args: {
+    title: 'Nothing to show here',
+    description:
+      'This project has no environment variables yet. Environment variables are encrypted at rest and injected into your builds and running deployments, so you can keep configuration out of your repository and vary it per environment.',
+    icons: [Folder, FileText, Search],
+  },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        story:
+          'On a wide screen the box spans its container while the title and description stay capped at a readable measure.',
+      },
+    },
+  },
+  render: (args) => (
+    <div className="w-[1100px] max-w-full p-6">
+      <EmptyState {...args} />
+    </div>
+  ),
+};
+
+export const InDataTable: Story = {
+  args: {
+    title: 'No team members',
+    description: 'Invite someone to collaborate on this project.',
+    icons: [Folder],
+    action: {
+      label: 'Invite member',
+      onClick: () => {
+        alert('Invite action clicked');
+      },
+    },
+  },
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        story:
+          "Rendered into DataTable's `emptyState` slot. The box spans every column of the table rather than covering only the first ones.",
+      },
+    },
+  },
+  render: (args) => (
+    <div className="w-[1100px] max-w-full p-6">
+      <DataTable
+        columns={[
+          { id: 'name', header: 'Name' },
+          { id: 'email', header: 'Email' },
+          { id: 'role', header: 'Role' },
+          { id: 'status', header: 'Status' },
+        ]}
+        data={[]}
+        emptyState={<EmptyState {...args} />}
+      />
+    </div>
+  ),
 };

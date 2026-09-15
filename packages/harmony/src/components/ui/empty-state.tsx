@@ -21,7 +21,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
         ref={ref}
         className={cn(
           'bg-background border-border hover:border-border/80 text-center',
-          'border-2 border-dashed rounded-xl p-20 w-full max-w-[620px] space-y-6',
+          'border-2 border-dashed rounded-xl p-8 sm:p-12 lg:p-16 w-full space-y-6',
           'group hover:bg-muted/50 transition duration-500 hover:duration-200',
           className
         )}
@@ -58,7 +58,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
           </div>
         )}
 
-        <div>
+        <div className="mx-auto max-w-lg">
           <h2 className="text-foreground">{title}</h2>
           <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{description}</p>
         </div>
