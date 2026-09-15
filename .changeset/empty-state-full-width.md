@@ -1,0 +1,17 @@
+---
+'@gigadrive/harmony': minor
+---
+
+EmptyState now fills the width of its container instead of capping itself at 620px.
+
+The root element no longer carries `max-w-[620px]`, so the dashed box spans whatever
+container it is placed in — most visibly inside `DataTable`'s `emptyState` slot, where it
+previously covered only the first columns of a wide table. The readability constraint moved
+to the title/description wrapper (`mx-auto max-w-lg`), so long descriptions still wrap at a
+comfortable measure on wide screens. Padding is now responsive (`p-8 sm:p-12 lg:p-16`)
+instead of a flat `p-20`, which keeps the box from eating excessive vertical space now that
+it can be much wider, and from crowding narrow containers.
+
+**Migration:** `className="max-w-none"` workarounds at call sites become no-ops and can be
+removed at your convenience. To keep the old behaviour, pass the cap explicitly:
+`<EmptyState className="mx-auto max-w-[620px] p-20" … />`.
