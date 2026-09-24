@@ -303,6 +303,7 @@ export class StorageUploadSessionsResource extends BaseResource {
     const headers = { 'Tus-Resumable': '1.0.0', ...options?.headers };
     await runResolvedUpload(this.transport, url, resolved, options, headers)
       .catch(toUploadError)
+      // Closes a file-path stream a failed or aborted transfer left open.
       .finally(resolved.release);
   }
 

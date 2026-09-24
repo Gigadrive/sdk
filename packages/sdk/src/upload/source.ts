@@ -59,9 +59,10 @@ export interface ResolvedUploadSource {
   requiresFiniteChunkSize: boolean;
   /**
    * Releases resources the SDK opened for {@link tusFile} (the read stream for a
-   * `path` input). Call it when the bytes will not be sent, for example when the
-   * API stored an empty file without a transfer. Caller-supplied streams are
-   * never touched.
+   * `path` input). Call it once the transfer settles, whether it succeeded,
+   * failed or was aborted, and when the bytes will not be sent at all, for
+   * example when the API stored an empty file without a transfer.
+   * Caller-supplied streams are never touched.
    */
   release: () => void;
 }
