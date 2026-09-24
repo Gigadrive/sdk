@@ -1,4 +1,8 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { UploadError } from '../errors';
 import type { HttpClient } from '../http-client';
 import type { TusUploadParams } from '../upload/transport';
 import { StorageUploadSessionsResource } from './storage-upload-sessions';
@@ -61,5 +65,20 @@ describe('StorageUploadSessionsResource', () => {
 
     await resource.resumeFromUrl('https://upload.example/abc', { data: new Uint8Array([1]) });
     expect(transport.mock.calls[0][0].resume).toBe(true);
+  });
+
+  it('closes the read stream when a path upload to a signed URL fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gigadrive-sdk-url-fail-'));
+    const path = join(dir, 'hello.txt');
+    writeFileSync(path, 'hello');
+    try {
+      const transport = vi.fn<(params: TusUploadParams) => Promise<void>>().mockRejectedValue(new Error('boom'));
+      const resource = new StorageUploadSessionsResource(createMockHttpClient(), transport);
+
+      await expect(resource.uploadToUrl('https://upload.example/abc', { path })).rejects.toBeInstanceOf(UploadError);
+      expect((transport.mock.calls[0][0].data as { destroyed?: boolean }).destroyed).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
