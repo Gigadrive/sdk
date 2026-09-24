@@ -226,6 +226,7 @@ const completedEmptyResponse = (key: string) => ({
   },
   upload: null,
   object: emptyObject(key),
+  publicObjectUrl: `https://assets.cdn.example/${key}`,
 });
 
 const bucket = { id: 'bucket-1', name: 'assets', cdnHostname: 'assets.cdn.example' };
@@ -275,13 +276,10 @@ describe('ApplicationStorageResource.upload with empty files', () => {
       expect.objectContaining({ key: 'pkg/.gitkeep', contentLength: 0, checksumSha256: EMPTY_SHA256 }),
       { query: { environment: 'production' } }
     );
-    // No tus PATCH/HEAD, no session polling, no object lookup: only the bucket read for the URL.
+    // One API call: no tus PATCH/HEAD, no session polling, no object or bucket lookup.
     expect(transport).not.toHaveBeenCalled();
     expect(onProgress).not.toHaveBeenCalled();
-    expect(get).toHaveBeenCalledTimes(1);
-    expect(get).toHaveBeenCalledWith('/applications/app/storage/buckets/assets', {
-      query: { environment: 'production' },
-    });
+    expect(get).not.toHaveBeenCalled();
     expect(result.session.state).toBe('completed');
     expect(result.object).toEqual(emptyObject('pkg/.gitkeep'));
     expect(result.url).toBe('https://assets.cdn.example/pkg/.gitkeep');
@@ -325,18 +323,41 @@ describe('ApplicationStorageResource.upload with empty files', () => {
 
     expect(result.session.state).toBe('completed');
     expect(result.object?.key).toBe('.gitkeep');
-    expect(get).not.toHaveBeenCalledWith(expect.stringContaining('/uploads/'), expect.anything());
-    expect(get).not.toHaveBeenCalledWith(expect.stringContaining('/objects'), expect.anything());
+    expect(get).not.toHaveBeenCalled();
     expect(transport).not.toHaveBeenCalled();
   });
 
-  it('builds the URL from the stored key with the same encoding as the API', async () => {
-    const { http } = createSizeAwareHttp();
+  it('builds the URL from the bucket when the API omits publicObjectUrl', async () => {
+    const { publicObjectUrl: _omitted, ...olderResponse } = completedEmptyResponse('docs/empty file#1.txt');
+    const get = vi.fn().mockResolvedValue(bucket);
+    const http = { post: vi.fn().mockResolvedValue(olderResponse), get } as unknown as HttpClient;
     const storage = new ApplicationStorageResource(http, vi.fn(), 'app');
 
-    const result = await storage.upload({ bucket: 'assets', key: 'docs/empty file#1.txt', data: new Uint8Array(0) });
+    const result = await storage.upload({
+      bucket: 'assets',
+      environment: 'production',
+      key: 'docs/empty file#1.txt',
+      data: new Uint8Array(0),
+    });
 
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith('/applications/app/storage/buckets/assets', {
+      query: { environment: 'production' },
+    });
+    // Same encoding as the API: segments encoded, slashes kept.
     expect(result.url).toBe('https://assets.cdn.example/docs/empty%20file%231.txt');
+  });
+
+  it('does not create the session when the signal is already aborted', async () => {
+    const { http, post } = createSizeAwareHttp();
+    const storage = new ApplicationStorageResource(http, vi.fn(), 'app');
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      storage.upload({ bucket: 'assets', key: '.gitkeep', data: new Uint8Array(0), signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('surfaces a 400 from the create call as an ApiError', async () => {
@@ -393,5 +414,23 @@ describe('ApplicationStorageResource.upload with empty files', () => {
     expect(results[1].result?.url).toBe('https://cdn.example/hello.txt');
     expect(results[1].result?.object).toBeUndefined();
     expect(results[2].result?.object?.key).toBe('src/pkg/__init__.py');
+  });
+});
+
+describe('ApplicationStorageResource.upload file-path cleanup', () => {
+  it('closes the read stream when the byte transfer fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gigadrive-sdk-fail-'));
+    const path = join(dir, 'hello.txt');
+    writeFileSync(path, 'hello');
+    try {
+      const http = { post: vi.fn().mockResolvedValue(createUploadResponse()), get: vi.fn() } as unknown as HttpClient;
+      const transport = vi.fn<(params: TusUploadParams) => Promise<void>>().mockRejectedValue(new Error('boom'));
+      const storage = new ApplicationStorageResource(http, transport, 'app');
+
+      await expect(storage.upload({ bucket: 'assets', key: 'hello.txt', path })).rejects.toBeInstanceOf(UploadError);
+      expect((transport.mock.calls[0][0].data as { destroyed?: boolean }).destroyed).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

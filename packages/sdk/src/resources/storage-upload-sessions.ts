@@ -122,6 +122,12 @@ export interface CreateUploadSessionResponse {
    * happens only for an empty file. `null` while bytes are still expected.
    */
   object: StorageObject | null;
+  /**
+   * Canonical object URL for the key, returned for every size (the same value
+   * as `upload.publicObjectUrl` when an upload instruction is returned). Older
+   * API deployments omit it.
+   */
+  publicObjectUrl?: string;
 }
 
 /** A byte source for uploading directly to a known signed URL. */

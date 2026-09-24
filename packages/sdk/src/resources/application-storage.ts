@@ -2,6 +2,7 @@ import { UploadError } from '../errors';
 import type { HttpClient } from '../http-client';
 import { resolveUploadSource, type NodeReadableLike, type UploadData } from '../upload/source';
 import {
+  createAbortError,
   runResolvedUpload,
   toUploadError,
   tusUploadTransport,
@@ -242,6 +243,13 @@ export class ApplicationStorageResource {
       checksumMd5: input.checksumMd5,
     });
 
+    // Checked before the create call: for an empty file that call alone stores
+    // the object, so an already-aborted upload must not reach it.
+    if (input.signal?.aborted) {
+      resolved.release();
+      throw createAbortError();
+    }
+
     let created: CreateUploadSessionResponse;
     try {
       created = await this.uploadSessions.create(
@@ -271,8 +279,15 @@ export class ApplicationStorageResource {
       if (!object) {
         throw new UploadError('The upload session completed without returning the stored object.');
       }
-      const bucket = await this.buckets.get(applicationId, bucketRef, { environment });
-      return { session, url: buildStorageObjectUrl(bucket.cdnHostname, object.key), object };
+      // API deployments that predate the top-level `publicObjectUrl` need the
+      // bucket's CDN hostname to build the same URL.
+      const url =
+        created.publicObjectUrl ??
+        buildStorageObjectUrl(
+          (await this.buckets.get(applicationId, bucketRef, { environment })).cdnHostname,
+          object.key
+        );
+      return { session, url, object };
     }
 
     await runResolvedUpload(
@@ -289,7 +304,10 @@ export class ApplicationStorageResource {
       },
       // Forward any required headers the API issued with the session.
       { 'Tus-Resumable': '1.0.0', ...upload.headers }
-    ).catch(toUploadError);
+    )
+      .catch(toUploadError)
+      // Closes a file-path stream a failed or aborted transfer left open.
+      .finally(resolved.release);
 
     if (input.waitForCompletion) {
       const options = completionOptions ?? {};
