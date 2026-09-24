@@ -7,7 +7,7 @@
  * @internal
  */
 
-import { computeChecksums, hashNodeFile, type Checksums } from './checksum';
+import { computeChecksums, EMPTY_SHA256, hashNodeFile, type Checksums } from './checksum';
 import { inferContentType } from './content-type';
 
 /** A minimal Node.js `Readable`-like shape (avoids depending on `node:stream` types). */
@@ -57,7 +57,16 @@ export interface ResolvedUploadSource {
   checksums: Checksums;
   /** Whether a finite chunk size is required (true for streamed/file-path inputs). */
   requiresFiniteChunkSize: boolean;
+  /**
+   * Releases resources the SDK opened for {@link tusFile} (the read stream for a
+   * `path` input). Call it when the bytes will not be sent, for example when the
+   * API stored an empty file without a transfer. Caller-supplied streams are
+   * never touched.
+   */
+  release: () => void;
 }
+
+const noop = () => {};
 
 const isNode = (): boolean => typeof process !== 'undefined' && !!process.versions?.node;
 
@@ -136,6 +145,7 @@ export const resolveUploadSource = async (
       contentType,
       checksums: buildChecksums(input, sha256),
       requiresFiniteChunkSize: false,
+      release: noop,
     };
   }
 
@@ -145,23 +155,38 @@ export const resolveUploadSource = async (
     const size = input.contentLength ?? fs.statSync(input.path).size;
     const sha256 = input.checksumSha256 ?? (hash ? (await hashNodeFile(input.path)).sha256 : '');
     // A fresh read stream is handed to tus for the byte upload.
-    const tusFile = fs.createReadStream(input.path) as unknown as NodeReadableLike;
-    return { tusFile, size, contentType, checksums: buildChecksums(input, sha256), requiresFiniteChunkSize: true };
+    const stream = fs.createReadStream(input.path);
+    return {
+      tusFile: stream as unknown as NodeReadableLike,
+      size,
+      contentType,
+      checksums: buildChecksums(input, sha256),
+      requiresFiniteChunkSize: true,
+      release: () => {
+        // The stream opens lazily; an error from that pending open is moot once
+        // the stream is discarded, so it must not surface as an uncaught error.
+        stream.on('error', noop);
+        stream.destroy();
+      },
+    };
   }
 
   if (input.stream !== undefined) {
     if (input.contentLength === undefined) {
       throw new Error('Uploading from a stream requires contentLength to be provided.');
     }
-    if (hash && !input.checksumSha256) {
+    // An empty stream has exactly one valid digest, so it need not be supplied.
+    const sha256 = input.checksumSha256 ?? (input.contentLength === 0 ? EMPTY_SHA256 : undefined);
+    if (hash && !sha256) {
       throw new Error('Uploading from a stream requires checksumSha256 to be provided.');
     }
     return {
       tusFile: input.stream,
       size: input.contentLength,
       contentType,
-      checksums: buildChecksums(input, input.checksumSha256 ?? ''),
+      checksums: buildChecksums(input, sha256 ?? ''),
       requiresFiniteChunkSize: true,
+      release: noop,
     };
   }
 

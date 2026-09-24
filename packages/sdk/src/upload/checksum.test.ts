@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeChecksums } from './checksum';
+import { computeChecksums, EMPTY_SHA256 } from './checksum';
 
 const HELLO = new TextEncoder().encode('hello');
 
@@ -20,5 +20,10 @@ describe('computeChecksums', () => {
     const result = await computeChecksums(HELLO);
     expect(result.sha1).toBeUndefined();
     expect(result.md5).toBeUndefined();
+  });
+
+  it('matches EMPTY_SHA256 for empty input', async () => {
+    const { sha256 } = await computeChecksums(new Uint8Array(0));
+    expect(sha256).toBe(EMPTY_SHA256);
   });
 });

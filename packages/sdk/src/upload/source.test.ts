@@ -118,4 +118,50 @@ describe('resolveUploadSource', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  describe('empty inputs', () => {
+    const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+    it.each([
+      ['Buffer', Buffer.alloc(0)],
+      ['Uint8Array', new Uint8Array(0)],
+      ['ArrayBuffer', new ArrayBuffer(0)],
+      ['Blob', new Blob([])],
+    ])('resolves an empty %s to size 0 and the empty digest', async (_name, data) => {
+      const resolved = await resolveUploadSource({ key: '.gitkeep', data });
+      expect(resolved.size).toBe(0);
+      expect(resolved.checksums.sha256).toBe(EMPTY_SHA256);
+    });
+
+    it('resolves an empty file path to size 0 and the empty digest, and releases its stream', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'gigadrive-sdk-'));
+      const path = join(dir, '__init__.py');
+      writeFileSync(path, '');
+      try {
+        const resolved = await resolveUploadSource({ key: '__init__.py', path });
+        expect(resolved.size).toBe(0);
+        expect(resolved.checksums.sha256).toBe(EMPTY_SHA256);
+        resolved.release();
+        expect((resolved.tusFile as { destroyed?: boolean }).destroyed).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('treats a stream contentLength of 0 as known and fills in the empty digest', async () => {
+      const resolved = await resolveUploadSource({ key: '.gitkeep', stream: noopStream, contentLength: 0 });
+      expect(resolved.size).toBe(0);
+      expect(resolved.checksums.sha256).toBe(EMPTY_SHA256);
+    });
+
+    it('keeps a caller-supplied digest for an empty stream', async () => {
+      const resolved = await resolveUploadSource({
+        key: '.gitkeep',
+        stream: noopStream,
+        contentLength: 0,
+        checksumSha256: 'a'.repeat(64),
+      });
+      expect(resolved.checksums.sha256).toBe('a'.repeat(64));
+    });
+  });
 });

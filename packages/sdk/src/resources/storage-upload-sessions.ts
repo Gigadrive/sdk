@@ -14,6 +14,7 @@ import {
   type StorageBucketReference,
   type StorageEnvironmentOptions,
 } from './storage-context';
+import type { StorageObject } from './storage-objects';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,9 +66,16 @@ export interface StorageUploadSession {
 export interface CreateUploadSessionInput {
   /** The object key/path the file will be stored at (e.g. `"images/photo.jpg"`). 1–1024 characters. */
   key: string;
-  /** File size in bytes. Required. */
+  /**
+   * File size in bytes: an integer, `0` or greater. `0` stores an empty object
+   * during the create call (see {@link CreateUploadSessionResponse}).
+   */
   contentLength: number;
-  /** Lowercase hex SHA-256 checksum (64 chars) of the content. Required for server-side verification. */
+  /**
+   * Lowercase hex SHA-256 checksum (64 chars) of the content. Required for
+   * server-side verification. For an empty file this must be the digest of
+   * empty input, `e3b0c442…b855`.
+   */
   checksumSha256: string;
   /** MIME content type of the file (e.g. `"image/jpeg"`). */
   contentType?: string;
@@ -81,13 +89,24 @@ export interface CreateUploadSessionInput {
 export interface ListStorageUploadSessionsQuery extends ListQuery, StorageEnvironmentOptions {}
 
 /**
- * Response from creating an upload session. Contains both the session metadata
- * and the resumable upload instructions (signed URL + headers).
+ * Response from creating an upload session. Contains the session metadata and
+ * either the resumable upload instructions (signed URL + headers) or, for an
+ * empty file, the object the API already stored.
+ *
+ * | Field     | `contentLength` 0                          | `contentLength` > 0             |
+ * | --------- | ------------------------------------------ | ------------------------------- |
+ * | `session` | `state: "completed"`, `uploadedAt` set     | `state: "ready"`                |
+ * | `upload`  | `null`                                     | Signed URL, method and headers  |
+ * | `object`  | The stored object                          | `null`                          |
  */
 export interface CreateUploadSessionResponse {
   /** The created upload session. */
   session: StorageUploadSession;
-  /** Resumable upload instructions — use these to send the file data. */
+  /**
+   * Resumable upload instructions — use these to send the file data. `null`
+   * when `contentLength` was 0: the empty object already exists and there is
+   * nothing to send.
+   */
   upload: {
     /** The HTTP method for the byte upload (resumable upload protocol). */
     method: 'PATCH';
@@ -97,7 +116,12 @@ export interface CreateUploadSessionResponse {
     headers: Record<string, string>;
     /** The URL where the object will be accessible after upload (CDN URL for public buckets). */
     publicObjectUrl: string;
-  };
+  } | null;
+  /**
+   * The stored object when the upload finished during the create call, which
+   * happens only for an empty file. `null` while bytes are still expected.
+   */
+  object: StorageObject | null;
 }
 
 /** A byte source for uploading directly to a known signed URL. */
@@ -177,6 +201,8 @@ export class StorageUploadSessionsResource extends BaseResource {
    * @param bucketRef - Canonical bucket name or deprecated UUID fallback.
    * @param data - Object key, content length, SHA-256 checksum, and optional content type / extra checksums.
    * @returns The session and resumable upload instructions (URL, method, headers).
+   *   For `contentLength: 0` the session is already `completed`, `upload` is
+   *   `null` and `object` holds the stored empty object.
    */
   async create(
     bucketRef: StorageBucketReference,

@@ -37,6 +37,7 @@ const resolved = (over: Partial<ResolvedUploadSource> = {}): ResolvedUploadSourc
   contentType: 'application/octet-stream',
   checksums: { sha256: 'x' },
   requiresFiniteChunkSize: false,
+  release: () => {},
   ...over,
 });
 
