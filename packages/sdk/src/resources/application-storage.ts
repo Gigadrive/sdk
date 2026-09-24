@@ -2,6 +2,7 @@ import { UploadError } from '../errors';
 import type { HttpClient } from '../http-client';
 import { resolveUploadSource, type NodeReadableLike, type UploadData } from '../upload/source';
 import {
+  createAbortError,
   runResolvedUpload,
   toUploadError,
   tusUploadTransport,
@@ -17,7 +18,11 @@ import {
 } from './storage-context';
 import { StorageObjectsResource, type StorageObject } from './storage-objects';
 import { StorageTrashResource } from './storage-trash';
-import { StorageUploadSessionsResource, type StorageUploadSession } from './storage-upload-sessions';
+import {
+  StorageUploadSessionsResource,
+  type CreateUploadSessionResponse,
+  type StorageUploadSession,
+} from './storage-upload-sessions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -103,7 +108,10 @@ export interface UploadFileResult {
   session: StorageUploadSession;
   /** The public/CDN URL of the uploaded object. */
   url: string;
-  /** The finalized storage object — present only when `waitForCompletion` was set. */
+  /**
+   * The finalized storage object — present when `waitForCompletion` was set,
+   * and always for an empty file, which the API stores during session creation.
+   */
   object?: StorageObject;
 }
 
@@ -130,6 +138,13 @@ export interface UploadBatchItemResult {
 // ---------------------------------------------------------------------------
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Build the public CDN URL for an object key, matching the `publicObjectUrl`
+ * the API issues: each path segment is URL-encoded and `/` separators are kept.
+ */
+const buildStorageObjectUrl = (cdnHostname: string, key: string): string =>
+  `https://${cdnHostname}/${encodeURIComponent(key).replace(/%2F/g, '/')}`;
 
 /**
  * Namespace for all storage operations on an application: bucket management,
@@ -193,6 +208,10 @@ export class ApplicationStorageResource {
    * Node filesystem `path`, or a Node readable `stream` (with `contentLength`
    * and `checksumSha256`). The content type is inferred from `key` when omitted.
    *
+   * Empty (zero-byte) files are supported for every input kind. The API stores
+   * them during session creation, so no bytes are transferred, `onProgress` is
+   * not called, `waitForCompletion` does not poll, and `object` is always set.
+   *
    * @param input - What and where to upload, plus optional transfer options.
    * @returns The upload session and public object URL (and the finalized object when `waitForCompletion` is set).
    * @throws {@link UploadError} if the byte upload fails.
@@ -224,19 +243,52 @@ export class ApplicationStorageResource {
       checksumMd5: input.checksumMd5,
     });
 
-    const { session, upload } = await this.uploadSessions.create(
-      applicationId,
-      bucketRef,
-      {
-        key: input.key,
-        contentLength: resolved.size,
-        checksumSha256: resolved.checksums.sha256,
-        contentType: resolved.contentType,
-        checksumSha1: resolved.checksums.sha1,
-        checksumMd5: resolved.checksums.md5,
-      },
-      { environment }
-    );
+    // Checked before the create call: for an empty file that call alone stores
+    // the object, so an already-aborted upload must not reach it.
+    if (input.signal?.aborted) {
+      resolved.release();
+      throw createAbortError();
+    }
+
+    let created: CreateUploadSessionResponse;
+    try {
+      created = await this.uploadSessions.create(
+        applicationId,
+        bucketRef,
+        {
+          key: input.key,
+          contentLength: resolved.size,
+          checksumSha256: resolved.checksums.sha256,
+          contentType: resolved.contentType,
+          checksumSha1: resolved.checksums.sha1,
+          checksumMd5: resolved.checksums.md5,
+        },
+        { environment }
+      );
+    } catch (error) {
+      resolved.release();
+      throw error;
+    }
+    const { session, upload } = created;
+
+    // An empty file is stored during session creation: the session is already
+    // completed, so there are no bytes to send and nothing to poll.
+    if (upload === null) {
+      resolved.release();
+      const object = created.object;
+      if (!object) {
+        throw new UploadError('The upload session completed without returning the stored object.');
+      }
+      // API deployments that predate the top-level `publicObjectUrl` need the
+      // bucket's CDN hostname to build the same URL.
+      const url =
+        created.publicObjectUrl ??
+        buildStorageObjectUrl(
+          (await this.buckets.get(applicationId, bucketRef, { environment })).cdnHostname,
+          object.key
+        );
+      return { session, url, object };
+    }
 
     await runResolvedUpload(
       this.transport,
@@ -252,7 +304,10 @@ export class ApplicationStorageResource {
       },
       // Forward any required headers the API issued with the session.
       { 'Tus-Resumable': '1.0.0', ...upload.headers }
-    ).catch(toUploadError);
+    )
+      .catch(toUploadError)
+      // Closes a file-path stream a failed or aborted transfer left open.
+      .finally(resolved.release);
 
     if (input.waitForCompletion) {
       const options = completionOptions ?? {};

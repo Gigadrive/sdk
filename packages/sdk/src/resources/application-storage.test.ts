@@ -1,7 +1,12 @@
 import { Buffer } from 'node:buffer';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { ConfigurationError } from '../errors';
-import type { HttpClient } from '../http-client';
+import type { TokenManager } from '../auth/token-manager';
+import { ApiError, ConfigurationError, UploadError } from '../errors';
+import { HttpClient } from '../http-client';
 import type { TusUploadParams } from '../upload/transport';
 import { ApplicationStorageResource, type UploadFileInput } from './application-storage';
 
@@ -15,6 +20,7 @@ const createUploadResponse = () => ({
     headers: { 'Tus-Resumable': '1.0.0', 'X-Upload-Token': 'signed-abc' },
     publicObjectUrl: 'https://cdn.example/hello.txt',
   },
+  object: null,
 });
 
 describe('ApplicationStorageResource.upload', () => {
@@ -188,5 +194,243 @@ describe('ApplicationStorageResource.upload', () => {
         query: { environment: 'production' },
       }
     );
+  });
+});
+
+const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+const emptyObject = (key: string) => ({
+  id: 'obj-empty',
+  bucketId: 'bucket-1',
+  applicationId: 'app',
+  uploadSessionId: 'sess-empty',
+  key,
+  contentType: 'text/plain',
+  contentLength: 0,
+  checksumSha1: null,
+  checksumSha256: EMPTY_SHA256,
+  checksumMd5: null,
+  uploadedAt: '2026-09-24T00:00:00.000Z',
+  createdAt: '2026-09-24T00:00:00.000Z',
+  updatedAt: '2026-09-24T00:00:00.000Z',
+});
+
+const completedEmptyResponse = (key: string) => ({
+  session: {
+    id: 'sess-empty',
+    key,
+    contentLength: 0,
+    checksumSha256: EMPTY_SHA256,
+    state: 'completed',
+    uploadedAt: '2026-09-24T00:00:00.000Z',
+  },
+  upload: null,
+  object: emptyObject(key),
+  publicObjectUrl: `https://assets.cdn.example/${key}`,
+});
+
+const bucket = { id: 'bucket-1', name: 'assets', cdnHostname: 'assets.cdn.example' };
+
+/** A mocked HTTP client that answers the create call like the API does for any size. */
+const createSizeAwareHttp = () => {
+  const post = vi.fn((_path: string, body: { key: string; contentLength: number }) =>
+    Promise.resolve(body.contentLength === 0 ? completedEmptyResponse(body.key) : createUploadResponse())
+  );
+  const get = vi.fn((path: string) => {
+    if (path.endsWith('/storage/buckets/assets')) return Promise.resolve(bucket);
+    return Promise.reject(new Error(`unexpected GET ${path}`));
+  });
+  return { http: { post, get } as unknown as HttpClient, post, get };
+};
+
+describe('ApplicationStorageResource.upload with empty files', () => {
+  const inputs: [string, () => Partial<UploadFileInput> | Promise<Partial<UploadFileInput>>][] = [
+    ['Buffer', () => ({ data: Buffer.alloc(0) })],
+    ['Uint8Array', () => ({ data: new Uint8Array(0) })],
+    ['ArrayBuffer', () => ({ data: new ArrayBuffer(0) })],
+    ['Blob', () => ({ data: new Blob([]) })],
+    ['stream with contentLength 0', () => ({ stream: Readable.from([]), contentLength: 0 })],
+    [
+      'stream with an explicit empty digest',
+      () => ({ stream: Readable.from([]), contentLength: 0, checksumSha256: EMPTY_SHA256 }),
+    ],
+  ];
+
+  it.each(inputs)('stores an empty %s with one create call and no transfer', async (_name, source) => {
+    const { http, post, get } = createSizeAwareHttp();
+    const transport = vi.fn<(params: TusUploadParams) => Promise<void>>();
+    const onProgress = vi.fn();
+    const storage = new ApplicationStorageResource(http, transport, 'app');
+
+    const result = await storage.upload({
+      bucket: 'assets',
+      environment: 'production',
+      key: 'pkg/.gitkeep',
+      onProgress,
+      ...(await source()),
+    } as UploadFileInput);
+
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(
+      '/applications/app/storage/buckets/assets/uploads',
+      expect.objectContaining({ key: 'pkg/.gitkeep', contentLength: 0, checksumSha256: EMPTY_SHA256 }),
+      { query: { environment: 'production' } }
+    );
+    // One API call: no tus PATCH/HEAD, no session polling, no object or bucket lookup.
+    expect(transport).not.toHaveBeenCalled();
+    expect(onProgress).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    expect(result.session.state).toBe('completed');
+    expect(result.object).toEqual(emptyObject('pkg/.gitkeep'));
+    expect(result.url).toBe('https://assets.cdn.example/pkg/.gitkeep');
+  });
+
+  it('stores an empty file from a path and closes the read stream it opened', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gigadrive-sdk-empty-'));
+    const path = join(dir, '__init__.py');
+    writeFileSync(path, '');
+    try {
+      const { http, post } = createSizeAwareHttp();
+      const transport = vi.fn<(params: TusUploadParams) => Promise<void>>();
+      const storage = new ApplicationStorageResource(http, transport, 'app');
+
+      const result = await storage.upload({ bucket: 'assets', key: 'src/pkg/__init__.py', path });
+
+      expect(post).toHaveBeenCalledWith(
+        '/applications/app/storage/buckets/assets/uploads',
+        expect.objectContaining({ contentLength: 0, checksumSha256: EMPTY_SHA256 }),
+        { query: { environment: undefined } }
+      );
+      expect(transport).not.toHaveBeenCalled();
+      expect(result.object?.contentLength).toBe(0);
+      expect(result.url).toBe('https://assets.cdn.example/src/pkg/__init__.py');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves waitForCompletion without polling the session', async () => {
+    const { http, get } = createSizeAwareHttp();
+    const transport = vi.fn<(params: TusUploadParams) => Promise<void>>();
+    const storage = new ApplicationStorageResource(http, transport, 'app');
+
+    const result = await storage.upload({
+      bucket: 'assets',
+      key: '.gitkeep',
+      data: new Uint8Array(0),
+      waitForCompletion: { timeoutMs: 1, pollIntervalMs: 1 },
+    });
+
+    expect(result.session.state).toBe('completed');
+    expect(result.object?.key).toBe('.gitkeep');
+    expect(get).not.toHaveBeenCalled();
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('builds the URL from the bucket when the API omits publicObjectUrl', async () => {
+    const { publicObjectUrl: _omitted, ...olderResponse } = completedEmptyResponse('docs/empty file#1.txt');
+    const get = vi.fn().mockResolvedValue(bucket);
+    const http = { post: vi.fn().mockResolvedValue(olderResponse), get } as unknown as HttpClient;
+    const storage = new ApplicationStorageResource(http, vi.fn(), 'app');
+
+    const result = await storage.upload({
+      bucket: 'assets',
+      environment: 'production',
+      key: 'docs/empty file#1.txt',
+      data: new Uint8Array(0),
+    });
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith('/applications/app/storage/buckets/assets', {
+      query: { environment: 'production' },
+    });
+    // Same encoding as the API: segments encoded, slashes kept.
+    expect(result.url).toBe('https://assets.cdn.example/docs/empty%20file%231.txt');
+  });
+
+  it('does not create the session when the signal is already aborted', async () => {
+    const { http, post } = createSizeAwareHttp();
+    const storage = new ApplicationStorageResource(http, vi.fn(), 'app');
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      storage.upload({ bucket: 'assets', key: '.gitkeep', data: new Uint8Array(0), signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a 400 from the create call as an ApiError', async () => {
+    const fetchFn = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Declared SHA-256 does not match an empty file' }), { status: 400 })
+      );
+    const tokenManager = { getToken: vi.fn().mockResolvedValue('token'), invalidate: vi.fn() };
+    const http = new HttpClient('https://api.example', tokenManager as unknown as TokenManager, fetchFn);
+    const transport = vi.fn<(params: TusUploadParams) => Promise<void>>();
+    const storage = new ApplicationStorageResource(http, transport, 'app');
+
+    const error = await storage
+      .upload({ bucket: 'assets', key: '.gitkeep', data: new Uint8Array(0), checksumSha256: 'a'.repeat(64) })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(400);
+    expect((error as ApiError).message).toBe('Declared SHA-256 does not match an empty file');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('fails with an UploadError when a completed session carries no object', async () => {
+    const http = {
+      post: vi.fn().mockResolvedValue({ ...completedEmptyResponse('.gitkeep'), object: null }),
+      get: vi.fn(),
+    } as unknown as HttpClient;
+    const storage = new ApplicationStorageResource(http, vi.fn(), 'app');
+
+    await expect(storage.upload({ bucket: 'assets', key: '.gitkeep', data: new Uint8Array(0) })).rejects.toBeInstanceOf(
+      UploadError
+    );
+  });
+
+  it('uploads a batch that mixes empty and non-empty files', async () => {
+    const { http, post } = createSizeAwareHttp();
+    const transport = vi.fn<(params: TusUploadParams) => Promise<void>>().mockResolvedValue(undefined);
+    const storage = new ApplicationStorageResource(http, transport, 'app');
+
+    const results = await storage.uploadBatch([
+      { bucket: 'assets', key: 'src/.gitkeep', data: new Uint8Array(0) },
+      { bucket: 'assets', key: 'src/hello.txt', data: new TextEncoder().encode('hello') },
+      { bucket: 'assets', key: 'src/pkg/__init__.py', data: Buffer.alloc(0) },
+    ]);
+
+    expect(results.map((r) => r.error)).toEqual([undefined, undefined, undefined]);
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport.mock.calls[0][0].uploadSize).toBe(5);
+    expect(results[0].result?.object?.contentLength).toBe(0);
+    expect(results[0].result?.url).toBe('https://assets.cdn.example/src/.gitkeep');
+    expect(results[1].result?.url).toBe('https://cdn.example/hello.txt');
+    expect(results[1].result?.object).toBeUndefined();
+    expect(results[2].result?.object?.key).toBe('src/pkg/__init__.py');
+  });
+});
+
+describe('ApplicationStorageResource.upload file-path cleanup', () => {
+  it('closes the read stream when the byte transfer fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gigadrive-sdk-fail-'));
+    const path = join(dir, 'hello.txt');
+    writeFileSync(path, 'hello');
+    try {
+      const http = { post: vi.fn().mockResolvedValue(createUploadResponse()), get: vi.fn() } as unknown as HttpClient;
+      const transport = vi.fn<(params: TusUploadParams) => Promise<void>>().mockRejectedValue(new Error('boom'));
+      const storage = new ApplicationStorageResource(http, transport, 'app');
+
+      await expect(storage.upload({ bucket: 'assets', key: 'hello.txt', path })).rejects.toBeInstanceOf(UploadError);
+      expect((transport.mock.calls[0][0].data as { destroyed?: boolean }).destroyed).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

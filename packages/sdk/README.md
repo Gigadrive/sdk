@@ -186,6 +186,12 @@ Accepted inputs: browser `File`/`Blob`, Node `Buffer`/`Uint8Array`/`ArrayBuffer`
 a Node filesystem `path`, or a Node readable `stream` (with `contentLength` and
 `checksumSha256`).
 
+Empty files such as `.gitkeep` or `__init__.py` work with every input kind. The
+API stores a zero-byte object when the upload session is created, so nothing is
+transferred, `waitForCompletion` returns without polling, and the result always
+includes `object`. For an empty `stream`, pass `contentLength: 0`; the empty
+SHA-256 is filled in for you.
+
 #### Many files at once
 
 ```ts

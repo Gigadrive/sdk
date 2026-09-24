@@ -10,6 +10,9 @@
  * @internal
  */
 
+/** SHA-256 of empty input — the only checksum the API accepts for a zero-byte upload. */
+export const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
 /** A set of computed content checksums (lowercase hex). */
 export interface Checksums {
   /** SHA-256 checksum. Always computed. */
