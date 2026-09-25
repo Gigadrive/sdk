@@ -1,5 +1,12 @@
 # gigadrive
 
+## 2.6.3
+
+### Patch Changes
+
+- Updated dependencies [[`730734c`](https://github.com/Gigadrive/sdk/commit/730734c5f4d2998ca1b43987f8c8c276c1f8c9b1), [`ee1da4b`](https://github.com/Gigadrive/sdk/commit/ee1da4b89d7ff328512a3af74ff79f827faa244a)]:
+  - @gigadrive/sdk@0.9.0
+
 ## 2.6.2
 
 ### Patch Changes
