@@ -12,6 +12,6 @@ Custom domains for Gigadrive Network applications.
   `Hostname.type` now includes `'CUSTOM'`, and `ApiError.code` is also read when the API sends it
   next to a string `error`.
 - **CLI:** `gigadrive domains list|add|inspect|check|rm` and `gigadrive domains owners
-  list|add|verify`. `domains add` prints the DNS records to publish as a table, supports
+list|add|verify`. `domains add` prints the DNS records to publish as a table, supports
   `--branch`, `--redirect-to` with `--status` and `--drop-path`, and `--wait` to follow the domain
   until it is live. Listing and inspecting commands accept `--json`.
