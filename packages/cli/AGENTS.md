@@ -38,7 +38,7 @@ packages/cli/
       env/index.ts              # `gigadrive env list|set|rm|pull`
       setup/index.ts            # `gigadrive setup` (link + pull + provision credentials)
       deployments/index.ts      # `gigadrive deployments list|inspect`
-      domains/index.ts          # `gigadrive domains list|add|inspect|check|rm|owners`
+      domains/index.ts          # `gigadrive domains list|add|update|claim|inspect|check|rm|owners`
       ai/index.ts               # `gigadrive ai usage|budgets|policies|models|chat`
       build/index.ts            # `gigadrive build`
       debug/index.ts            # `gigadrive debug` (parent)

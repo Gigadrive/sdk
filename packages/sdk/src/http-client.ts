@@ -226,16 +226,19 @@ export class HttpClient {
   private async toApiError(response: Response): Promise<ApiError> {
     let message: string;
     let code: string | undefined;
+    let reason: string | undefined;
 
     try {
       const body = (await response.json()) as {
         error?: string | { message?: string; code?: string };
         code?: unknown;
+        reason?: unknown;
       };
       if (typeof body.error === 'string') {
         message = body.error;
-        // Some endpoints (custom domains) send a stable code next to the message.
+        // Some endpoints (custom domains) send a stable code, and sometimes a reason, next to the message.
         if (typeof body.code === 'string') code = body.code;
+        if (typeof body.reason === 'string') reason = body.reason;
       } else if (body.error && typeof body.error === 'object') {
         message = body.error.message ?? response.statusText;
         code = body.error.code;
@@ -246,7 +249,7 @@ export class HttpClient {
       message = response.statusText;
     }
 
-    return new ApiError(message, response.status, code);
+    return new ApiError(message, response.status, code, reason);
   }
 
   private buildUrl(path: string, query?: Record<string, QueryValue>): string {

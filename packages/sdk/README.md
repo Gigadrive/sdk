@@ -252,6 +252,49 @@ const { items: models } = await client.aiGateway.listModels();
 Organization-scoped governance (usage analytics, budgets, policies) lives under
 `client.organizations.aiGateway`.
 
+## Custom domains
+
+Attach a hostname you own to an application. The response lists the DNS records to publish; Gigadrive
+Network then verifies ownership, checks DNS and issues the certificate on its own.
+
+```ts
+import { DomainNotActiveError } from '@gigadrive/sdk';
+
+const domain = await client.applications.domains.add('app-id', { hostname: 'shop.example.com' });
+for (const record of domain.requiredRecords) {
+  console.log(record.type, record.host, record.value);
+}
+
+try {
+  await client.applications.domains.waitUntilActive('app-id', domain.id, {
+    timeoutMs: 15 * 60_000,
+    onState: (current) => console.log(current.state),
+  });
+} catch (error) {
+  if (error instanceof DomainNotActiveError) {
+    // `reason` is `timeout`, `failed`, `suspended` or `removing`; `domain.error` explains what to fix.
+    console.error(error.reason, error.domain.error?.message);
+  }
+}
+```
+
+Redirect a domain, or serve a branch instead of production:
+
+```ts
+await client.applications.domains.update('app-id', domain.id, {
+  target: { type: 'redirect', to: 'www.example.com', statusCode: 308 },
+});
+```
+
+Verifying the registrable domain once lets every application of the organization attach hostnames
+below it without another TXT record:
+
+```ts
+const claim = await client.organizations.domains.add('org-id', 'example.com');
+console.log(claim.record.host, claim.record.value); // publish this TXT record
+await client.organizations.domains.verify('org-id', claim.id);
+```
+
 ## Pagination
 
 List endpoints accept `page` / `perPage` / `cursor` and return `{ items, total }`

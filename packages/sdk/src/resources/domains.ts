@@ -1,4 +1,4 @@
-import { GigadriveError } from '../errors';
+import { ApiError, GigadriveError } from '../errors';
 import type { Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 
@@ -147,17 +147,20 @@ export interface WaitUntilActiveOptions {
   onState?: (domain: CustomDomain) => void;
 }
 
+/** Why {@link ApplicationDomainsResource.waitUntilActive} stopped without an active domain. */
+export type DomainNotActiveReason = 'timeout' | 'failed' | 'suspended' | 'removing';
+
 /**
  * Thrown by {@link ApplicationDomainsResource.waitUntilActive} when the domain did not become active
- * in time, or stopped in a state that needs you to act (`failed` or `suspended`).
+ * in time, stopped in a state that needs you to act (`failed` or `suspended`), or was removed.
  */
 export class DomainNotActiveError extends GigadriveError {
-  /** The domain as of the last check. */
+  /** The domain as of the last successful check. */
   readonly domain: CustomDomain;
-  /** `timeout` when the wait ran out, otherwise the state that ended it. */
-  readonly reason: 'timeout' | 'failed' | 'suspended';
+  /** `timeout` when the wait ran out, `removing` when the domain was removed, otherwise the state that ended it. */
+  readonly reason: DomainNotActiveReason;
 
-  constructor(domain: CustomDomain, reason: 'timeout' | 'failed' | 'suspended') {
+  constructor(domain: CustomDomain, reason: DomainNotActiveReason) {
     const detail = domain.error ? `: ${domain.error.message}` : '';
     super(
       reason === 'timeout'
@@ -171,6 +174,10 @@ export class DomainNotActiveError extends GigadriveError {
 }
 
 const SERVING_STATES = new Set<CustomDomainState>(['active', 'degraded']);
+
+/** Rate limits, server errors and network failures are worth another poll; anything else is final. */
+const isTransient = (error: unknown) =>
+  error instanceof ApiError ? error.status === 429 || error.status >= 500 : error instanceof TypeError;
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -226,8 +233,9 @@ export class ApplicationDomainsResource extends BaseResource {
   }
 
   /** Get one custom domain with its current state. */
-  async get(applicationId: string, domainId: string): Promise<CustomDomain> {
-    return this.httpClient.get(`/applications/${applicationId}/domains/${domainId}`);
+  async get(applicationId: string, domainId: string, options?: { signal?: AbortSignal }): Promise<CustomDomain> {
+    const path = `/applications/${applicationId}/domains/${domainId}`;
+    return options?.signal ? this.httpClient.get(path, { signal: options.signal }) : this.httpClient.get(path);
   }
 
   /**
@@ -265,8 +273,11 @@ export class ApplicationDomainsResource extends BaseResource {
   /**
    * Poll a domain until it serves traffic.
    *
+   * Rate limits, server errors and network failures do not end the wait; the next poll retries until
+   * the timeout. Aborting the signal or reaching the timeout also cancels a request in flight.
+   *
    * @returns The domain once it is `active` (or `degraded`, which also serves).
-   * @throws {DomainNotActiveError} When it fails, is suspended, or the timeout runs out.
+   * @throws {DomainNotActiveError} When it fails, is suspended or removed, or the timeout runs out.
    *
    * @example
    * ```ts
@@ -283,20 +294,42 @@ export class ApplicationDomainsResource extends BaseResource {
   ): Promise<CustomDomain> {
     const { timeoutMs = 10 * 60_000, intervalMs = 5_000, signal, onState } = options;
     const deadline = Date.now() + timeoutMs;
-    let lastState: CustomDomainState | undefined;
+    let last: CustomDomain | undefined;
 
     for (;;) {
-      const domain = await this.get(applicationId, domainId);
-      if (domain.state !== lastState) {
-        lastState = domain.state;
-        onState?.(domain);
+      const remaining = deadline - Date.now();
+      const requestSignal = signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(Math.max(remaining, 1))])
+        : AbortSignal.timeout(Math.max(remaining, 1));
+
+      let domain: CustomDomain | undefined;
+      try {
+        domain = await this.get(applicationId, domainId, { signal: requestSignal });
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        // A domain that disappears mid-wait was removed; report it like any other terminal state.
+        if (last && error instanceof ApiError && error.status === 404) throw new DomainNotActiveError(last, 'removing');
+        const timedOut = Date.now() >= deadline;
+        if (!timedOut && !isTransient(error)) throw error;
+        if (timedOut && !last) throw error;
       }
-      if (SERVING_STATES.has(domain.state)) return domain;
-      if (domain.state === 'failed' || domain.state === 'suspended') {
-        throw new DomainNotActiveError(domain, domain.state);
+
+      if (domain) {
+        if (domain.state !== last?.state) onState?.(domain);
+        last = domain;
+        if (SERVING_STATES.has(domain.state)) return domain;
+        if (domain.state === 'failed' || domain.state === 'suspended' || domain.state === 'removing') {
+          throw new DomainNotActiveError(domain, domain.state);
+        }
       }
-      if (Date.now() + intervalMs > deadline) throw new DomainNotActiveError(domain, 'timeout');
-      await sleep(intervalMs, signal);
+
+      const untilDeadline = deadline - Date.now();
+      if (untilDeadline <= 0) {
+        if (last) throw new DomainNotActiveError(last, 'timeout');
+        throw new GigadriveError('Timed out before the domain could be read');
+      }
+      // Sleep at most until the deadline, so the last check happens at the deadline and not an interval early.
+      await sleep(Math.min(intervalMs, untilDeadline), signal);
     }
   }
 }

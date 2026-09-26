@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../errors';
 import type { HttpClient } from '../http-client';
 import {
   ApplicationDomainsResource,
@@ -112,6 +113,72 @@ describe('ApplicationDomainsResource', () => {
     await expect(
       new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', { intervalMs: 5, timeoutMs: 1 })
     ).rejects.toMatchObject({ name: 'DomainNotActiveError', reason: 'timeout' });
+  });
+
+  it('stops when the domain is being removed', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get).mockResolvedValueOnce(domain('pending_dns')).mockResolvedValueOnce(domain('removing'));
+
+    await expect(
+      new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', { intervalMs: 1 })
+    ).rejects.toMatchObject({ name: 'DomainNotActiveError', reason: 'removing' });
+  });
+
+  it('reports a domain that disappears mid-wait as removed', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get)
+      .mockResolvedValueOnce(domain('pending_dns'))
+      .mockRejectedValueOnce(new ApiError('Not found', 404, 'not_found'));
+
+    await expect(
+      new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', { intervalMs: 1 })
+    ).rejects.toMatchObject({ name: 'DomainNotActiveError', reason: 'removing', domain: { state: 'pending_dns' } });
+  });
+
+  it('keeps polling through rate limits, server errors and network failures', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get)
+      .mockResolvedValueOnce(domain('pending_dns'))
+      .mockRejectedValueOnce(new ApiError('Too many requests', 429))
+      .mockRejectedValueOnce(new ApiError('Bad gateway', 502))
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(domain('active'));
+
+    const result = await new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', { intervalMs: 1 });
+
+    expect(result.state).toBe('active');
+    expect(http.get).toHaveBeenCalledTimes(5);
+  });
+
+  it('fails right away on a client error it cannot recover from', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get).mockRejectedValue(new ApiError('Forbidden', 403, 'forbidden'));
+
+    await expect(
+      new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', { intervalMs: 1 })
+    ).rejects.toMatchObject({ name: 'ApiError', status: 403 });
+    expect(http.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks once more at the deadline instead of giving up an interval early', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get).mockResolvedValueOnce(domain('issuing_certificate')).mockResolvedValueOnce(domain('active'));
+
+    const result = await new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', {
+      intervalMs: 60_000,
+      timeoutMs: 20,
+    });
+
+    expect(result.state).toBe('active');
+  });
+
+  it('passes a signal to every poll so a hung request is cancelled', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get).mockResolvedValue(domain('active'));
+
+    await new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1');
+
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/domains/dom-1', { signal: expect.any(AbortSignal) });
   });
 
   it('stops waiting when aborted', async () => {

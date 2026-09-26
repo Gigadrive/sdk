@@ -73,6 +73,8 @@ export class ApiRequestError extends Schema.TaggedError<ApiRequestError>()('ApiR
   message: Schema.String,
   statusCode: Schema.optional(Schema.Number),
   code: Schema.optional(Schema.String),
+  /** Finer-grained reason next to `code`, for example `daily_add_limit`. */
+  reason: Schema.optional(Schema.String),
 }) {}
 
 // ---------------------------------------------------------------------------
@@ -102,6 +104,18 @@ export class DomainWaitError extends Schema.TaggedError<DomainWaitError>()('Doma
   message: Schema.String,
   state: Schema.String,
 }) {}
+
+/** The domain command's flags contradict each other or are out of range. */
+export class InvalidDomainOptionsError extends Schema.TaggedError<InvalidDomainOptionsError>()(
+  'InvalidDomainOptionsError',
+  { message: Schema.String }
+) {}
+
+/** A destructive command needs confirmation, but there is no terminal to ask on and `--yes` was not passed. */
+export class ConfirmationRequiredError extends Schema.TaggedError<ConfirmationRequiredError>()(
+  'ConfirmationRequiredError',
+  { message: Schema.String }
+) {}
 
 /** No organization was given and the linked project does not name one. */
 export class OrganizationRequiredError extends Schema.TaggedError<OrganizationRequiredError>()(
