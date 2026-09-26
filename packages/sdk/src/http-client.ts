@@ -228,9 +228,14 @@ export class HttpClient {
     let code: string | undefined;
 
     try {
-      const body = (await response.json()) as { error?: string | { message?: string; code?: string } };
+      const body = (await response.json()) as {
+        error?: string | { message?: string; code?: string };
+        code?: unknown;
+      };
       if (typeof body.error === 'string') {
         message = body.error;
+        // Some endpoints (custom domains) send a stable code next to the message.
+        if (typeof body.code === 'string') code = body.code;
       } else if (body.error && typeof body.error === 'object') {
         message = body.error.message ?? response.statusText;
         code = body.error.code;

@@ -92,6 +92,23 @@ export class EnvVarNotFoundError extends Schema.TaggedError<EnvVarNotFoundError>
   message: Schema.String,
 }) {}
 
+/** No custom domain of the application matched the requested hostname or ID. */
+export class DomainNotFoundError extends Schema.TaggedError<DomainNotFoundError>()('DomainNotFoundError', {
+  message: Schema.String,
+}) {}
+
+/** `--wait` gave up: the domain did not start serving in time, or stopped in a state that needs action. */
+export class DomainWaitError extends Schema.TaggedError<DomainWaitError>()('DomainWaitError', {
+  message: Schema.String,
+  state: Schema.String,
+}) {}
+
+/** No organization was given and the linked project does not name one. */
+export class OrganizationRequiredError extends Schema.TaggedError<OrganizationRequiredError>()(
+  'OrganizationRequiredError',
+  { message: Schema.String }
+) {}
+
 /** The actor has no applications to link. */
 export class NoApplicationsFoundError extends Schema.TaggedError<NoApplicationsFoundError>()(
   'NoApplicationsFoundError',
