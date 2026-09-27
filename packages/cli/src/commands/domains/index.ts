@@ -289,6 +289,9 @@ export const errorMessage = (
       if (error.code === 'domain_in_use' && error.reason === 'other_organization') {
         return `${error.message}\nIf you control the domain, verify it with "gigadrive domains owners add <domain>", then move it with "gigadrive domains claim <hostname>".`;
       }
+      if (error.reason === 'ownership_not_live') {
+        return `${error.message}\nPublish the TXT record shown by "gigadrive domains owners list" again, wait for DNS to update, then retry the claim.`;
+      }
       return `Failed to ${action}: ${error.message}`;
     default:
       return error.message;

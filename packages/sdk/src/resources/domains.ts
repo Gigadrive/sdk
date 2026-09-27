@@ -264,7 +264,7 @@ export class ApplicationDomainsResource extends BaseResource {
 
   /**
    * Move a hostname another organization attached to this application. Verify the domain for your
-   * organization first; the claim must follow the verification within 10 minutes.
+   * organization first and keep its TXT record published: the claim checks the record again.
    */
   async claim(applicationId: string, hostname: string): Promise<CustomDomain> {
     return this.httpClient.post(`/applications/${applicationId}/domains/claim`, { hostname });

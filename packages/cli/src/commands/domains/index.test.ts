@@ -123,6 +123,12 @@ describe('errorMessage', () => {
       'gigadrive domains claim'
     );
   });
+
+  it('asks to republish the TXT record when a claim cannot prove control live', () => {
+    expect(errorMessage('claim the domain', apiError('claim_refused', 'ownership_not_live'))).toContain(
+      'Publish the TXT record'
+    );
+  });
 });
 
 describe('findDomain', () => {
