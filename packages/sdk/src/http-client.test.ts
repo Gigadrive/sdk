@@ -150,6 +150,20 @@ describe('HttpClient', () => {
     await expect(client.get('/fail')).rejects.toMatchObject({ message: 'Bad input', status: 422, code: 'invalid' });
   });
 
+  it('should parse a top-level code next to a string error', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Queue not found', code: 'queue_not_found' }), { status: 404 })
+    );
+
+    const client = createClient();
+
+    await expect(client.get('/fail')).rejects.toMatchObject({
+      message: 'Queue not found',
+      status: 404,
+      code: 'queue_not_found',
+    });
+  });
+
   it('should send PUT request with JSON body', async () => {
     mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
 

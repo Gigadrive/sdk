@@ -131,6 +131,20 @@ export type {
   UploadByteSource,
 } from './storage-upload-sessions';
 
+export { QueuesResource } from './queues';
+export type {
+  QueueInfo,
+  QueueMessageInput,
+  QueueMessageRecord,
+  QueueNackResult,
+  QueueSchedule,
+  QueueScheduleInput,
+  QueueScopeOptions,
+  QueueSendResult,
+  QueueSettings,
+  QueueStats,
+} from './queues';
+
 export { StickySessionsResource } from './sticky-sessions';
 export type { CreateStickySessionUrlInput, CreateStickySessionUrlResult } from './sticky-sessions';
 

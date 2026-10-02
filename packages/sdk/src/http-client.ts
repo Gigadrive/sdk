@@ -228,9 +228,10 @@ export class HttpClient {
     let code: string | undefined;
 
     try {
-      const body = (await response.json()) as { error?: string | { message?: string; code?: string } };
+      const body = (await response.json()) as { error?: string | { message?: string; code?: string }; code?: string };
       if (typeof body.error === 'string') {
         message = body.error;
+        code = typeof body.code === 'string' ? body.code : undefined;
       } else if (body.error && typeof body.error === 'object') {
         message = body.error.message ?? response.statusText;
         code = body.error.code;
