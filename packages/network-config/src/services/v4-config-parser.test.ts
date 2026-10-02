@@ -675,3 +675,150 @@ describe('V4ConfigParser', () => {
     expect(assetPaths.length).toBeLessThanOrEqual(101);
   });
 });
+
+describe('V4ConfigParser containers', () => {
+  const parse = (config: ConfigV4, files: Record<string, string> = {}) =>
+    Effect.runPromise(
+      Effect.either(
+        V4ConfigParser.parse(config, '/project').pipe(
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(Layer.merge(makeTestFs(files), TestPathLayer))
+        )
+      )
+    );
+
+  it('serves every path from a lone container function', async () => {
+    const result = await parse({ version: 4, containers: { web: { image: 'nginx:1.27', port: 80 } } });
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.entrypoints).toEqual([
+      {
+        path: 'container:web',
+        displayName: 'web',
+        runtime: 'docker',
+        memory: 512,
+        maxDuration: 30,
+        streaming: true,
+        container: { name: 'web', source: { type: 'registry', reference: 'nginx:1.27' }, port: 80 },
+      },
+    ]);
+    expect(result.right.routes).toEqual([
+      {
+        path: '/*',
+        destination: 'container:web',
+        handler: 'SERVERLESS_FUNCTION_STREAMING',
+        headers: {},
+        methods: ['ANY'],
+        positiveRequirements: undefined,
+        negativeRequirements: undefined,
+        status: undefined,
+      },
+    ]);
+    expect(result.right.warnings).toEqual([]);
+    expect(result.right.sidecars).toBeUndefined();
+  });
+
+  it('routes explicitly declared destinations to container functions', async () => {
+    const result = await parse({
+      version: 4,
+      containers: {
+        api: { image: 'acme/api', streaming: false },
+        admin: { image: 'acme/admin' },
+        cron: { image: 'acme/cron', schedule: 'rate(1 hour)' },
+      },
+      routes: [{ source: '/api/*', destination: '/container:api' }],
+    });
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.routes.map((route) => [route.path, route.destination, route.handler])).toEqual([
+      ['/api/*', '/container:api', 'SERVERLESS_FUNCTION'],
+    ]);
+    expect(result.right.warnings).toEqual([
+      "Container function 'admin' has no route and no schedule, so nothing reaches it. Add a route with destination 'container:admin'.",
+    ]);
+  });
+
+  it('does not add a catch-all next to static assets', async () => {
+    const result = await parse(
+      { version: 4, assets: 'public', containers: { api: { image: 'acme/api' } } },
+      { '/project/public/index.html': '<html></html>' }
+    );
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.routes).toEqual([]);
+  });
+
+  it('carries sidecars next to file functions', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(
+          {
+            version: 4,
+            functions: { 'dist/main.js': { runtime: 'node-22' } },
+            containers: { redis: { image: 'redis:7-alpine', sidecar: true, port: 6379 } },
+          },
+          projectFolder
+        ).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(NodeContext.layer))
+      );
+
+      expect(result.entrypoints.map((entrypoint) => entrypoint.path)).toEqual(['dist/main.js']);
+      expect(result.sidecars).toEqual([
+        { name: 'redis', source: { type: 'registry', reference: 'redis:7-alpine' }, port: 6379, memory: 256 },
+      ]);
+      expect(result.warnings).toEqual([]);
+    });
+  });
+
+  it('refuses a sidecar on the port of a managed runtime', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const result = await Effect.runPromise(
+        Effect.either(
+          V4ConfigParser.parse(
+            {
+              version: 4,
+              functions: { 'dist/main.js': { runtime: 'php-84' } },
+              containers: { fpm: { image: 'acme/fpm', sidecar: true, port: 9000 } },
+            },
+            projectFolder
+          ).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(NodeContext.layer))
+        )
+      );
+
+      expect(result._tag === 'Left' && result.left.message).toBe(
+        "Sidecar 'fpm' listens on port 9000, which the php-84 runtime of 'dist/main.js' uses inside the same microVM. Choose another port."
+      );
+    });
+  });
+
+  it('warns when sidecars have no function to run next to', async () => {
+    const result = await parse({ version: 4, containers: { redis: { image: 'redis', sidecar: true } } });
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.warnings).toEqual([
+      'Sidecars run next to functions, and this deployment has none, so no sidecar will start.',
+    ]);
+  });
+
+  it('imports a Compose file and lets containers override its services', async () => {
+    const result = await parse(
+      {
+        version: 4,
+        compose: 'compose.yaml',
+        containers: { cache: { image: 'valkey/valkey:8', sidecar: true, port: 6379 } },
+      },
+      {
+        '/project/compose.yaml': 'services:\n  web:\n    build: .\n    ports: ["3000"]\n  cache:\n    image: redis\n',
+        '/project/Dockerfile': 'FROM node:22',
+      }
+    );
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.entrypoints.map((entrypoint) => entrypoint.container)).toEqual([
+      { name: 'web', source: { type: 'dockerfile', context: '.', dockerfile: 'Dockerfile' }, port: 3000 },
+    ]);
+    expect(result.right.sidecars).toEqual([
+      { name: 'cache', source: { type: 'registry', reference: 'valkey/valkey:8' }, port: 6379, memory: 256 },
+    ]);
+    expect(result.right.routes.map((route) => route.destination)).toEqual(['container:web']);
+  });
+});

@@ -107,4 +107,26 @@ describe('ArchiveService.createZipArchive', () => {
     expect(entries).toContain('.next/cache');
     expect(entries).toContain('.env.local');
   });
+
+  it('keeps Dockerfiles and Compose files that .dockerignore lists', async () => {
+    const directory = await makeProject();
+    await nodeFs.mkdir(path.join(directory, 'services', 'api'), { recursive: true });
+    await Promise.all([
+      nodeFs.writeFile(path.join(directory, 'Dockerfile'), 'FROM node:22'),
+      nodeFs.writeFile(path.join(directory, 'compose.yaml'), 'services: {}'),
+      nodeFs.writeFile(path.join(directory, 'services', 'api', 'Dockerfile.prod'), 'FROM node:22'),
+      nodeFs.writeFile(path.join(directory, 'secrets.txt'), 'secret'),
+      nodeFs.writeFile(
+        path.join(directory, '.dockerignore'),
+        'Dockerfile\n**/Dockerfile.*\ncompose.yaml\nsecrets.txt\n'
+      ),
+    ]);
+
+    const entries = await createArchive(directory);
+
+    expect(entries).toContain('Dockerfile');
+    expect(entries).toContain('compose.yaml');
+    expect(entries).toContain('services/api/Dockerfile.prod');
+    expect(entries).not.toContain('secrets.txt');
+  });
 });

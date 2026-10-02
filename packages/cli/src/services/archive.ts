@@ -22,6 +22,22 @@ const MANAGED_IGNORE_PATTERNS = [
   '**/Thumbs.db',
 ];
 
+/**
+ * Container build inputs that stay in the archive whatever the ignore files
+ * say. Docker sends a Dockerfile even when `.dockerignore` lists it, and that
+ * file, like a Compose file, is commonly listed there.
+ */
+const CONTAINER_BUILD_FILE_PATTERNS = [
+  '!Dockerfile',
+  '!**/Dockerfile',
+  '!**/*.Dockerfile',
+  '!**/Dockerfile.*',
+  '!compose.yaml',
+  '!compose.yml',
+  '!docker-compose.yaml',
+  '!docker-compose.yml',
+];
+
 const readIgnoreFile = (fs: FileSystem.FileSystem, ignorePath: string): Effect.Effect<string[]> =>
   fs.readFileString(ignorePath, 'utf8').pipe(
     Effect.map((content) => content.split('\n').filter((line: string) => line.trim() !== '')),
@@ -96,6 +112,7 @@ const initializeIgnoreRules = (
       }
 
       yield* collectIgnorePatterns(fs, pathService, baseDir, baseDir, ignoreRules);
+      ignoreRules.add(CONTAINER_BUILD_FILE_PATTERNS);
     }
     return ignoreRules;
   });

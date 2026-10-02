@@ -105,6 +105,73 @@ export interface ConfigV4 extends Config {
 
   /** Declares managed services to provision for the deployment environment. */
   services?: ConfigV4Services;
+
+  /**
+   * Container images to run, keyed by name. A container without `sidecar: true`
+   * runs as a function that routes target with `destination: container:<name>`.
+   * A sidecar runs next to every function instance and answers at `<name>:<port>`.
+   *
+   * @example
+   * ```yaml
+   * containers:
+   *   web:
+   *     build: .
+   *     port: 3000
+   *   redis:
+   *     image: redis:7-alpine
+   *     sidecar: true
+   * ```
+   */
+  containers?: Record<string, ConfigV4Container> | null;
+
+  /**
+   * Project-relative path of a Compose file whose services are imported as
+   * `containers`. Entries in `containers` win over imported services of the
+   * same name.
+   */
+  compose?: string | null;
+}
+
+/** One entry of the v4 `containers` map. Exactly one of `image` and `build` is required. */
+export interface ConfigV4Container {
+  /** Registry image reference, e.g. `redis:7-alpine` or `ghcr.io/acme/api:1.4`. */
+  image?: string;
+  /** Build context directory, or the full build settings, for a Dockerfile in the repository. */
+  build?: string | ConfigV4ContainerBuild;
+  /** Run next to every function instance instead of serving routes. Defaults to `false`. */
+  sidecar?: boolean;
+  /** TCP port the container listens on. Defaults to the image's first exposed port, then 8080. */
+  port?: number;
+  /** Replaces the image `ENTRYPOINT`. A string is split into words the way Compose splits it. */
+  entrypoint?: string | string[];
+  /** Replaces the image `CMD`. A string is split into words the way Compose splits it. */
+  command?: string | string[];
+  /** Environment variables baked into the container, merged over the image `ENV`. */
+  env?: Record<string, string>;
+  /** Replaces the image `WORKDIR`. */
+  working_dir?: string;
+  /** Replaces the image `USER`. Root is never used: a root image runs as a dedicated non-root user. */
+  user?: string;
+  /** Memory in MB. Defaults to 512 for a container function and 256 for a sidecar. */
+  memory?: number;
+  /** Maximum lifetime of one request, in seconds. Container functions only. */
+  max_duration?: number;
+  /** Stream responses. Defaults to `true`. Container functions only. */
+  streaming?: boolean;
+  /** Run on a timer, like a function `schedule`. Container functions only. */
+  schedule?: string;
+}
+
+/** Dockerfile build settings for a container. */
+export interface ConfigV4ContainerBuild {
+  /** Project-relative build context. Defaults to `.`. */
+  context?: string;
+  /** Dockerfile path relative to the context. Defaults to `Dockerfile`. */
+  dockerfile?: string;
+  /** Build stage to stop at. */
+  target?: string;
+  /** Build arguments. */
+  args?: Record<string, string>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type

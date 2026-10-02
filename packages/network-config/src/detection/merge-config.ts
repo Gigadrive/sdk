@@ -13,6 +13,7 @@ import type { NormalizedConfig } from '../normalized-config';
  * - regions: always use user's (always populated from parsing)
  * - environmentVariables: deep merge (framework base, user overrides)
  * - services: always use user's (frameworks don't define services)
+ * - sidecars: always use user's (frameworks don't define sidecars)
  * - warnings/errors: concatenate both
  *
  * @param userConfig - The config parsed from the user's config file
@@ -52,6 +53,7 @@ export const mergeWithFrameworkDefaults = Effect.fn('mergeWithFrameworkDefaults'
         : frameworkConfig.excludeFiles,
 
     services: userConfig.services,
+    ...(userConfig.sidecars !== undefined && { sidecars: userConfig.sidecars }),
     userArchive: userConfig.userArchive,
 
     warnings: [...frameworkConfig.warnings, ...userConfig.warnings],

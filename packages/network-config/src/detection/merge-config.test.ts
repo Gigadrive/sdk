@@ -190,4 +190,18 @@ describe('mergeWithFrameworkDefaults', () => {
     const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, framework));
     expect(result.excludeFiles).toEqual(['tests/', '.ddev']);
   });
+
+  it('should keep user sidecars and never take them from the framework', async () => {
+    const sidecar = { name: 'redis', source: { type: 'registry' as const, reference: 'redis' }, memory: 256 };
+
+    const withSidecars = await Effect.runPromise(
+      mergeWithFrameworkDefaults(makeConfig({ sidecars: [sidecar] }), makeConfig())
+    );
+    const withoutSidecars = await Effect.runPromise(
+      mergeWithFrameworkDefaults(makeConfig(), makeConfig({ sidecars: [sidecar] }))
+    );
+
+    expect(withSidecars.sidecars).toEqual([sidecar]);
+    expect(withoutSidecars).not.toHaveProperty('sidecars');
+  });
 });

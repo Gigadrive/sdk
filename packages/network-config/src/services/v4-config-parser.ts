@@ -3,8 +3,10 @@ import { Effect } from 'effect';
 import { minimatch } from 'minimatch';
 import safeRegex from 'safe-regex2';
 import { collectAssetFiles } from '../collect-asset-files';
-import { FunctionConfigError } from '../errors';
+import { containerEntrypointPath, normalizeContainers, readComposeContainers } from '../containers';
+import { ContainerConfigError, FunctionConfigError } from '../errors';
 import {
+  CONTAINER_RUNTIME,
   DEFAULT_FUNCTION_DURATION_SECONDS,
   type NormalizedConfigEntrypoint,
   type NormalizedConfigRoute,
@@ -13,7 +15,7 @@ import {
   type NormalizedImagePolicy,
 } from '../normalized-config';
 import { AVAILABLE_REGIONS, type Region } from '../regions';
-import type { ConfigV4, ConfigV4FunctionSettings } from '../v4';
+import type { ConfigV4, ConfigV4Container, ConfigV4FunctionSettings } from '../v4';
 
 const DEFAULT_FUNCTION_SETTINGS: Required<Pick<ConfigV4FunctionSettings, 'memory' | 'max_duration'>> &
   Pick<ConfigV4FunctionSettings, 'schedule' | 'symlinks' | 'excludeFiles' | 'includeFiles'> = {
@@ -262,6 +264,55 @@ const collectAssets = Effect.fn('collectAssets')(function* (config: ConfigV4, pr
     .map((assetName) => `${config.assets}/${assetName}`);
 });
 
+/**
+ * Ports a managed runtime binds inside the function microVM, which a sidecar
+ * running next to it must not take: the guest runtime's HTTP port, and the
+ * php-fpm port for PHP functions.
+ */
+const reservedRuntimePorts = (entrypoint: NormalizedConfigEntrypoint): number[] =>
+  entrypoint.runtime === CONTAINER_RUNTIME ? [] : entrypoint.runtime.startsWith('php-') ? [8080, 9000] : [8080];
+
+/**
+ * Resolves the `compose` import and the `containers` map into container
+ * entrypoints, sidecars and the routes a lone container function implies.
+ */
+const parseContainers = Effect.fn('parseContainers')(function* (
+  config: ConfigV4,
+  projectFolder: string,
+  fileEntrypoints: readonly NormalizedConfigEntrypoint[]
+) {
+  const warnings: string[] = [];
+  let containers: Record<string, ConfigV4Container> = {};
+
+  if (config.compose != null) {
+    const imported = yield* readComposeContainers(config.compose, projectFolder);
+    containers = imported.containers;
+    warnings.push(...imported.warnings);
+  }
+  containers = { ...containers, ...(config.containers ?? {}) };
+
+  const result = yield* normalizeContainers(containers, projectFolder);
+  warnings.push(...result.warnings);
+
+  for (const entrypoint of fileEntrypoints) {
+    for (const port of reservedRuntimePorts(entrypoint)) {
+      const sidecar = result.sidecars.find((candidate) => candidate.port === port);
+      if (sidecar !== undefined) {
+        return yield* new ContainerConfigError({
+          message: `Sidecar '${sidecar.name}' listens on port ${port}, which the ${entrypoint.runtime} runtime of '${entrypoint.path}' uses inside the same microVM. Choose another port.`,
+          containerName: sidecar.name,
+        });
+      }
+    }
+  }
+
+  if (result.sidecars.length > 0 && fileEntrypoints.length === 0 && result.entrypoints.length === 0) {
+    warnings.push('Sidecars run next to functions, and this deployment has none, so no sidecar will start.');
+  }
+
+  return { ...result, warnings };
+});
+
 // -- Service ----------------------------------------------------------------------------------
 
 export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigParser', {
@@ -275,8 +326,33 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
      * @param projectFolder - Absolute path to the project root
      */
     parse: Effect.fn('V4ConfigParser.parse')(function* (config: ConfigV4, projectFolder: string) {
-      const entrypoints = yield* parseEntrypoints(config, projectFolder);
+      const fileEntrypoints = yield* parseEntrypoints(config, projectFolder);
+      const containers = yield* parseContainers(config, projectFolder, fileEntrypoints);
+      const entrypoints = [...fileEntrypoints, ...containers.entrypoints];
       const assets = yield* collectAssets(config, projectFolder);
+      const routes = (config.routes ?? []).map((route) => mapRoute(route, entrypoints));
+      const warnings = [...containers.warnings];
+
+      // A project that is nothing but one container function serves every path
+      // from it, the way a project with one detected framework does.
+      const [onlyContainer] = containers.entrypoints;
+      if (
+        routes.length === 0 &&
+        config.assets == null &&
+        fileEntrypoints.length === 0 &&
+        containers.entrypoints.length === 1
+      ) {
+        routes.push(mapRoute({ source: '/*', destination: onlyContainer.path }, entrypoints));
+      } else {
+        for (const entrypoint of containers.entrypoints) {
+          const routed = routes.some((route) => route.destination.replace(/^\/+/, '') === entrypoint.path);
+          if (!routed && entrypoint.schedule === undefined) {
+            warnings.push(
+              `Container function '${entrypoint.displayName}' has no route and no schedule, so nothing reaches it. Add a route with destination '${containerEntrypointPath(entrypoint.displayName ?? '')}'.`
+            );
+          }
+        }
+      }
 
       return {
         regions: resolveRegions(config.regions),
@@ -290,10 +366,11 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         commands: config.build_commands ?? [],
         images: normalizeImagePolicy(config.images),
         services: normalizeServices(config.services),
+        ...(containers.sidecars.length > 0 && { sidecars: containers.sidecars }),
         entrypoints,
         errors: [],
-        warnings: [],
-        routes: (config.routes ?? []).map((route) => mapRoute(route, entrypoints)),
+        warnings,
+        routes,
       };
     }),
   }),

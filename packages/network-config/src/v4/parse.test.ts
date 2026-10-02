@@ -113,6 +113,15 @@ describe('parse config v4', function () {
           ],
         },
       ],
+      sidecars: [
+        {
+          name: 'cache',
+          source: { type: 'registry', reference: 'redis:7-alpine' },
+          port: 6379,
+          command: ['redis-server', '--save', ''],
+          memory: 256,
+        },
+      ],
     });
   });
 
@@ -199,6 +208,53 @@ describe('parse config v4', function () {
         functions: { 'src/server.ts': { max_duration: 0 } },
       })
     ).toBe(false);
+  });
+
+  test('accepts container functions and sidecars', function () {
+    const validate = createSchemaValidator();
+
+    const valid = validate({
+      version: 4,
+      compose: 'docker-compose.yml',
+      containers: {
+        web: {
+          build: { context: '.', dockerfile: 'Dockerfile', target: 'prod', args: { VERSION: '1' } },
+          port: 3000,
+          command: 'node server.js',
+          entrypoint: ['tini', '--'],
+          env: { NODE_ENV: 'production' },
+          working_dir: '/app',
+          user: 'node',
+          memory: 1024,
+          max_duration: 120,
+          streaming: false,
+          schedule: 'rate(1 hour)',
+        },
+        worker: { build: './worker' },
+        redis: { image: 'redis:7-alpine', sidecar: true, port: 6379 },
+      },
+      routes: [{ source: '/*', destination: 'container:web' }],
+    });
+
+    expect(validate.errors).toBeNull();
+    expect(valid).toBe(true);
+  });
+
+  test.each([
+    ['both image and build', { web: { image: 'nginx', build: '.' } }],
+    ['neither image nor build', { web: { port: 80 } }],
+    ['an uppercase name', { Web: { image: 'nginx' } }],
+    ['the reserved localhost name', { localhost: { image: 'nginx' } }],
+    ['a relative working_dir', { web: { image: 'nginx', working_dir: 'app' } }],
+    ['a port out of range', { web: { image: 'nginx', port: 70000 } }],
+    ['an image with whitespace', { web: { image: 'nginx latest' } }],
+    ['an unknown key', { web: { image: 'nginx', volumes: ['/data'] } }],
+    ['an invalid schedule', { web: { image: 'nginx', schedule: 'every hour' } }],
+    ['too little memory', { web: { image: 'nginx', memory: 64 } }],
+  ])('rejects a container with %s', function (_label, containers) {
+    const validate = createSchemaValidator();
+
+    expect(validate({ version: 4, containers })).toBe(false);
   });
 
   test('getFunctionSettings', async () => {
