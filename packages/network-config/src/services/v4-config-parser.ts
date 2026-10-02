@@ -7,13 +7,14 @@ import { FunctionConfigError } from '../errors';
 import {
   DEFAULT_FUNCTION_DURATION_SECONDS,
   type NormalizedConfigEntrypoint,
+  type NormalizedConfigQueue,
   type NormalizedConfigRoute,
   type NormalizedConfigRouteHandler,
   type NormalizedConfigServiceDefinition,
   type NormalizedImagePolicy,
 } from '../normalized-config';
 import { AVAILABLE_REGIONS, type Region } from '../regions';
-import type { ConfigV4, ConfigV4FunctionSettings } from '../v4';
+import type { ConfigV4, ConfigV4FunctionSettings, ConfigV4Queue, ConfigV4QueueDuration } from '../v4';
 
 const DEFAULT_FUNCTION_SETTINGS: Required<Pick<ConfigV4FunctionSettings, 'memory' | 'max_duration'>> &
   Pick<ConfigV4FunctionSettings, 'schedule' | 'symlinks' | 'excludeFiles' | 'includeFiles'> = {
@@ -52,13 +53,72 @@ const normalizeImagePolicy = (images: ConfigV4['images']): NormalizedImagePolicy
   };
 };
 
+const DURATION_UNIT_SECONDS = { s: 1, m: 60, h: 3_600, d: 86_400 } as const;
+
+/** Resolves a queue duration (`90`, `'10m'`) to whole seconds; schema validation guarantees the shape. */
+const queueDurationSeconds = (value: ConfigV4QueueDuration | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number') return value;
+  const match = /^(\d+)(s|m|h|d)$/.exec(value);
+  if (!match)
+    throw new Error(`Invalid queue duration "${value}". Use seconds or a string such as 30s, 10m, 12h or 4d.`);
+  return Number(match[1]) * DURATION_UNIT_SECONDS[match[2] as keyof typeof DURATION_UNIT_SECONDS];
+};
+
+const byName = <T extends { name: string }>(left: T, right: T) =>
+  left.name < right.name ? -1 : left.name > right.name ? 1 : 0;
+
+/** Drops keys whose value is `undefined`, so absent settings stay absent in the normalized config. */
+const definedOnly = <T extends object>(value: T): T =>
+  Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+
+const normalizeQueue = (name: string, queue: ConfigV4Queue | null): NormalizedConfigQueue => {
+  if (queue === null) return { name };
+  const schedules = queue.schedules
+    ? Object.entries(queue.schedules)
+        .map(([scheduleName, schedule]) =>
+          definedOnly({
+            name: scheduleName,
+            cron: schedule.cron,
+            timezone: schedule.timezone,
+            body:
+              schedule.body === undefined || typeof schedule.body === 'string'
+                ? schedule.body
+                : JSON.stringify(schedule.body),
+            contentType: schedule.contentType,
+            headers: schedule.headers,
+            enabled: schedule.enabled,
+          })
+        )
+        .sort(byName)
+    : undefined;
+  return definedOnly({
+    name,
+    consumer: queue.consumer,
+    visibilityTimeoutSeconds: queueDurationSeconds(queue.visibilityTimeout),
+    retentionSeconds: queueDurationSeconds(queue.retention),
+    maxAttempts: queue.maxAttempts,
+    retryBackoffMinSeconds: queueDurationSeconds(queue.retryBackoff?.min),
+    retryBackoffMaxSeconds: queueDurationSeconds(queue.retryBackoff?.max),
+    deduplicationWindowSeconds: queueDurationSeconds(queue.deduplicationWindow),
+    concurrency: queue.concurrency,
+    rateLimit:
+      queue.rateLimit == null
+        ? queue.rateLimit
+        : { count: queue.rateLimit.count, periodSeconds: queueDurationSeconds(queue.rateLimit.period) ?? 1 },
+    deadLetter: queue.deadLetter,
+    schedules,
+  });
+};
+
 /**
  * Converts keyed v4 service declarations into the stable normalized list used
  * by deployment provisioning.
  *
  * Storage bucket names are preserved exactly after schema validation and
  * sorted to keep deployment plans deterministic. Bucket visibility defaults
- * to private, matching the File Storage API creation contract.
+ * to private, matching the File Storage API creation contract. Queue
+ * durations resolve to seconds and object schedule bodies to JSON.
  */
 const normalizeServices = (services: ConfigV4['services']): NormalizedConfigServiceDefinition[] | undefined => {
   if (services == null) return undefined;
@@ -78,7 +138,16 @@ const normalizeServices = (services: ConfigV4['services']): NormalizedConfigServ
       type: 'storage',
       buckets: Object.entries(services.storage.buckets)
         .map(([name, bucket]) => ({ name, visibility: bucket?.visibility ?? 'private' }))
-        .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)),
+        .sort(byName),
+    });
+  }
+
+  if (services.queues !== undefined) {
+    normalized.push({
+      type: 'queues',
+      queues: Object.entries(services.queues)
+        .map(([name, queue]) => normalizeQueue(name, queue))
+        .sort(byName),
     });
   }
 
