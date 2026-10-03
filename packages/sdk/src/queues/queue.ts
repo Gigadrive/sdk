@@ -177,6 +177,8 @@ const toDate = (value: string | null | undefined) => {
 const BATCH_LIMIT = 100;
 /** {@link Queue.consume} gathers acknowledgements this long into one batch request. */
 const ACK_FLUSH_MS = 25;
+/** Pauses before each retry of a batch acknowledgement that failed in transit or with a 5xx or 429. */
+const ACK_RETRY_DELAYS_MS = [200, 1_000];
 /** Shortest and longest pause after an empty receive in {@link Queue.consume}. */
 const EMPTY_POLL_MIN_MS = 1_000;
 const EMPTY_POLL_MAX_MS = 5_000;
@@ -389,28 +391,59 @@ export class Queue<T = unknown> {
     // in one request instead of one each.
     const pending: { message: ReceivedQueueMessage<T>; settled: (error?: unknown) => void }[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
+    /**
+     * Acknowledges one batch; resolves with one error (or `undefined`) per
+     * message. A failed request is retried, since a lost acknowledgement makes
+     * finished work run again; on a retry, `message_not_found` means an earlier
+     * attempt landed. An API without the batch route gets one request per message.
+     */
+    const sendAcks = async (batch: ReceivedQueueMessage<T>[]): Promise<(Error | undefined)[]> => {
+      const resource = this.resource();
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          const { results } = await resource.ackBatch(
+            this.name,
+            batch.map((message) => ({ messageId: message.messageId, receipt: message.receipt })),
+            this.scope
+          );
+          return batch.map((_message, index) => {
+            const result = results[index];
+            if (result?.acknowledged || (attempt > 0 && result?.code === 'message_not_found')) return undefined;
+            const code = result?.code ?? 'no_result';
+            return new ApiError(
+              `Acknowledging message failed: ${code}`,
+              code === 'message_not_found' ? 404 : 409,
+              code
+            );
+          });
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 404 && error.code !== 'queue_not_found') {
+            const settled = await Promise.allSettled(
+              batch.map((message) => resource.ack(this.name, message.messageId, message.receipt, this.scope))
+            );
+            return settled.map((outcome) =>
+              outcome.status === 'fulfilled'
+                ? undefined
+                : outcome.reason instanceof Error
+                  ? outcome.reason
+                  : new Error(errorText(outcome.reason))
+            );
+          }
+          const retryable = !(error instanceof ApiError) || error.status >= 500 || error.status === 429;
+          const delay = ACK_RETRY_DELAYS_MS[attempt];
+          if (!retryable || delay === undefined) throw error;
+          await sleep(delay, undefined);
+        }
+      }
+    };
     const flush = () => {
       clearTimeout(timer);
       timer = undefined;
       const batch = pending.splice(0, BATCH_LIMIT);
       if (pending.length > 0) timer = setTimeout(flush, 0);
       if (batch.length === 0) return;
-      this.resource()
-        .ackBatch(
-          this.name,
-          batch.map(({ message }) => ({ messageId: message.messageId, receipt: message.receipt })),
-          this.scope
-        )
-        .then(({ results }) =>
-          batch.forEach(({ settled }, index) => {
-            const result = results[index];
-            settled(
-              result?.acknowledged
-                ? undefined
-                : new Error(`Acknowledging message failed: ${result?.code ?? 'no result'}`)
-            );
-          })
-        )
+      sendAcks(batch.map(({ message }) => message))
+        .then((errors) => batch.forEach(({ settled }, index) => settled(errors[index])))
         // Settling twice is a no-op, so a malformed answer still settles every message.
         .catch((error: unknown) => batch.forEach(({ settled }) => settled(error)));
     };

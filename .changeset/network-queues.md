@@ -16,7 +16,8 @@ deployment:
   message without spending an attempt, or `NonRetryableError` to dead-letter it.
 - `receive()` and `consume()` for pull queues, with `ack`, `retry`, `defer`, `deadLetter` and `extendLease` on each
   message. `consume()` acknowledges messages that finish together in one batch request
-  (`client.queues.ackBatch()`, up to 100 messages, one billed operation per ten).
+  (`client.queues.ackBatch()`, up to 100 messages, one billed operation per ten), retrying a batch that failed in
+  transit or with a 5xx.
 - `ensure()`, `pause()`, `resume()`, `purge()`, `redrive()`, `schedule()` and `unschedule()` for management and cron
   schedules.
 

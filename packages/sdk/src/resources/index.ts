@@ -133,6 +133,7 @@ export type {
 
 export { QueuesResource } from './queues';
 export type {
+  QueueAckResult,
   QueueInfo,
   QueueMessageInput,
   QueueMessageRecord,

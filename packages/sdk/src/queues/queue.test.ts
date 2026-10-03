@@ -277,8 +277,64 @@ describe('Queue.receive and consume', () => {
     expect(acks).toHaveLength(1);
     expect((acks[0] as [string, { messages: unknown[] }])[1].messages).toHaveLength(12);
     expect(onError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ message: 'Acknowledging message failed: receipt_mismatch' })
+      expect.objectContaining({ message: 'Acknowledging message failed: receipt_mismatch', status: 409 })
     );
+    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(ApiError);
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({ code: 'receipt_mismatch' });
+  });
+
+  it('retries a batch acknowledgement that failed in transit, counting an already-landed one as done', async () => {
+    let receives = 0;
+    let acks = 0;
+    http.post.mockImplementation((path: string, body: { messages?: { messageId: string }[] }) => {
+      if (path.endsWith('/receive')) {
+        return Promise.resolve({ messages: receives++ === 0 ? [record({ id: 'a' }), record({ id: 'b' })] : [] });
+      }
+      acks += 1;
+      // The first request landed for `a` but its answer was lost.
+      if (acks === 1) return Promise.reject(new ApiError('Bad gateway', 502));
+      return Promise.resolve({
+        results: (body.messages ?? []).map(({ messageId }) =>
+          messageId === 'a'
+            ? { messageId, acknowledged: false, code: 'message_not_found' }
+            : { messageId, acknowledged: true }
+        ),
+      });
+    });
+    const onError = vi.fn();
+
+    await jobs.consume(() => undefined, { maxMessages: 2, stopWhenEmpty: true, onError });
+
+    expect(acks).toBe(2);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not retry an acknowledgement the API refused, and falls back to single acks without the batch route', async () => {
+    let receives = 0;
+    http.post.mockImplementation((path: string) => {
+      if (path.endsWith('/receive'))
+        return Promise.resolve({ messages: receives++ === 0 ? [record({ id: 'a' })] : [] });
+      if (path.endsWith('/messages/ack')) return Promise.reject(new ApiError('Not found', 404));
+      return Promise.resolve({ acknowledged: true });
+    });
+    const onError = vi.fn();
+
+    await jobs.consume(() => undefined, { stopWhenEmpty: true, onError });
+
+    const paths = http.post.mock.calls.map(([path]: [string]) => path.split('/messages/')[1]);
+    expect(paths).toEqual(['receive', 'ack', 'a/ack', 'receive']);
+    expect(onError).not.toHaveBeenCalled();
+
+    http.post.mockReset();
+    receives = 0;
+    http.post.mockImplementation((path: string) => {
+      if (path.endsWith('/receive'))
+        return Promise.resolve({ messages: receives++ === 0 ? [record({ id: 'b' })] : [] });
+      return Promise.reject(new ApiError('Forbidden', 403, 'forbidden'));
+    });
+    await jobs.consume(() => undefined, { stopWhenEmpty: true, onError });
+    expect(http.post.mock.calls.filter(([path]: [string]) => path.endsWith('/messages/ack'))).toHaveLength(1);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ status: 403 }));
   });
 
   it('pauses between empty receives that return early, such as from a paused queue', async () => {
