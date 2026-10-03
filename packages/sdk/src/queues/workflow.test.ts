@@ -71,7 +71,7 @@ describe('createWorkflowQueue', () => {
       world.queue(QUEUE, message, {
         idempotencyKey: 'step:1',
         delaySeconds: 2.5,
-        headers: { traceparent: '00-abc', 'x-gigadrive-queue-name': 'spoofed' },
+        headers: { traceparent: '00-abc', 'x-gigadrive-queue-name': 'spoofed', 'x-real-ip': '203.0.113.9' },
       })
     ).resolves.toEqual({ messageId: 'msg-1' });
     await world.queue(`${QUEUE}-2`, { runId: 'wrun_2' }, { deploymentId: 'dpl_local@1.0.0' });
@@ -99,6 +99,7 @@ describe('createWorkflowQueue', () => {
       deduplicationKey: 'step:1',
       deploymentId: DEPLOYMENT,
     });
+    expect(first.headers).toEqual({ traceparent: '00-abc', 'x-workflow-queue-name': QUEUE });
     expect(JSON.parse(first.body as string)).toEqual({
       runId: 'wrun_1',
       stepInput: { input: { __type: 'Uint8Array', data: 'aGk=' } },

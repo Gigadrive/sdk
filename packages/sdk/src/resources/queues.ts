@@ -95,7 +95,14 @@ export interface QueueMessageInput {
   body?: string;
   encoding?: 'utf8' | 'base64';
   contentType?: string;
-  /** Headers forwarded with push deliveries. Names under `x-gigadrive-` and transport headers are reserved. */
+  /**
+   * Headers forwarded with push deliveries, up to 32. Reserved and refused:
+   * `host`, `content-length`, `content-type`, `connection`,
+   * `transfer-encoding`, `te`, `upgrade`, `keep-alive`, `proxy-*`,
+   * `authorization`, `cookie`, `x-gigadrive-*`, `x-nebula-*`,
+   * `x-substrate-*`, `x-vercel-*`, `x-forwarded-*`, `x-bunny-*`,
+   * `x-real-ip`, `true-client-ip` and `forwarded`.
+   */
   headers?: Record<string, string>;
   /** Deliver after this many seconds, up to one year. */
   delaySeconds?: number;
@@ -355,7 +362,12 @@ export class QueuesResource extends BaseResource {
     });
   }
 
-  /** Deletes a message in any state, such as a scheduled send you no longer want. */
+  /**
+   * Cancels a message that has not been delivered yet, such as a scheduled
+   * send you no longer want. A message being delivered or dead-lettered
+   * answers 400 `invalid_request`; settle it from its consumer, or purge or
+   * redrive dead letters.
+   */
   async deleteMessage(name: string, messageId: string, options?: QueueScopeOptions): Promise<{ deleted: boolean }> {
     return this.httpClient.delete(this.path(name, options, `/messages/${encodeURIComponent(messageId)}`), {
       query: { environment: options?.environment },
@@ -397,7 +409,7 @@ export class QueuesResource extends BaseResource {
    * Acknowledges up to 100 received messages in one request. Each settles on
    * its own: `results` reports, in order, which were acknowledged and why any
    * were not (`message_not_found`, `receipt_mismatch`). A batch counts one
-   * operation per ten messages.
+   * operation per started ten acknowledged messages.
    */
   async ackBatch(
     name: string,

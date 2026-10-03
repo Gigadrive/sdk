@@ -40,7 +40,11 @@ export const QUEUE_RESPONSE_HEADERS = {
   retryAfter: 'x-gigadrive-queue-retry-after',
   /** `dead-letter`: stop retrying now, whatever the status. */
   action: 'x-gigadrive-queue-action',
-  /** Reason recorded on the message. */
+  /**
+   * Reason recorded on the message. Read only together with `action:
+   * dead-letter`; for any other failure the platform records `HTTP <status>`
+   * and the first 512 bytes of the response body.
+   */
   error: 'x-gigadrive-queue-error',
 } as const;
 
@@ -267,7 +271,8 @@ export class Queue<T = unknown> {
 
   /**
    * Sends many messages, 100 per request. Results come back in input order;
-   * a refused message does not fail the rest.
+   * a refused message does not fail the rest. Chunks are split by count only:
+   * a request whose message bodies exceed 4 MiB in total is refused whole.
    */
   async sendBatch(messages: readonly ({ payload: T } & QueueSendOptions)[]): Promise<QueueBatchSent[]> {
     const results: QueueBatchSent[] = [];
@@ -593,10 +598,8 @@ export class Queue<T = unknown> {
         }
         if (error instanceof NonRetryableError) return deadLetterResponse(error.message);
         console.error(`[gigadrive] Queue handler for "${queueName}" failed (attempt ${String(attempt)})`, error);
-        return Response.json(
-          { error: errorText(error) },
-          { status: 500, headers: { [QUEUE_RESPONSE_HEADERS.error]: headerText(errorText(error)) } }
-        );
+        // The dispatcher records the start of the body as the attempt's error.
+        return Response.json({ error: errorText(error) }, { status: 500 });
       }
     };
   }

@@ -14,8 +14,9 @@ export const WORKFLOW_QUEUE_NAME_HEADER = 'x-workflow-queue-name';
 
 const WORKFLOW_PREFIX = /^__(?:[a-z][a-z0-9]*_)?wkf_workflow_/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Headers the API refuses on a message (`limits.ts` in the network repo); dropped here instead of failing the send. */
 const RESERVED_HEADER =
-  /^(host|content-length|content-type|connection|transfer-encoding|te|upgrade|keep-alive|proxy-.*|authorization|cookie|x-gigadrive-.*|x-nebula-.*|x-substrate-.*|x-vercel-.*|x-forwarded-.*)$/i;
+  /^(host|content-length|content-type|connection|transfer-encoding|te|upgrade|keep-alive|proxy-.*|authorization|cookie|x-gigadrive-.*|x-nebula-.*|x-substrate-.*|x-vercel-.*|x-forwarded-.*|x-bunny-.*|x-real-ip|true-client-ip|forwarded)$/i;
 
 /** Options of a Workflow SDK queue send, as the Workflow runtime passes them. */
 export interface WorkflowQueueSendOptions {

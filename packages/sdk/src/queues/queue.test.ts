@@ -454,7 +454,9 @@ describe('Queue.handler', () => {
     })(await delivery('{"to":"jane@example.com"}'));
     expect(failed.status).toBe(500);
     expect(failed.headers.get('x-gigadrive-queue-action')).toBeNull();
-    expect(failed.headers.get('x-gigadrive-queue-error')).toBe('SMTP timeout');
+    // The dispatcher records the start of the body; the error header only counts with a dead-letter action.
+    expect(failed.headers.get('x-gigadrive-queue-error')).toBeNull();
+    await expect(failed.json()).resolves.toEqual({ error: 'SMTP timeout' });
   });
 });
 
