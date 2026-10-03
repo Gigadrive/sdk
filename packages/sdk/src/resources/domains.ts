@@ -1,5 +1,5 @@
 import { ApiError, GigadriveError } from '../errors';
-import type { Paginated } from '../http-client';
+import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
 
 /** Lifecycle state of a custom domain. Only `active` and `degraded` serve traffic. */
@@ -179,6 +179,25 @@ const SERVING_STATES = new Set<CustomDomainState>(['active', 'degraded']);
 const isTransient = (error: unknown) =>
   error instanceof ApiError ? error.status === 429 || error.status >= 500 : error instanceof TypeError;
 
+/**
+ * A signal for one poll that aborts when the caller's signal does or after `ms`. Built by hand
+ * because `AbortSignal.any` needs Node 18.17 and the SDK supports every Node 18 release.
+ */
+const pollSignal = (ms: number, signal?: AbortSignal) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms);
+  const onAbort = () => controller.abort(signal?.reason);
+  if (signal?.aborted) onAbort();
+  else signal?.addEventListener('abort', onAbort, { once: true });
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    },
+  };
+};
+
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
@@ -213,8 +232,10 @@ export class ApplicationDomainsResource extends BaseResource {
    * for (const domain of items) console.log(domain.hostname, domain.state);
    * ```
    */
-  async list(applicationId: string): Promise<Paginated<CustomDomain>> {
-    return this.httpClient.get(`/applications/${applicationId}/domains`);
+  async list(applicationId: string, query?: ListQuery): Promise<Paginated<CustomDomain>> {
+    return this.httpClient.get(`/applications/${applicationId}/domains`, {
+      query: query as Record<string, string | number | undefined> | undefined,
+    });
   }
 
   /**
@@ -297,21 +318,21 @@ export class ApplicationDomainsResource extends BaseResource {
     let last: CustomDomain | undefined;
 
     for (;;) {
-      const remaining = deadline - Date.now();
-      const requestSignal = signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(Math.max(remaining, 1))])
-        : AbortSignal.timeout(Math.max(remaining, 1));
+      const poll = pollSignal(Math.max(deadline - Date.now(), 1), signal);
 
       let domain: CustomDomain | undefined;
       try {
-        domain = await this.get(applicationId, domainId, { signal: requestSignal });
+        domain = await this.get(applicationId, domainId, { signal: poll.signal });
       } catch (error) {
         if (signal?.aborted) throw error;
         // A domain that disappears mid-wait was removed; report it like any other terminal state.
         if (last && error instanceof ApiError && error.status === 404) throw new DomainNotActiveError(last, 'removing');
-        const timedOut = Date.now() >= deadline;
-        if (!timedOut && !isTransient(error)) throw error;
-        if (timedOut && !last) throw error;
+        // A final error such as a 403 ends the wait even at the deadline; only the poll's own
+        // timeout and transient failures fall through to the timeout handling below.
+        if (!poll.signal.aborted && !isTransient(error)) throw error;
+        if (Date.now() >= deadline && !last) throw error;
+      } finally {
+        poll.dispose();
       }
 
       if (domain) {
@@ -342,8 +363,10 @@ export class ApplicationDomainsResource extends BaseResource {
  */
 export class OrganizationDomainsResource extends BaseResource {
   /** List the organization's claimed and verified domains. */
-  async list(organizationId: string): Promise<Paginated<DomainOwnership>> {
-    return this.httpClient.get(`/organizations/${organizationId}/domains`);
+  async list(organizationId: string, query?: ListQuery): Promise<Paginated<DomainOwnership>> {
+    return this.httpClient.get(`/organizations/${organizationId}/domains`, {
+      query: query as Record<string, string | number | undefined> | undefined,
+    });
   }
 
   /**

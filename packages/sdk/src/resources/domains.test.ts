@@ -59,7 +59,7 @@ describe('ApplicationDomainsResource', () => {
     await domains.remove('app-1', 'dom-1');
     await domains.claim('app-1', 'shop.example.com');
 
-    expect(http.get).toHaveBeenCalledWith('/applications/app-1/domains');
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/domains', { query: undefined });
     expect(http.post).toHaveBeenCalledWith('/applications/app-1/domains', {
       hostname: 'shop.example.com',
       target: { type: 'redirect', to: 'www.example.com' },
@@ -69,6 +69,16 @@ describe('ApplicationDomainsResource', () => {
     expect(http.post).toHaveBeenCalledWith('/applications/app-1/domains/dom-1/refresh');
     expect(http.delete).toHaveBeenCalledWith('/applications/app-1/domains/dom-1');
     expect(http.post).toHaveBeenCalledWith('/applications/app-1/domains/claim', { hostname: 'shop.example.com' });
+  });
+
+  it('passes pagination to the list endpoints', async () => {
+    const http = createMockHttpClient();
+
+    await new ApplicationDomainsResource(http).list('app-1', { cursor: 'next', perPage: 10 });
+    await new OrganizationDomainsResource(http).list('org-1', { page: 2 });
+
+    expect(http.get).toHaveBeenCalledWith('/applications/app-1/domains', { query: { cursor: 'next', perPage: 10 } });
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/domains', { query: { page: 2 } });
   });
 
   it('waits until the domain serves and reports each state once', async () => {
@@ -160,6 +170,60 @@ describe('ApplicationDomainsResource', () => {
     expect(http.get).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a final client error at the deadline instead of reporting a timeout', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get)
+      .mockResolvedValueOnce(domain('pending_dns'))
+      .mockImplementationOnce(() => {
+        // Block synchronously past the deadline, so the 403 arrives late but before the poll's own timer fires.
+        const until = Date.now() + 10;
+        while (Date.now() < until);
+        return Promise.reject(new ApiError('Forbidden', 403, 'forbidden'));
+      });
+
+    await expect(
+      new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', { intervalMs: 60_000, timeoutMs: 5 })
+    ).rejects.toMatchObject({ name: 'ApiError', status: 403 });
+  });
+
+  it('reports a timeout when the last poll is cut off at the deadline', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get)
+      .mockResolvedValueOnce(domain('pending_dns'))
+      .mockImplementationOnce(
+        (_path: string, options?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener('abort', () => reject(options.signal?.reason));
+          })
+      );
+
+    await expect(
+      new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', { intervalMs: 60_000, timeoutMs: 5 })
+    ).rejects.toMatchObject({ name: 'DomainNotActiveError', reason: 'timeout' });
+  });
+
+  it('honours the caller signal without AbortSignal.any, which Node 18 before 18.17 lacks', async () => {
+    const http = createMockHttpClient();
+    vi.mocked(http.get).mockImplementation(
+      (_path: string, options?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(options.signal?.reason));
+        })
+    );
+    const controller = new AbortController();
+    const any = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+    Object.defineProperty(AbortSignal, 'any', { value: undefined, configurable: true });
+    try {
+      const waiting = new ApplicationDomainsResource(http).waitUntilActive('app-1', 'dom-1', {
+        signal: controller.signal,
+      });
+      controller.abort(new Error('cancelled'));
+      await expect(waiting).rejects.toThrow('cancelled');
+    } finally {
+      if (any) Object.defineProperty(AbortSignal, 'any', any);
+    }
+  });
+
   it('checks once more at the deadline instead of giving up an interval early', async () => {
     const http = createMockHttpClient();
     vi.mocked(http.get).mockResolvedValueOnce(domain('issuing_certificate')).mockResolvedValueOnce(domain('active'));
@@ -207,7 +271,7 @@ describe('OrganizationDomainsResource', () => {
     await domains.verify('org-1', 'own-1');
     await domains.remove('org-1', 'own-1');
 
-    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/domains');
+    expect(http.get).toHaveBeenCalledWith('/organizations/org-1/domains', { query: undefined });
     expect(http.post).toHaveBeenCalledWith('/organizations/org-1/domains', { name: 'example.com' });
     expect(http.get).toHaveBeenCalledWith('/organizations/org-1/domains/own-1');
     expect(http.post).toHaveBeenCalledWith('/organizations/org-1/domains/own-1/verify');

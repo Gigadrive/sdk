@@ -15,6 +15,7 @@ Custom domains for Gigadrive Network applications.
 - **CLI:** `gigadrive domains list|add|update|claim|inspect|check|rm` and `gigadrive domains owners
 list|add|verify|rm`. `domains add` prints the DNS records to publish as a table, supports
   `--production`, `--branch`, or `--redirect-to` with `--status` and `--drop-path` (conflicting
-  flags are refused), and `--wait` to follow the domain until it is live. Every command accepts
-  `--json`, which prints only the result on stdout. Removing asks for confirmation, or requires
+  flags are refused), and `--wait` to follow the domain until it is live. `list`, `add`, `update`,
+  `claim`, `inspect`, `check`, `owners list` and `owners add` accept `--json`, which prints only the
+  result on stdout. Removing asks for confirmation, or requires
   `--yes` when not running in a terminal.

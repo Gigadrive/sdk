@@ -271,10 +271,9 @@ try {
     onState: (current) => console.log(current.state),
   });
 } catch (error) {
-  if (error instanceof DomainNotActiveError) {
-    // `reason` is `timeout`, `failed`, `suspended` or `removing`; `domain.error` explains what to fix.
-    console.error(error.reason, error.domain.error?.message);
-  }
+  if (!(error instanceof DomainNotActiveError)) throw error;
+  // `reason` is `timeout`, `failed`, `suspended` or `removing`; `domain.error` explains what to fix.
+  console.error(error.reason, error.domain.error?.message);
 }
 ```
 
