@@ -20,7 +20,7 @@ deployment:
   schedules.
 
 `client.queues` exposes the same API over REST, and `createWorkflowQueue()` implements the Workflow SDK World `Queue`
-interface on top of it. `verifyQueueSignature()` and `signQueueDelivery()` are exported for custom servers and tests.
+interface on top of it, pinning every message to the deployment that sent it. `verifyQueueSignature()` and `signQueueDelivery()` are exported for custom servers and tests.
 `ApiError.code` now also reads a top-level `code` next to a string `error`.
 
 `@gigadrive/network-config` accepts `services.queues` in `gigadrive.yaml`: queues keyed by name with an optional

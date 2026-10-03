@@ -1,4 +1,5 @@
 import type { GigadriveClient } from '../client';
+import { ApiError } from '../errors';
 import type { QueueMessageInput, QueueScopeOptions, QueueSettings, QueuesResource } from '../resources/queues';
 import { defaultQueuesResource } from './default-client';
 import { base64ToBytes, bytesToBase64, toArrayBuffer, toHex, utf8Decode, utf8Encode } from './encoding';
@@ -66,8 +67,11 @@ export interface WorkflowQueueOptions extends QueueScopeOptions {
   /** Deployment id the Workflow runtime stamps on runs. Defaults to `GIGADRIVE_DEPLOYMENT_ID`. */
   deploymentId?: string;
   /**
-   * Settings for the backing queue. Defaults: 100 attempts (the Workflow
-   * runtime gives up earlier on its own) and a 300 second delivery timeout.
+   * Settings for the backing queue. Without them the queue is created once
+   * with 100 attempts (the Workflow runtime gives up earlier on its own) and a
+   * 900 second delivery timeout, and later changes made in the console are
+   * kept. With them, every cold start applies them, so declare them here or
+   * in the console, not both.
    */
   queueSettings?: Omit<QueueSettings, 'consumerPath'>;
   /** Push signing secret. Defaults to `GIGADRIVE_QUEUE_SIGNING_SECRET`. */
@@ -115,8 +119,9 @@ const deduplicationKeyFor = async (idempotencyKey: string): Promise<string> =>
  * Every Workflow queue with the same prefix shares one push queue named
  * after the prefix (such as `__wkf_workflow_`), created on first use and
  * delivering to `/.well-known/workflow/v1/flow`. Sleeps and step timeouts
- * reschedule the message without spending attempts, deliveries are pinned
- * to the run's deployment, and idempotency keys become deduplication keys.
+ * reschedule the message without spending attempts, every message is pinned
+ * to the deployment that sent it (or the one the runtime names), and
+ * idempotency keys become deduplication keys.
  *
  * @typeParam TMessageId - Pass the World's `MessageId` type so the result
  *   satisfies `@workflow/world`'s branded message ids.
@@ -142,17 +147,16 @@ export function createWorkflowQueue<TMessageId extends string = string>(
     if (!prefix) throw new Error(`"${queueName}" is not a Workflow SDK queue name`);
     let ready = ensured.get(prefix);
     if (!ready) {
-      ready = resource().ensure(
-        prefix,
-        {
-          maxAttempts: 100,
-          visibilityTimeoutSeconds: 300,
-          deadLetter: true,
-          ...options.queueSettings,
-          consumerPath: options.consumerPath ?? WORKFLOW_CONSUMER_PATH,
-        },
-        scope
-      );
+      const consumerPath = options.consumerPath ?? WORKFLOW_CONSUMER_PATH;
+      ready = options.queueSettings
+        ? resource().ensure(prefix, { ...options.queueSettings, consumerPath }, scope)
+        : // Create-only: a queue that exists keeps the settings someone gave it in the console.
+          resource()
+            .create(prefix, { maxAttempts: 100, visibilityTimeoutSeconds: 900, deadLetter: true, consumerPath }, scope)
+            .catch((error: unknown) => {
+              if (error instanceof ApiError && error.code === 'queue_exists') return undefined;
+              throw error;
+            });
       ensured.set(prefix, ready);
       ready.catch(() => ensured.delete(prefix));
     }
@@ -169,13 +173,16 @@ export function createWorkflowQueue<TMessageId extends string = string>(
       Object.entries(opts.headers ?? {}).filter(([name]) => !RESERVED_HEADER.test(name))
     );
     headers[WORKFLOW_QUEUE_NAME_HEADER] = queueName;
+    // The runtime omits the deployment on step dispatches and continuations: they belong to the
+    // deployment sending them, so a promotion never moves an in-flight run to new code.
+    const pin = opts.deploymentId ?? options.deploymentId ?? readEnv('GIGADRIVE_DEPLOYMENT_ID');
     return {
       body: encodeWorkflowMessage(message),
       contentType: 'application/json',
       headers,
       ...(opts.delaySeconds && opts.delaySeconds > 0 ? { delaySeconds: Math.ceil(opts.delaySeconds) } : {}),
       ...(opts.idempotencyKey ? { deduplicationKey: await deduplicationKeyFor(opts.idempotencyKey) } : {}),
-      ...(opts.deploymentId && UUID.test(opts.deploymentId) ? { deploymentId: opts.deploymentId } : {}),
+      ...(pin && UUID.test(pin) ? { deploymentId: pin } : {}),
     };
   };
 
@@ -237,7 +244,8 @@ export function createWorkflowQueue<TMessageId extends string = string>(
             }));
           if (!valid) return Response.json({ error: 'Invalid queue signature' }, { status: 401 });
         }
-        if (!queueName.startsWith(queueNamePrefix)) {
+        // The physical queue name is signed; the Workflow queue name rides in a header, so both must agree.
+        if (physicalName !== queueNamePrefix || !queueName.startsWith(queueNamePrefix)) {
           return Response.json({ error: 'Unhandled queue' }, { status: 400 });
         }
 

@@ -231,6 +231,40 @@ describe('Queue.receive and consume', () => {
 
     await expect(jobs.consume(() => undefined, { signal: controller.signal })).resolves.toBeUndefined();
   });
+
+  it('reports a failed acknowledgement instead of retrying work that succeeded', async () => {
+    let receives = 0;
+    http.post.mockImplementation((path: string) => {
+      if (path.endsWith('/receive')) return Promise.resolve({ messages: receives++ === 0 ? [record()] : [] });
+      if (path.endsWith('/ack')) return Promise.reject(new Error('fetch failed'));
+      return Promise.resolve({});
+    });
+    const onError = vi.fn();
+
+    await jobs.consume(() => undefined, { stopWhenEmpty: true, onError });
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'fetch failed' }));
+    expect(http.post.mock.calls.some(([path]: [string]) => path.endsWith('/nack'))).toBe(false);
+  });
+
+  it('pauses between empty receives that return early, such as from a paused queue', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      http.post.mockResolvedValue({ messages: [] });
+      const consuming = jobs.consume(() => undefined, { wait: 0, signal: controller.signal });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(http.post).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(999);
+      expect(http.post).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(http.post).toHaveBeenCalledTimes(2);
+      controller.abort();
+      await expect(consuming).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('Queue.handler', () => {
@@ -262,6 +296,15 @@ describe('Queue.handler', () => {
       })
     );
     expect(handler.mock.calls[0]![1].headers).not.toHaveProperty('x-gigadrive-queue-signature');
+  });
+
+  it('refuses a signed delivery of another queue', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const handler = vi.fn();
+    const jobsHandler = resource.queue('jobs', { signingSecret: SECRET }).handler(handler);
+    // A genuine delivery for "emails", replayed at the "jobs" route.
+    expect((await jobsHandler(await delivery('{"to":"jane@example.com"}'))).status).toBe(400);
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it('rejects unsigned, forged and non-queue requests without calling the handler', async () => {

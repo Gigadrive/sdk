@@ -175,6 +175,22 @@ const toDate = (value: string | null | undefined) => {
 };
 
 const BATCH_LIMIT = 100;
+/** Shortest and longest pause after an empty receive in {@link Queue.consume}. */
+const EMPTY_POLL_MIN_MS = 1_000;
+const EMPTY_POLL_MAX_MS = 5_000;
+
+/** Resolves after `ms`, or as soon as `signal` aborts. */
+const sleep = (ms: number, signal: AbortSignal | undefined) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve();
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    }
+    signal?.addEventListener('abort', done, { once: true });
+  });
 
 /**
  * A typed handle on one queue: send messages, receive and process them, or
@@ -366,8 +382,10 @@ export class Queue<T = unknown> {
     } = {}
   ): Promise<void> {
     const wait = options.wait ?? (options.stopWhenEmpty ? 0 : 20);
+    const waitMs = Math.min(durationToSeconds(wait), 20) * 1000;
     while (!options.signal?.aborted) {
       let messages: ReceivedQueueMessage<T>[];
+      const started = Date.now();
       try {
         messages = await this.receive({
           maxMessages: options.maxMessages ?? 10,
@@ -381,19 +399,31 @@ export class Queue<T = unknown> {
       }
       if (messages.length === 0) {
         if (options.stopWhenEmpty) return;
+        // An empty answer that came back early (a paused queue, or `wait: 0`)
+        // would otherwise turn this loop into a tight polling loop.
+        const remaining = Math.max(waitMs, EMPTY_POLL_MIN_MS) - (Date.now() - started);
+        if (remaining > 0) await sleep(Math.min(remaining, EMPTY_POLL_MAX_MS), options.signal);
         continue;
       }
       await Promise.all(
         messages.map(async (message) => {
+          let outcome: Promise<void>;
           try {
-            try {
-              await handler(message.payload, message);
-              await message.ack();
-            } catch (error) {
-              if (error instanceof RetryLaterError) await message.defer(error.delaySeconds);
-              else if (error instanceof NonRetryableError) await message.deadLetter(error.message);
-              else await message.retry({ error: errorText(error) });
-            }
+            await handler(message.payload, message);
+            outcome = message.ack();
+          } catch (error) {
+            outcome =
+              error instanceof RetryLaterError
+                ? message.defer(error.delaySeconds)
+                : error instanceof NonRetryableError
+                  ? message.deadLetter(error.message)
+                  : message.retry({ error: errorText(error) });
+          }
+          // A failed settle is reported, never mistaken for a failed handler: the
+          // message comes back when its lease ends, and is not retried or
+          // dead-lettered for work that succeeded.
+          try {
+            await outcome;
           } catch (settleError) {
             options.onError?.(settleError);
           }
@@ -428,6 +458,12 @@ export class Queue<T = unknown> {
       const attempt = Number(header(QUEUE_DELIVERY_HEADERS.attempt) ?? '1');
       if (!messageId || !queueName) {
         return Response.json({ error: 'Not a queue delivery' }, { status: 400 });
+      }
+      // The signature covers the queue name: refuse another queue's delivery, so a captured
+      // request cannot be replayed here, and two queues sharing one route is caught early.
+      if (queueName !== this.name) {
+        console.error(`[gigadrive] Rejected a delivery for queue "${queueName}" at the handler of "${this.name}"`);
+        return Response.json({ error: `This endpoint consumes queue "${this.name}"` }, { status: 400 });
       }
       const body = new Uint8Array(await request.arrayBuffer());
 
