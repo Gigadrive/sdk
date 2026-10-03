@@ -1,5 +1,6 @@
 import type { ListQuery, Paginated } from '../http-client';
 import { BaseResource } from './base-resource';
+import { OrganizationDomainsResource } from './domains';
 import { OrganizationAiGatewayResource } from './organization-ai-gateway';
 import { OrganizationEnvVarsResource } from './organization-env-vars';
 import { OrganizationMembersResource } from './organization-members';
@@ -90,12 +91,24 @@ export class OrganizationsResource extends BaseResource {
    */
   readonly products: OrganizationProductsResource;
 
+  /**
+   * Domains the organization verified. A verified domain lets every application attach hostnames
+   * below it without another TXT record.
+   *
+   * @example
+   * ```ts
+   * const claim = await client.organizations.domains.add('org-id', 'example.com');
+   * ```
+   */
+  readonly domains: OrganizationDomainsResource;
+
   constructor(...args: ConstructorParameters<typeof BaseResource>) {
     super(...args);
     this.envVars = new OrganizationEnvVarsResource(this.httpClient);
     this.aiGateway = new OrganizationAiGatewayResource(this.httpClient);
     this.members = new OrganizationMembersResource(this.httpClient);
     this.products = new OrganizationProductsResource(this.httpClient);
+    this.domains = new OrganizationDomainsResource(this.httpClient);
   }
 
   /**

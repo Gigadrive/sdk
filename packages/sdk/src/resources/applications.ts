@@ -3,6 +3,7 @@ import { ApplicationEnvVarsResource } from './application-env-vars';
 import { ApplicationRequestsResource } from './application-requests';
 import { ApplicationStorageResource } from './application-storage';
 import { BaseResource } from './base-resource';
+import { ApplicationDomainsResource } from './domains';
 import type { ApplicationHostnameList, HostnameAvailability, SetProductionHostnameResult } from './hostnames';
 import type { Organization } from './organizations';
 
@@ -120,11 +121,23 @@ export class ApplicationsResource extends BaseResource {
    */
   readonly requests: ApplicationRequestsResource;
 
+  /**
+   * Custom domains attached to the application.
+   *
+   * @example
+   * ```ts
+   * const domain = await client.applications.domains.add('app-id', { hostname: 'shop.example.com' });
+   * await client.applications.domains.waitUntilActive('app-id', domain.id);
+   * ```
+   */
+  readonly domains: ApplicationDomainsResource;
+
   constructor(httpClient: ConstructorParameters<typeof BaseResource>[0], defaultApplicationId?: string) {
     super(httpClient);
     this.envVars = new ApplicationEnvVarsResource(this.httpClient);
     this.storage = new ApplicationStorageResource(this.httpClient, undefined, defaultApplicationId);
     this.requests = new ApplicationRequestsResource(this.httpClient);
+    this.domains = new ApplicationDomainsResource(this.httpClient);
   }
 
   /**

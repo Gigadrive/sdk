@@ -8,6 +8,7 @@ import { appsCommand } from './commands/apps';
 import { buildCommand } from './commands/build';
 import { debugCommand } from './commands/debug';
 import { deploymentsCommand } from './commands/deployments';
+import { domainsCommand } from './commands/domains';
 import { envCommand } from './commands/env';
 import { linkCommand, unlinkCommand } from './commands/link';
 import { loginCommand } from './commands/login';
@@ -43,6 +44,7 @@ const gigadrive = Command.make('gigadrive', {}, () => Effect.void).pipe(
     appsCommand,
     envCommand,
     deploymentsCommand,
+    domainsCommand,
     aiCommand,
     buildCommand,
     debugCommand,
