@@ -190,6 +190,11 @@ export interface QueueScheduleInput {
   enabled?: boolean;
 }
 
+/** One message's outcome in a batch acknowledgement. */
+export type QueueAckResult =
+  | { messageId: string; acknowledged: true }
+  | { messageId: string; acknowledged: false; code: 'message_not_found' | 'receipt_mismatch' };
+
 /** Outcome of a nack. */
 export type QueueNackResult = { status: 'retrying'; deliverAt: string } | { status: 'dead' | 'dropped' };
 
@@ -385,6 +390,23 @@ export class QueuesResource extends BaseResource {
     return this.httpClient.post(this.path(name, options, `/messages/${encodeURIComponent(messageId)}/ack`), {
       environment: options?.environment,
       receipt,
+    });
+  }
+
+  /**
+   * Acknowledges up to 100 received messages in one request. Each settles on
+   * its own: `results` reports, in order, which were acknowledged and why any
+   * were not (`message_not_found`, `receipt_mismatch`). A batch counts one
+   * operation per ten messages.
+   */
+  async ackBatch(
+    name: string,
+    messages: { messageId: string; receipt: string }[],
+    options?: QueueScopeOptions
+  ): Promise<{ results: QueueAckResult[] }> {
+    return this.httpClient.post(this.path(name, options, '/messages/ack'), {
+      environment: options?.environment,
+      messages,
     });
   }
 

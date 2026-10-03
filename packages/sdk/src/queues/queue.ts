@@ -175,6 +175,8 @@ const toDate = (value: string | null | undefined) => {
 };
 
 const BATCH_LIMIT = 100;
+/** {@link Queue.consume} gathers acknowledgements this long into one batch request. */
+const ACK_FLUSH_MS = 25;
 /** Shortest and longest pause after an empty receive in {@link Queue.consume}. */
 const EMPTY_POLL_MIN_MS = 1_000;
 const EMPTY_POLL_MAX_MS = 5_000;
@@ -383,6 +385,47 @@ export class Queue<T = unknown> {
   ): Promise<void> {
     const wait = options.wait ?? (options.stopWhenEmpty ? 0 : 20);
     const waitMs = Math.min(durationToSeconds(wait), 20) * 1000;
+    // Handlers that finish within ACK_FLUSH_MS of each other are acknowledged
+    // in one request instead of one each.
+    const pending: { message: ReceivedQueueMessage<T>; settled: (error?: unknown) => void }[] = [];
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      clearTimeout(timer);
+      timer = undefined;
+      const batch = pending.splice(0, BATCH_LIMIT);
+      if (pending.length > 0) timer = setTimeout(flush, 0);
+      if (batch.length === 0) return;
+      this.resource()
+        .ackBatch(
+          this.name,
+          batch.map(({ message }) => ({ messageId: message.messageId, receipt: message.receipt })),
+          this.scope
+        )
+        .then(({ results }) =>
+          batch.forEach(({ settled }, index) => {
+            const result = results[index];
+            settled(
+              result?.acknowledged
+                ? undefined
+                : new Error(`Acknowledging message failed: ${result?.code ?? 'no result'}`)
+            );
+          })
+        )
+        // Settling twice is a no-op, so a malformed answer still settles every message.
+        .catch((error: unknown) => batch.forEach(({ settled }) => settled(error)));
+    };
+    const acknowledge = (message: ReceivedQueueMessage<T>) =>
+      new Promise<void>((resolve, reject) => {
+        pending.push({
+          message,
+          settled: (error) => {
+            if (error === undefined) resolve();
+            else reject(error instanceof Error ? error : new Error(errorText(error)));
+          },
+        });
+        if (pending.length >= BATCH_LIMIT) flush();
+        else timer ??= setTimeout(flush, ACK_FLUSH_MS);
+      });
     while (!options.signal?.aborted) {
       let messages: ReceivedQueueMessage<T>[];
       const started = Date.now();
@@ -410,7 +453,7 @@ export class Queue<T = unknown> {
           let outcome: Promise<void>;
           try {
             await handler(message.payload, message);
-            outcome = message.ack();
+            outcome = acknowledge(message);
           } catch (error) {
             outcome =
               error instanceof RetryLaterError

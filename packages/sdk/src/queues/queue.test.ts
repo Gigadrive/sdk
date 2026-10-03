@@ -187,9 +187,15 @@ describe('Queue.receive and consume', () => {
       ],
       [],
     ];
-    http.post.mockImplementation((path: string) =>
-      Promise.resolve(path.endsWith('/receive') ? { messages: batches.shift() ?? [] } : {})
-    );
+    http.post.mockImplementation((path: string, body: { messages?: { messageId: string }[] }) => {
+      if (path.endsWith('/receive')) return Promise.resolve({ messages: batches.shift() ?? [] });
+      if (path.endsWith('/messages/ack')) {
+        return Promise.resolve({
+          results: (body.messages ?? []).map(({ messageId }) => ({ messageId, acknowledged: true })),
+        });
+      }
+      return Promise.resolve({});
+    });
 
     await jobs.consume(
       (_payload, meta) => {
@@ -205,7 +211,7 @@ describe('Queue.receive and consume', () => {
       .map(([path, body]: [string, Record<string, unknown>]) => [path.split('/messages/')[1], body]);
     expect(settled).toEqual(
       expect.arrayContaining([
-        ['ok/ack', { environment: undefined, receipt: 'r-ok' }],
+        ['ack', { environment: undefined, messages: [{ messageId: 'ok', receipt: 'r-ok' }] }],
         ['later/nack', { environment: undefined, receipt: 'r-later', delaySeconds: 300, countAttempt: false }],
         ['never/nack', { environment: undefined, receipt: 'r-never', deadLetter: true, error: 'invalid recipient' }],
         ['boom/nack', { environment: undefined, receipt: 'r-boom', error: 'SMTP timeout' }],
@@ -245,6 +251,34 @@ describe('Queue.receive and consume', () => {
 
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'fetch failed' }));
     expect(http.post.mock.calls.some(([path]: [string]) => path.endsWith('/nack'))).toBe(false);
+  });
+
+  it('acknowledges messages that finish together in one request and reports refused ones', async () => {
+    let receives = 0;
+    http.post.mockImplementation((path: string, body: { messages?: { messageId: string }[] }) => {
+      if (path.endsWith('/receive')) {
+        return Promise.resolve({
+          messages: receives++ === 0 ? Array.from({ length: 12 }, (_, i) => record({ id: `m${String(i)}` })) : [],
+        });
+      }
+      return Promise.resolve({
+        results: (body.messages ?? []).map(({ messageId }) =>
+          messageId === 'm3'
+            ? { messageId, acknowledged: false, code: 'receipt_mismatch' }
+            : { messageId, acknowledged: true }
+        ),
+      });
+    });
+    const onError = vi.fn();
+
+    await jobs.consume(() => undefined, { maxMessages: 12, stopWhenEmpty: true, onError });
+
+    const acks = http.post.mock.calls.filter(([path]: [string]) => path.endsWith('/messages/ack'));
+    expect(acks).toHaveLength(1);
+    expect((acks[0] as [string, { messages: unknown[] }])[1].messages).toHaveLength(12);
+    expect(onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'Acknowledging message failed: receipt_mismatch' })
+    );
   });
 
   it('pauses between empty receives that return early, such as from a paused queue', async () => {

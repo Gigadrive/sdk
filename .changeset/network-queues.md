@@ -15,7 +15,8 @@ deployment:
   It verifies the delivery signature with `GIGADRIVE_QUEUE_SIGNING_SECRET`. Throw `RetryLaterError('5m')` to defer a
   message without spending an attempt, or `NonRetryableError` to dead-letter it.
 - `receive()` and `consume()` for pull queues, with `ack`, `retry`, `defer`, `deadLetter` and `extendLease` on each
-  message.
+  message. `consume()` acknowledges messages that finish together in one batch request
+  (`client.queues.ackBatch()`, up to 100 messages, one billed operation per ten).
 - `ensure()`, `pause()`, `resume()`, `purge()`, `redrive()`, `schedule()` and `unschedule()` for management and cron
   schedules.
 
