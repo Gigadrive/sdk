@@ -1,5 +1,31 @@
 # gigadrive
 
+## 2.7.0
+
+### Minor Changes
+
+- Custom domains for Gigadrive Network applications. ([#537](https://github.com/Gigadrive/sdk/pull/537))
+
+  - **SDK:** `client.applications.domains` lists, adds, updates, checks, removes and claims custom
+    domains, and `waitUntilActive()` polls until a domain serves traffic. It throws
+    `DomainNotActiveError` when the domain fails, is suspended or removed, or the wait runs out of
+    time; rate limits, server errors and network failures are retried until the timeout, and aborting
+    or timing out cancels the request in flight. `client.organizations.domains` manages the domains an
+    organization verified with a TXT record. `Hostname.type` now includes `'CUSTOM'`, and `ApiError`
+    also exposes the `code` and `reason` the API sends next to a string `error`.
+  - **CLI:** `gigadrive domains list|add|update|claim|inspect|check|rm` and `gigadrive domains owners
+list|add|verify|rm`. `domains add` prints the DNS records to publish as a table, supports
+    `--production`, `--branch`, or `--redirect-to` with `--status` and `--drop-path` (conflicting
+    flags are refused), and `--wait` to follow the domain until it is live. `list`, `add`, `update`,
+    `claim`, `inspect`, `check`, `owners list` and `owners add` accept `--json`, which prints only the
+    result on stdout. Removing asks for confirmation, or requires
+    `--yes` when not running in a terminal.
+
+### Patch Changes
+
+- Updated dependencies [[`af8d481`](https://github.com/Gigadrive/sdk/commit/af8d48139be5ead86bd5dc0a587df824c8f7ba9e), [`730734c`](https://github.com/Gigadrive/sdk/commit/730734c5f4d2998ca1b43987f8c8c276c1f8c9b1), [`ee1da4b`](https://github.com/Gigadrive/sdk/commit/ee1da4b89d7ff328512a3af74ff79f827faa244a)]:
+  - @gigadrive/sdk@0.9.0
+
 ## 2.6.2
 
 ### Patch Changes
