@@ -215,6 +215,39 @@ describe('V4ConfigParser', () => {
     ]);
   });
 
+  it('labels a plain-text schedule body as text and accepts fractional and zero durations', async () => {
+    const config: ConfigV4 = {
+      version: 4,
+      services: {
+        queues: {
+          digests: {
+            retryBackoff: { min: 0, max: '1.5h' },
+            schedules: { nightly: { cron: '@daily', body: 'digest' } },
+          },
+        },
+      },
+    };
+    const result = await Effect.runPromise(
+      V4ConfigParser.parse(config, path.join(__dirname, '../v4')).pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(NodeContext.layer)
+      )
+    );
+    expect(result.services).toEqual([
+      {
+        type: 'queues',
+        queues: [
+          {
+            name: 'digests',
+            retryBackoffMinSeconds: 0,
+            retryBackoffMaxSeconds: 5_400,
+            schedules: [{ name: 'nightly', cron: '@daily', body: 'digest', contentType: 'text/plain; charset=utf-8' }],
+          },
+        ],
+      },
+    ]);
+  });
+
   it('validates queue declarations against the published schema', () => {
     const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '../v4/schema.json'), 'utf8'));
     const ajv = new Ajv({ allErrors: true });
@@ -226,6 +259,7 @@ describe('V4ConfigParser', () => {
       withQueues({ emails: { consumer: '/api/queues/emails', retention: '4d', rateLimit: { count: 5, period: '1m' } } })
     ).toBe(true);
     expect(withQueues({ 'orders.v2': null })).toBe(true);
+    expect(withQueues({ emails: { deduplicationWindow: 0, retryBackoff: { max: '1.5h' } } })).toBe(true);
     expect(withQueues({ emails: { consumer: 'https://example.com/hook' } })).toBe(false);
     expect(withQueues({ emails: { retention: '10 minutes' } })).toBe(false);
     expect(withQueues({ emails: { maxAttempts: 0 } })).toBe(false);

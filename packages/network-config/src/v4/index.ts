@@ -182,7 +182,7 @@ export interface ConfigV4Services {
   queues?: Record<string, ConfigV4Queue | null>;
 }
 
-/** A duration in seconds, or a string such as `30s`, `10m`, `12h` or `4d`. */
+/** A duration in seconds, or a string such as `30s`, `10m`, `1.5h` or `4d`. */
 export type ConfigV4QueueDuration = number | `${number}${'s' | 'm' | 'h' | 'd'}`;
 
 /** Settings for a declaratively provisioned queue. Omitted settings keep the platform defaults. */
@@ -220,7 +220,7 @@ export interface ConfigV4QueueSchedule {
   timezone?: string;
   /** Message body. Strings are sent as is; any other value is serialized as JSON. */
   body?: unknown;
-  /** Content type of the body. Defaults to `application/json`. */
+  /** Content type of the body. Defaults to `text/plain` for a string body and `application/json` otherwise. */
   contentType?: string;
   /** Headers delivered with every message from this schedule. */
   headers?: Record<string, string>;

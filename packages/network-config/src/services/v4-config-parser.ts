@@ -59,10 +59,10 @@ const DURATION_UNIT_SECONDS = { s: 1, m: 60, h: 3_600, d: 86_400 } as const;
 const queueDurationSeconds = (value: ConfigV4QueueDuration | undefined): number | undefined => {
   if (value === undefined) return undefined;
   if (typeof value === 'number') return value;
-  const match = /^(\d+)(s|m|h|d)$/.exec(value);
+  const match = /^(\d+(?:\.\d+)?)(s|m|h|d)$/.exec(value);
   if (!match)
-    throw new Error(`Invalid queue duration "${value}". Use seconds or a string such as 30s, 10m, 12h or 4d.`);
-  return Number(match[1]) * DURATION_UNIT_SECONDS[match[2] as keyof typeof DURATION_UNIT_SECONDS];
+    throw new Error(`Invalid queue duration "${value}". Use seconds or a string such as 30s, 10m, 1.5h or 4d.`);
+  return Math.ceil(Number(match[1]) * DURATION_UNIT_SECONDS[match[2] as keyof typeof DURATION_UNIT_SECONDS]);
 };
 
 const byName = <T extends { name: string }>(left: T, right: T) =>
@@ -85,7 +85,9 @@ const normalizeQueue = (name: string, queue: ConfigV4Queue | null): NormalizedCo
               schedule.body === undefined || typeof schedule.body === 'string'
                 ? schedule.body
                 : JSON.stringify(schedule.body),
-            contentType: schedule.contentType,
+            // A plain-text body labelled JSON would fail to decode on every fire.
+            contentType:
+              schedule.contentType ?? (typeof schedule.body === 'string' ? 'text/plain; charset=utf-8' : undefined),
             headers: schedule.headers,
             enabled: schedule.enabled,
           })

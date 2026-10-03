@@ -510,7 +510,7 @@
                         },
                         "contentType": {
                           "type": "string",
-                          "description": "Content type of the body. Defaults to application/json."
+                          "description": "Content type of the body. Defaults to text/plain for a string body and application/json otherwise."
                         },
                         "headers": {
                           "type": "object",
@@ -539,14 +539,14 @@
       "oneOf": [
         {
           "type": "integer",
-          "minimum": 1
+          "minimum": 0
         },
         {
           "type": "string",
-          "pattern": "^[0-9]+(s|m|h|d)$"
+          "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$"
         }
       ],
-      "description": "A duration in seconds, or a string such as 30s, 10m, 12h or 4d."
+      "description": "A duration in seconds, or a string such as 30s, 10m, 1.5h or 4d."
     },
     "runtimes": {
       "type": "string",
