@@ -1,6 +1,6 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
-import { COMPOSE_FILE_NAMES, normalizeContainers, readComposeContainers } from '../containers';
+import { COMPOSE_FILE_NAMES, composeDeclaresApp, normalizeContainers, readComposeContainers } from '../containers';
 import type { NormalizedConfig } from '../normalized-config';
 import { AVAILABLE_REGIONS } from '../regions';
 import type { ConfigV4Container } from '../v4';
@@ -22,7 +22,10 @@ export interface ContainerProjectDetection {
  * Callers try this only after finding neither a `gigadrive.yaml` nor a
  * framework. A framework project often carries a Compose file for local
  * databases, and deploying that file instead of the framework would change
- * what an existing project deploys.
+ * what an existing project deploys. For the same reason a Compose file counts
+ * only when it names an application: a service that builds from source or is
+ * marked `x-gigadrive: { public: true }`. One that only runs, say, a database
+ * for local development is ignored, and the root `Dockerfile` check follows.
  *
  * @param projectFolder - Absolute path to the project root
  * @returns The detection, or `undefined` when the project has neither file
@@ -41,7 +44,7 @@ export const detectContainerProject = Effect.fn('detectContainerProject')(functi
   const warnings: string[] = [];
 
   const composeFile = yield* Effect.findFirst(COMPOSE_FILE_NAMES, exists);
-  if (composeFile._tag === 'Some') {
+  if (composeFile._tag === 'Some' && (yield* composeDeclaresApp(composeFile.value, projectFolder))) {
     const imported = yield* readComposeContainers(composeFile.value, projectFolder);
     warnings.push(...imported.warnings);
     detection = { kind: 'compose', file: composeFile.value, containers: imported.containers };

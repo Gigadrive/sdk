@@ -1,4 +1,5 @@
 import type {
+  ContainerRuntime,
   NeonAWSRegion,
   NormalizedConfigRouteMatchRequirements,
   NormalizedConfigRouteMethod,
@@ -110,6 +111,8 @@ export interface ConfigV4 extends Config {
    * Container images to run, keyed by name. A container without `sidecar: true`
    * runs as a function that routes target with `destination: container:<name>`.
    * A sidecar runs next to every function instance and answers at `<name>:<port>`.
+   * A name is 1 to 63 lowercase letters, digits, `-` or `_`, starts with a
+   * letter (so it never reads as an IP address), and is not `localhost`.
    *
    * @example
    * ```yaml
@@ -148,11 +151,15 @@ export interface ConfigV4Container {
   command?: string | string[];
   /** Environment variables baked into the container, merged over the image `ENV`. */
   env?: Record<string, string>;
-  /** Replaces the image `WORKDIR`. */
+  /** Replaces the image `WORKDIR`. Must be absolute. */
   working_dir?: string;
-  /** Replaces the image `USER`. Root is never used: a root image runs as a dedicated non-root user. */
-  user?: string;
-  /** Memory in MB. Defaults to 512 for a container function and 256 for a sidecar. */
+  /**
+   * Replaces the image `USER`: a name, a uid, `name:group` or `uid:gid`. A bare
+   * uid may be written as a number. Root is never used: a root image runs as a
+   * dedicated non-root user.
+   */
+  user?: string | number;
+  /** Memory in MB, a whole number from 128 to 3009. Defaults to 512 for a container function and 256 for a sidecar. */
   memory?: number;
   /** Maximum lifetime of one request, in seconds. Container functions only. */
   max_duration?: number;
@@ -271,9 +278,17 @@ export interface ConfigV4FunctionSettings {
    */
   max_duration?: number;
   /**
-   * The runtime to use for the function.
+   * The runtime to use for the function. `docker` builds the matched file as a
+   * Dockerfile, with its directory as the build context, and runs the image as
+   * the function. Routes target it by the Dockerfile's path, like any other
+   * function file.
    */
-  runtime?: Runtime;
+  runtime?: Runtime | ContainerRuntime;
+  /**
+   * TCP port the image listens on. Only for `runtime: docker`. Defaults to the
+   * image's first exposed port, then 8080.
+   */
+  port?: number;
   /**
    * Enable function response streaming. When omitted, Node and Bun runtimes stream by default.
    */

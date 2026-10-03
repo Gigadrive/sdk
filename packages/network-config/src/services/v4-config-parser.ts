@@ -1,9 +1,15 @@
 import { getFilesForPattern } from '@gigadrive/build-utils';
 import { Effect } from 'effect';
 import { minimatch } from 'minimatch';
+import { posix } from 'node:path';
 import safeRegex from 'safe-regex2';
 import { collectAssetFiles } from '../collect-asset-files';
-import { containerEntrypointPath, normalizeContainers, readComposeContainers } from '../containers';
+import {
+  containerEntrypointPath,
+  dockerFunctionContainerName,
+  normalizeContainers,
+  readComposeContainers,
+} from '../containers';
 import { ContainerConfigError, FunctionConfigError } from '../errors';
 import {
   CONTAINER_RUNTIME,
@@ -190,12 +196,24 @@ const mapRoute = (
 
 // -- Effectful helpers ------------------------------------------------------------------------
 
+/** A `functions` entry with `runtime: docker`: its Dockerfile, and the container it becomes. */
+interface DockerFunction {
+  readonly file: string;
+  readonly name: string;
+  readonly container: ConfigV4Container;
+}
+
 /**
  * Resolves function entrypoints from the config's `functions` section.
+ *
+ * Files matched under `runtime: docker` are Dockerfiles. They are returned as
+ * `dockerFunctions` instead, and become container functions alongside the
+ * `containers` map.
  */
 const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: ConfigV4, projectFolder: string) {
   const entrypoints: NormalizedConfigEntrypoint[] = [];
-  if (config.functions == null) return entrypoints;
+  const dockerFunctions: DockerFunction[] = [];
+  if (config.functions == null) return { entrypoints, dockerFunctions };
 
   for (const [fnPath, func] of Object.entries(config.functions)) {
     if (getFunctionSettings(fnPath, config) == null) {
@@ -226,6 +244,39 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
         });
       }
 
+      if (settings.runtime === CONTAINER_RUNTIME) {
+        const unsupported = (['symlinks', 'includeFiles'] as const).filter((key) => settings[key] !== undefined);
+        if (unsupported.length > 0) {
+          return yield* new FunctionConfigError({
+            message: `Function '${file}' runs a Dockerfile, so ${unsupported.join(' and ')} do not apply. Copy files in the Dockerfile instead.`,
+            functionPath: file,
+          });
+        }
+        // Only what the config declares: an unset `memory` takes the container default, not 128 MB.
+        const declared = Object.entries(config.functions)
+          .filter(([pattern]) => matchesPattern(file, pattern))
+          .reduce<ConfigV4FunctionSettings>((merged, [, value]) => ({ ...merged, ...value }), {});
+        dockerFunctions.push({
+          file,
+          name: dockerFunctionContainerName(file),
+          container: {
+            build: { context: posix.dirname(file), dockerfile: posix.basename(file) },
+            ...(declared.port !== undefined && { port: declared.port }),
+            ...(declared.memory !== undefined && { memory: declared.memory }),
+            ...(declared.max_duration !== undefined && { max_duration: declared.max_duration }),
+            ...(declared.streaming !== undefined && { streaming: declared.streaming }),
+            ...(func.schedule !== undefined && { schedule: func.schedule }),
+          },
+        });
+        continue;
+      }
+      if (settings.port !== undefined) {
+        return yield* new FunctionConfigError({
+          message: `Function '${file}' sets port, which only applies to 'runtime: docker'.`,
+          functionPath: file,
+        });
+      }
+
       const runtime = settings.runtime ?? 'node-20';
       const streaming = settings.streaming ?? runtimeStreamsByDefault(runtime);
 
@@ -248,7 +299,19 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
     }
   }
 
-  return entrypoints;
+  // Globs list files in directory order, so sort for a stable config.
+  dockerFunctions.sort((left, right) => (left.file < right.file ? -1 : left.file > right.file ? 1 : 0));
+  for (const [index, { file, name }] of dockerFunctions.entries()) {
+    const clash = dockerFunctions.slice(0, index).find((candidate) => candidate.name === name);
+    if (clash !== undefined) {
+      return yield* new FunctionConfigError({
+        message: `Functions '${clash.file}' and '${file}' would both be named '${name}'. Declare one of them under 'containers' with an explicit name.`,
+        functionPath: file,
+      });
+    }
+  }
+
+  return { entrypoints, dockerFunctions };
 });
 
 /**
@@ -279,7 +342,8 @@ const reservedRuntimePorts = (entrypoint: NormalizedConfigEntrypoint): number[] 
 const parseContainers = Effect.fn('parseContainers')(function* (
   config: ConfigV4,
   projectFolder: string,
-  fileEntrypoints: readonly NormalizedConfigEntrypoint[]
+  fileEntrypoints: readonly NormalizedConfigEntrypoint[],
+  dockerFunctions: readonly DockerFunction[]
 ) {
   const warnings: string[] = [];
   let containers: Record<string, ConfigV4Container> = {};
@@ -290,6 +354,15 @@ const parseContainers = Effect.fn('parseContainers')(function* (
     warnings.push(...imported.warnings);
   }
   containers = { ...containers, ...(config.containers ?? {}) };
+  for (const { file, name, container } of dockerFunctions) {
+    if (containers[name] !== undefined) {
+      return yield* new ContainerConfigError({
+        message: `Function '${file}' runs as container '${name}', which 'containers' or the Compose file already declares. Rename one of them.`,
+        containerName: name,
+      });
+    }
+    containers[name] = container;
+  }
 
   const result = yield* normalizeContainers(containers, projectFolder);
   warnings.push(...result.warnings);
@@ -304,10 +377,6 @@ const parseContainers = Effect.fn('parseContainers')(function* (
         });
       }
     }
-  }
-
-  if (result.sidecars.length > 0 && fileEntrypoints.length === 0 && result.entrypoints.length === 0) {
-    warnings.push('Sidecars run next to functions, and this deployment has none, so no sidecar will start.');
   }
 
   return { ...result, warnings };
@@ -326,33 +395,24 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
      * @param projectFolder - Absolute path to the project root
      */
     parse: Effect.fn('V4ConfigParser.parse')(function* (config: ConfigV4, projectFolder: string) {
-      const fileEntrypoints = yield* parseEntrypoints(config, projectFolder);
-      const containers = yield* parseContainers(config, projectFolder, fileEntrypoints);
+      const { entrypoints: fileEntrypoints, dockerFunctions } = yield* parseEntrypoints(config, projectFolder);
+      const containers = yield* parseContainers(config, projectFolder, fileEntrypoints, dockerFunctions);
       const entrypoints = [...fileEntrypoints, ...containers.entrypoints];
       const assets = yield* collectAssets(config, projectFolder);
-      const routes = (config.routes ?? []).map((route) => mapRoute(route, entrypoints));
+      // A route reaches a `runtime: docker` function by its Dockerfile path, like any function file.
+      const dockerFunctionPaths = new Map(
+        dockerFunctions.map(({ file, name }) => [file, containerEntrypointPath(name)])
+      );
+      const routes = (config.routes ?? []).map((route) =>
+        mapRoute(
+          {
+            ...route,
+            destination: dockerFunctionPaths.get(normalizeRouteDestination(route.destination)) ?? route.destination,
+          },
+          entrypoints
+        )
+      );
       const warnings = [...containers.warnings];
-
-      // A project that is nothing but one container function serves every path
-      // from it, the way a project with one detected framework does.
-      const [onlyContainer] = containers.entrypoints;
-      if (
-        routes.length === 0 &&
-        config.assets == null &&
-        fileEntrypoints.length === 0 &&
-        containers.entrypoints.length === 1
-      ) {
-        routes.push(mapRoute({ source: '/*', destination: onlyContainer.path }, entrypoints));
-      } else {
-        for (const entrypoint of containers.entrypoints) {
-          const routed = routes.some((route) => route.destination.replace(/^\/+/, '') === entrypoint.path);
-          if (!routed && entrypoint.schedule === undefined) {
-            warnings.push(
-              `Container function '${entrypoint.displayName}' has no route and no schedule, so nothing reaches it. Add a route with destination '${containerEntrypointPath(entrypoint.displayName ?? '')}'.`
-            );
-          }
-        }
-      }
 
       return {
         regions: resolveRegions(config.regions),

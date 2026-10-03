@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { ConfigVersionError } from './errors';
 import { filterFunctionsFromAssets } from './filter-functions-from-assets';
-import type { NormalizedConfig } from './normalized-config';
+import { CONTAINER_RUNTIME, type NormalizedConfig } from './normalized-config';
 import { RawConfigReader } from './services/raw-config-reader';
 import { SchemaValidator } from './services/schema-validator';
 import { V4ConfigParser } from './services/v4-config-parser';
@@ -85,6 +85,46 @@ export const postProcessConfig = Effect.fn('postProcessConfig')(function* (
     (result.assets?.paths?.length ?? 0) > 0 ||
     (result.assets?.prefixes?.length ?? 0) > 0 ||
     (result.assets?.manifests?.length ?? 0) > 0;
+
+  // Container functions are judged on the final config, after a framework's
+  // defaults and build output have been merged in, so that one declared next
+  // to a detected framework neither replaces nor shadows the framework's app.
+  const containerFunctions = result.entrypoints.filter((entrypoint) => entrypoint.runtime === CONTAINER_RUNTIME);
+  const [onlyFunction] = result.entrypoints;
+  if (
+    onlyFunction !== undefined &&
+    onlyFunction.runtime === CONTAINER_RUNTIME &&
+    result.entrypoints.length === 1 &&
+    result.routes.length === 0 &&
+    !hasAssets
+  ) {
+    // A project that is nothing but one container function serves every path
+    // from it, the way a project with one detected framework does.
+    result = {
+      ...result,
+      routes: [
+        {
+          path: '/*',
+          destination: onlyFunction.path,
+          handler: onlyFunction.streaming === true ? 'SERVERLESS_FUNCTION_STREAMING' : 'SERVERLESS_FUNCTION',
+          methods: ['ANY'],
+          headers: {},
+        },
+      ],
+    };
+  } else {
+    for (const entrypoint of containerFunctions) {
+      const routed = result.routes.some((route) => route.destination.replace(/^\/+/, '') === entrypoint.path);
+      if (!routed && entrypoint.schedule === undefined) {
+        result.warnings.push(
+          `Container function '${entrypoint.displayName ?? entrypoint.path}' has no route and no schedule, so nothing reaches it. Add a route with destination '${entrypoint.path}'.`
+        );
+      }
+    }
+  }
+  if ((result.sidecars?.length ?? 0) > 0 && result.entrypoints.length === 0) {
+    result.warnings.push('Sidecars run next to functions, and this deployment has none, so no sidecar will start.');
+  }
 
   // Stricter check first: no functions, no assets, AND no routes → error
   if (result.entrypoints.length === 0 && !hasAssets && result.routes.length === 0) {

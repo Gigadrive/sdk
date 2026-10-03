@@ -72,9 +72,42 @@ describe('detectContainerProject', () => {
     ]);
   });
 
-  it('fails with the Compose error when the file cannot be deployed', async () => {
-    const result = await detect({ '/project/compose.yml': 'services:\n  cache:\n    image: redis\n' });
+  it('ignores a Compose file that only runs services for local development', async () => {
+    const result = await detect({
+      '/project/compose.yml': 'services:\n  db:\n    image: postgres:17\n    ports: ["5432:5432"]\n',
+    });
 
-    expect(result._tag === 'Left' && result.left.message).toContain('has no service that builds from source');
+    expect(result).toMatchObject({ _tag: 'Right', right: undefined });
+  });
+
+  it('falls back to the root Dockerfile next to a development-only Compose file', async () => {
+    const result = await detect({
+      '/project/Dockerfile': 'FROM node:22',
+      '/project/docker-compose.yml': 'services:\n  redis:\n    image: redis:7\n',
+    });
+
+    if (result._tag === 'Left' || result.right === undefined) throw new Error('expected a detection');
+    expect(result.right.kind).toBe('dockerfile');
+    expect(result.right.config.sidecars).toBeUndefined();
+  });
+
+  it('detects a Compose file whose image service is marked public', async () => {
+    const result = await detect({
+      '/project/compose.yaml':
+        'services:\n  web:\n    image: nginx\n    x-gigadrive: { public: true }\n  cache:\n    image: redis\n',
+    });
+
+    if (result._tag === 'Left' || result.right === undefined) throw new Error('expected a detection');
+    expect(result.right.kind).toBe('compose');
+    expect(result.right.config.routes.map((route) => route.destination)).toEqual(['container:web']);
+  });
+
+  it('fails with the Compose error when the application is ambiguous', async () => {
+    const result = await detect({
+      '/project/Dockerfile': 'FROM scratch',
+      '/project/compose.yml': 'services:\n  web:\n    build: .\n  worker:\n    build: .\n',
+    });
+
+    expect(result._tag === 'Left' && result.left.message).toContain('so it is unclear which service serves HTTP');
   });
 });

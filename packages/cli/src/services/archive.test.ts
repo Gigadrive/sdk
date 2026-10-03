@@ -61,7 +61,10 @@ const readZipEntries = async (archivePath: string) => {
   return entries;
 };
 
-const createArchive = async (directory: string, options?: { useIgnoreFiles?: boolean; useManagedIgnore?: boolean }) => {
+const createArchive = async (
+  directory: string,
+  options?: { useIgnoreFiles?: boolean; useManagedIgnore?: boolean; buildsContainerImages?: boolean }
+) => {
   const archivePath = path.join(directory, 'project.zip');
   await Effect.runPromise(Effect.provide(ArchiveService.createZipArchive(directory, archivePath, options), TestLayer));
   return readZipEntries(archivePath);
@@ -128,5 +131,21 @@ describe('ArchiveService.createZipArchive', () => {
     expect(entries).toContain('compose.yaml');
     expect(entries).toContain('services/api/Dockerfile.prod');
     expect(entries).not.toContain('secrets.txt');
+  });
+
+  it('leaves .dockerignore to BuildKit when the deployment builds images', async () => {
+    const directory = await makeProject();
+    // The common allow-list form: Docker reads it as "only src", gitignore rules as "nothing".
+    await nodeFs.writeFile(path.join(directory, '.dockerignore'), '*\n!src\n');
+
+    const forImages = await createArchive(directory, { buildsContainerImages: true });
+    const withoutImages = await createArchive(directory);
+
+    expect(forImages).toContain('package.json');
+    expect(forImages).toContain('src/index.ts');
+    // .gitignore and the managed ignores still apply.
+    expect(forImages).not.toContain('ignored.log');
+    expect(forImages).not.toContain('node_modules/package/index.js');
+    expect(withoutImages).not.toContain('package.json');
   });
 });

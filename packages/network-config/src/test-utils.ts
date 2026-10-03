@@ -25,6 +25,9 @@ export const makeTestFs = (files: Record<string, string>) => {
 
   return Layer.succeed(FileSystem.FileSystem, {
     exists: (path: string) => Effect.succeed(path in files || directories.has(path)),
+    // No symbolic links in memory: an existing path is its own real path.
+    realPath: (path: string) =>
+      path in files || directories.has(path) ? Effect.succeed(path) : Effect.fail(new Error(`Not found: ${path}`)),
     readFileString: (path: string) =>
       path in files ? Effect.succeed(files[path]) : Effect.fail(new Error(`File not found: ${path}`)),
     readDirectory: (path: string) => {

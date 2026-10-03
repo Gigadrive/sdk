@@ -58,6 +58,8 @@ let existingFiles: Set<string> = new Set();
 
 const StubFileSystem = Layer.succeed(FileSystem.FileSystem, {
   exists: (filePath: string) => Effect.succeed(existingFiles.has(filePath)),
+  realPath: (filePath: string) =>
+    existingFiles.has(filePath) ? Effect.succeed(filePath) : Effect.fail(new Error('Not implemented in test stub')),
   readFileString: () => Effect.fail(new Error('Not implemented in test stub')),
   stat: () => Effect.fail(new Error('Not implemented in test stub')),
   readDirectory: () => Effect.succeed([]),

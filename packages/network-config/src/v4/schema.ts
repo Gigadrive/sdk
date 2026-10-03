@@ -149,8 +149,16 @@ export const schema = {
             minimum: 1,
           },
           runtime: {
-            $ref: '#/$defs/runtimes',
-            description: 'The runtime to use for the function.',
+            anyOf: [{ $ref: '#/$defs/runtimes' }, { const: 'docker' }],
+            description:
+              'The runtime to use for the function. `docker` builds the matched file as a Dockerfile, with its directory as the build context, and runs the image as the function.',
+          },
+          port: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 65535,
+            description:
+              'TCP port the image listens on. Only for `runtime: docker`. Defaults to the first exposed port of the image, then 8080.',
           },
           streaming: {
             type: 'boolean',
@@ -265,7 +273,7 @@ export const schema = {
         'Container images to run, keyed by name. A container runs as a function unless `sidecar` is true; routes target it with `destination: container:<name>`. A sidecar runs next to every function instance and answers at `<name>:<port>`.',
       maxProperties: 16,
       propertyNames: {
-        pattern: '^[a-z0-9][a-z0-9_-]{0,62}$',
+        pattern: '^[a-z][a-z0-9_-]{0,62}$',
         not: { enum: ['localhost'] },
       },
       additionalProperties: {
@@ -333,13 +341,15 @@ export const schema = {
             description: 'Replaces the image WORKDIR. Must be absolute.',
           },
           user: {
-            type: 'string',
-            minLength: 1,
-            maxLength: 256,
-            description: 'Replaces the image USER: a name, a uid, `name:group` or `uid:gid`.',
+            oneOf: [
+              { type: 'string', minLength: 1, maxLength: 256 },
+              { type: 'integer', minimum: 0 },
+            ],
+            description:
+              'Replaces the image USER: a name, a uid, `name:group` or `uid:gid`. A bare uid may be a number.',
           },
           memory: {
-            type: 'number',
+            type: 'integer',
             minimum: 128,
             maximum: 3009,
             description: 'Memory in MB. Defaults to 512 for a container function and 256 for a sidecar.',

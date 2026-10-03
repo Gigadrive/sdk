@@ -251,10 +251,44 @@ describe('parse config v4', function () {
     ['an unknown key', { web: { image: 'nginx', volumes: ['/data'] } }],
     ['an invalid schedule', { web: { image: 'nginx', schedule: 'every hour' } }],
     ['too little memory', { web: { image: 'nginx', memory: 64 } }],
+    ['fractional memory', { web: { image: 'nginx', memory: 512.5 } }],
+    ['a numeric name', { 1234: { image: 'nginx' } }],
+    ['a name starting with a digit', { '1web': { image: 'nginx' } }],
+    ['a name with a dot', { 'web.app': { image: 'nginx' } }],
+    ['an empty user', { web: { image: 'nginx', user: '' } }],
+    ['a negative numeric user', { web: { image: 'nginx', user: -1 } }],
+    ['a fractional numeric user', { web: { image: 'nginx', user: 1000.5 } }],
   ])('rejects a container with %s', function (_label, containers) {
     const validate = createSchemaValidator();
 
     expect(validate({ version: 4, containers })).toBe(false);
+  });
+
+  test('accepts a numeric user and names that start with a letter', function () {
+    const validate = createSchemaValidator();
+
+    expect(validate({ version: 4, containers: { a: { image: 'nginx', user: 1000 } } })).toBe(true);
+    expect(validate({ version: 4, containers: { web_1: { image: 'nginx', user: 0 } } })).toBe(true);
+    expect(validate({ version: 4, containers: { 'w-2': { image: 'nginx', user: '1000:1000' } } })).toBe(true);
+  });
+
+  test('accepts a Dockerfile function with a port', function () {
+    const validate = createSchemaValidator();
+
+    expect(validate({ version: 4, functions: { Dockerfile: { runtime: 'docker', port: 3000, memory: 512 } } })).toBe(
+      true
+    );
+    expect(validate({ version: 4, functions: { 'api/index.js': { runtime: 'node-22' } } })).toBe(true);
+  });
+
+  test.each([
+    ['an unknown runtime', { Dockerfile: { runtime: 'dockerfile' } }],
+    ['a fractional port', { Dockerfile: { runtime: 'docker', port: 80.5 } }],
+    ['a port out of range', { Dockerfile: { runtime: 'docker', port: 0 } }],
+  ])('rejects a function with %s', function (_label, functions) {
+    const validate = createSchemaValidator();
+
+    expect(validate({ version: 4, functions })).toBe(false);
   });
 
   test('getFunctionSettings', async () => {
