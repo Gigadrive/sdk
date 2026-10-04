@@ -149,18 +149,24 @@ export const schema = {
             minimum: 1,
           },
           runtime: {
-            $ref: '#/$defs/runtimes',
-            description: 'The runtime to use for the function.',
+            anyOf: [{ $ref: '#/$defs/runtimes' }, { const: 'docker' }],
+            description:
+              'The runtime to use for the function. `docker` builds the matched file as a Dockerfile, with its directory as the build context, and runs the image as the function.',
+          },
+          port: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 65535,
+            description:
+              'TCP port the image listens on. Only for `runtime: docker`. Defaults to the first exposed port of the image, then 8080.',
           },
           streaming: {
             type: 'boolean',
             description: 'Enable function response streaming. When omitted, Node and Bun runtimes stream by default.',
           },
           schedule: {
-            type: 'string',
+            $ref: '#/$defs/schedule',
             description: 'An expression to schedule the function to run at specific times.',
-            pattern:
-              '^(?:rate[(](?:(?:1[ ]+(hour|minute|day))|(?:[0-9]+[ ]+(hours|minutes|days)))[)])|(?:cron[(](?:(?:(?:[0-5]?[0-9])|[*])(?:(?:[-](?:(?:[0-5]?[0-9])|[*]))|(?:[/][0-9]+))?(?:[,](?:(?:[0-5]?[0-9])|[*])(?:(?:[-](?:(?:[0-5]?[0-9])|[*]))|(?:[/][0-9]+))?)*)[ ]+(?:(?:(?:[0-2]?[0-9])|[*])(?:(?:[-](?:(?:[0-2]?[0-9])|[*]))|(?:[/][0-9]+))?(?:[,](?:(?:[0-2]?[0-9])|[*])(?:(?:[-](?:(?:[0-2]?[0-9])|[*]))|(?:[/][0-9]+))?)*)[ ]+(?:(?:[?][ ]+(?:(?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:(?:[-](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:[/][0-9]+)?)|(?:[/][0-9]+))?(?:[,](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:(?:[-](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:[/][0-9]+)?)|(?:[/][0-9]+))?)*)[ ]+(?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))[#][0-5])|(?:(?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))L?)|[L*])(?:(?:[-](?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))L?)|[L*]))|(?:[/][0-9]+))?(?:[,](?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))L?)|[L*])(?:(?:[-](?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))L?)|[L*]))|(?:[/][0-9]+))?)*)))|(?:(?:(?:(?:(?:[1-3]?[0-9])W?)|LW|[L*])(?:(?:[-](?:(?:(?:[1-3]?[0-9])W?)|LW|[L*]))|(?:[/][0-9]+))?(?:[,](?:(?:(?:[1-3]?[0-9])W?)|LW|[L*])(?:(?:[-](?:(?:(?:[1-3]?[0-9])W?)|LW|[L*]))|(?:[/][0-9]+))?)*)[ ]+(?:(?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:(?:[-](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:[/][0-9]+)?)|(?:[/][0-9]+))?(?:[,](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:(?:[-](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:[/][0-9]+)?)|(?:[/][0-9]+))?)*)[ ]+[?]))[ ]+(?:(?:(?:[12][0-9]{3})|[*])(?:(?:[-](?:(?:[12][0-9]{3})|[*]))|(?:[/][0-9]+))?(?:[,](?:(?:[12][0-9]{3})|[*])(?:(?:[-](?:(?:[12][0-9]{3})|[*]))|(?:[/][0-9]+))?)*)[)])$',
           },
           symlinks: {
             type: 'object',
@@ -250,6 +256,117 @@ export const schema = {
             additionalProperties: {
               type: 'string',
             },
+          },
+        },
+      },
+    },
+    compose: {
+      type: ['string', 'null'],
+      minLength: 1,
+      maxLength: 1024,
+      description:
+        'Project-relative path of a Compose file whose services are imported as containers. Entries in `containers` win over imported services of the same name.',
+    },
+    containers: {
+      type: ['object', 'null'],
+      description:
+        'Container images to run, keyed by name. A container runs as a function unless `sidecar` is true; routes target it with `destination: container:<name>`. A sidecar runs next to every function instance and answers at `<name>:<port>`.',
+      maxProperties: 16,
+      propertyNames: {
+        pattern: '^[a-z][a-z0-9_-]{0,62}$',
+        not: { enum: ['localhost'] },
+      },
+      additionalProperties: {
+        type: 'object',
+        additionalProperties: false,
+        oneOf: [{ required: ['image'] }, { required: ['build'] }],
+        properties: {
+          image: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 512,
+            pattern: '^[^\\s]+$',
+            description: 'Registry image reference, e.g. `redis:7-alpine` or `ghcr.io/acme/api:1.4`.',
+          },
+          build: {
+            description: 'Build context directory, or the full build settings, for a Dockerfile in the repository.',
+            oneOf: [
+              { type: 'string', minLength: 1, maxLength: 1024 },
+              {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  context: { type: 'string', minLength: 1, maxLength: 1024 },
+                  dockerfile: { type: 'string', minLength: 1, maxLength: 1024 },
+                  target: { type: 'string', minLength: 1, maxLength: 128 },
+                  args: {
+                    type: 'object',
+                    maxProperties: 100,
+                    additionalProperties: { type: 'string', maxLength: 65536 },
+                  },
+                },
+              },
+            ],
+          },
+          sidecar: {
+            type: 'boolean',
+            description: 'Run next to every function instance instead of serving routes. Defaults to false.',
+          },
+          port: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 65535,
+            description:
+              'TCP port the container listens on. Defaults to the first exposed port of the image, then 8080.',
+          },
+          entrypoint: {
+            $ref: '#/$defs/stringOrStringArray',
+            description: 'Replaces the image ENTRYPOINT. A string is split into words the way Compose splits it.',
+          },
+          command: {
+            $ref: '#/$defs/stringOrStringArray',
+            description: 'Replaces the image CMD. A string is split into words the way Compose splits it.',
+          },
+          env: {
+            type: 'object',
+            maxProperties: 100,
+            additionalProperties: { type: 'string', maxLength: 65536 },
+            description: 'Environment variables baked into the container, merged over the image ENV.',
+          },
+          working_dir: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 1024,
+            pattern: '^/',
+            description: 'Replaces the image WORKDIR. Must be absolute.',
+          },
+          user: {
+            oneOf: [
+              { type: 'string', minLength: 1, maxLength: 256 },
+              { type: 'integer', minimum: 0 },
+            ],
+            description:
+              'Replaces the image USER: a name, a uid, `name:group` or `uid:gid`. A bare uid may be a number.',
+          },
+          memory: {
+            type: 'integer',
+            minimum: 128,
+            maximum: 3009,
+            description: 'Memory in MB. Defaults to 512 for a container function and 256 for a sidecar.',
+          },
+          max_duration: {
+            type: 'number',
+            minimum: 1,
+            maximum: MAX_FUNCTION_DURATION_SECONDS,
+            description: 'Maximum lifetime in seconds of one request. Container functions only.',
+          },
+          streaming: {
+            type: 'boolean',
+            description: 'Stream responses. Defaults to true. Container functions only.',
+          },
+          schedule: {
+            $ref: '#/$defs/schedule',
+            description: 'An expression to run the container function at specific times. Container functions only.',
           },
         },
       },
@@ -416,6 +533,17 @@ export const schema = {
     },
   },
   $defs: {
+    schedule: {
+      type: 'string',
+      pattern:
+        '^(?:rate[(](?:(?:1[ ]+(hour|minute|day))|(?:[0-9]+[ ]+(hours|minutes|days)))[)])|(?:cron[(](?:(?:(?:[0-5]?[0-9])|[*])(?:(?:[-](?:(?:[0-5]?[0-9])|[*]))|(?:[/][0-9]+))?(?:[,](?:(?:[0-5]?[0-9])|[*])(?:(?:[-](?:(?:[0-5]?[0-9])|[*]))|(?:[/][0-9]+))?)*)[ ]+(?:(?:(?:[0-2]?[0-9])|[*])(?:(?:[-](?:(?:[0-2]?[0-9])|[*]))|(?:[/][0-9]+))?(?:[,](?:(?:[0-2]?[0-9])|[*])(?:(?:[-](?:(?:[0-2]?[0-9])|[*]))|(?:[/][0-9]+))?)*)[ ]+(?:(?:[?][ ]+(?:(?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:(?:[-](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:[/][0-9]+)?)|(?:[/][0-9]+))?(?:[,](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:(?:[-](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:[/][0-9]+)?)|(?:[/][0-9]+))?)*)[ ]+(?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))[#][0-5])|(?:(?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))L?)|[L*])(?:(?:[-](?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))L?)|[L*]))|(?:[/][0-9]+))?(?:[,](?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))L?)|[L*])(?:(?:[-](?:(?:(?:[1-7]|(?:SUN|MON|TUE|WED|THU|FRI|SAT))L?)|[L*]))|(?:[/][0-9]+))?)*)))|(?:(?:(?:(?:(?:[1-3]?[0-9])W?)|LW|[L*])(?:(?:[-](?:(?:(?:[1-3]?[0-9])W?)|LW|[L*]))|(?:[/][0-9]+))?(?:[,](?:(?:(?:[1-3]?[0-9])W?)|LW|[L*])(?:(?:[-](?:(?:(?:[1-3]?[0-9])W?)|LW|[L*]))|(?:[/][0-9]+))?)*)[ ]+(?:(?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:(?:[-](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:[/][0-9]+)?)|(?:[/][0-9]+))?(?:[,](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:(?:[-](?:(?:[1]?[0-9])|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|[*])(?:[/][0-9]+)?)|(?:[/][0-9]+))?)*)[ ]+[?]))[ ]+(?:(?:(?:[12][0-9]{3})|[*])(?:(?:[-](?:(?:[12][0-9]{3})|[*]))|(?:[/][0-9]+))?(?:[,](?:(?:[12][0-9]{3})|[*])(?:(?:[-](?:(?:[12][0-9]{3})|[*]))|(?:[/][0-9]+))?)*)[)])$',
+    },
+    stringOrStringArray: {
+      oneOf: [
+        { type: 'string', minLength: 1, maxLength: 4096 },
+        { type: 'array', maxItems: 256, items: { type: 'string', maxLength: 4096 } },
+      ],
+    },
     runtimes: {
       type: 'string',
       enum: ['php-84', 'php-83', 'php-81', 'node-22', 'node-20', 'node-18', 'node-16', 'bun-1'],

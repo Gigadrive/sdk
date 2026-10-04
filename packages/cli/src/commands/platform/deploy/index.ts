@@ -148,6 +148,10 @@ export const deployCommand = Command.make(
       const archive = yield* archiveService.createZipArchive(config.userArchive?.rootOverwrite || cwd, archivePath, {
         whitelist: config.userArchive?.fileWhitelist,
         excludeFiles: config.excludeFiles,
+        buildsContainerImages: [
+          ...config.entrypoints.flatMap((entrypoint) => (entrypoint.container ? [entrypoint.container] : [])),
+          ...(config.sidecars ?? []),
+        ].some((container) => container.source.type === 'dockerfile'),
       });
       yield* Console.log(`Archive created (${formatFileSize(archive.size)})`);
 

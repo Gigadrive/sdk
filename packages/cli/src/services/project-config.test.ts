@@ -58,6 +58,8 @@ let existingFiles: Set<string> = new Set();
 
 const StubFileSystem = Layer.succeed(FileSystem.FileSystem, {
   exists: (filePath: string) => Effect.succeed(existingFiles.has(filePath)),
+  realPath: (filePath: string) =>
+    existingFiles.has(filePath) ? Effect.succeed(filePath) : Effect.fail(new Error('Not implemented in test stub')),
   readFileString: () => Effect.fail(new Error('Not implemented in test stub')),
   stat: () => Effect.fail(new Error('Not implemented in test stub')),
   readDirectory: () => Effect.succeed([]),
@@ -133,6 +135,34 @@ describe('ProjectConfigService.resolve', () => {
       _tag: 'caught',
       directory: '/project',
     });
+  });
+
+  it('should deploy a root Dockerfile as a container function when nothing else is found', async () => {
+    existingFiles.add('/project/Dockerfile');
+    mockNoFrameworkDetected();
+    mockedPostProcessConfig.mockImplementation((config) => Effect.succeed(config) as never);
+
+    const result = await runEffect(ProjectConfigService.resolve('/project'));
+
+    expect(result.configPath).toBeNull();
+    expect(result.framework).toBeUndefined();
+    expect(result.config.entrypoints).toMatchObject([
+      { path: 'container:app', runtime: 'docker', container: { source: { type: 'dockerfile', context: '.' } } },
+    ]);
+    expect(result.config.routes).toMatchObject([{ path: '/*', destination: 'container:app' }]);
+  });
+
+  it('should surface an unreadable Compose file as a ConfigParseError', async () => {
+    existingFiles.add('/project/compose.yaml');
+    mockNoFrameworkDetected();
+
+    const result = await runEffect(
+      ProjectConfigService.resolve('/project').pipe(
+        Effect.catchTag('ConfigParseError', (err) => Effect.succeed({ caught: err.message, cause: err.cause }))
+      )
+    );
+
+    expect(result).toEqual({ caught: "Compose file 'compose.yaml' could not be read.", cause: 'compose.yaml' });
   });
 
   it('should return config and configPath when config file is valid and no framework detected', async () => {

@@ -9,10 +9,13 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import type { NormalizedConfig, NormalizedConfigEntrypoint, NormalizedConfigRoute } from '../normalized-config';
+import { postProcessConfig } from '../parse-config';
 import { AVAILABLE_REGIONS } from '../regions';
 import { makeTestFs, TestPathLayer } from '../test-utils';
 import type { ConfigV4 } from '../v4';
+import { RawConfigReader } from './raw-config-reader';
 import { getFunctionSettings, V4ConfigParser } from './v4-config-parser';
+import { VercelBuildOutputParser } from './vercel-build-output-parser';
 
 /** Load the example.yaml fixture as a raw object. */
 const loadExample = (): Record<string, unknown> => {
@@ -673,5 +676,326 @@ describe('V4ConfigParser', () => {
     const assetPaths = requireAssetPaths(result);
     expect(assetPaths.length).toBeGreaterThan(0);
     expect(assetPaths.length).toBeLessThanOrEqual(101);
+  });
+});
+
+describe('V4ConfigParser containers', () => {
+  // Parsed and post-processed, as every caller sees a config: the catch-all
+  // route and the route warnings are decided on the final config.
+  const parse = (config: ConfigV4, files: Record<string, string> = {}) =>
+    Effect.runPromise(
+      Effect.either(
+        V4ConfigParser.parse(config, '/project').pipe(
+          Effect.flatMap((parsed) => postProcessConfig(parsed, '/project')),
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(VercelBuildOutputParser.Default),
+          Effect.provide(RawConfigReader.Default),
+          Effect.provide(Layer.merge(makeTestFs(files), TestPathLayer))
+        )
+      )
+    );
+
+  it('serves every path from a lone container function', async () => {
+    const result = await parse({ version: 4, containers: { web: { image: 'nginx:1.27', port: 80 } } });
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.entrypoints).toEqual([
+      {
+        path: 'container:web',
+        displayName: 'web',
+        runtime: 'docker',
+        memory: 512,
+        maxDuration: 30,
+        streaming: true,
+        container: { name: 'web', source: { type: 'registry', reference: 'nginx:1.27' }, port: 80 },
+      },
+    ]);
+    expect(result.right.routes).toEqual([
+      {
+        path: '/*',
+        destination: 'container:web',
+        handler: 'SERVERLESS_FUNCTION_STREAMING',
+        headers: {},
+        methods: ['ANY'],
+        positiveRequirements: undefined,
+        negativeRequirements: undefined,
+        status: undefined,
+      },
+    ]);
+    expect(result.right.warnings).toEqual([]);
+    expect(result.right.sidecars).toBeUndefined();
+  });
+
+  it('routes explicitly declared destinations to container functions', async () => {
+    const result = await parse({
+      version: 4,
+      containers: {
+        api: { image: 'acme/api', streaming: false },
+        admin: { image: 'acme/admin' },
+        cron: { image: 'acme/cron', schedule: 'rate(1 hour)' },
+      },
+      routes: [{ source: '/api/*', destination: '/container:api' }],
+    });
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.routes.map((route) => [route.path, route.destination, route.handler])).toEqual([
+      ['/api/*', '/container:api', 'SERVERLESS_FUNCTION'],
+    ]);
+    expect(result.right.warnings).toEqual([
+      "Container function 'admin' has no route and no schedule, so nothing reaches it. Add a route with destination 'container:admin'.",
+    ]);
+  });
+
+  it('does not add a catch-all next to static assets', async () => {
+    const result = await parse(
+      { version: 4, assets: 'public', containers: { api: { image: 'acme/api' } } },
+      { '/project/public/index.html': '<html></html>' }
+    );
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.routes).toEqual([]);
+  });
+
+  it('carries sidecars next to file functions', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const result = await Effect.runPromise(
+        V4ConfigParser.parse(
+          {
+            version: 4,
+            functions: { 'dist/main.js': { runtime: 'node-22' } },
+            containers: { redis: { image: 'redis:7-alpine', sidecar: true, port: 6379 } },
+          },
+          projectFolder
+        ).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(NodeContext.layer))
+      );
+
+      expect(result.entrypoints.map((entrypoint) => entrypoint.path)).toEqual(['dist/main.js']);
+      expect(result.sidecars).toEqual([
+        { name: 'redis', source: { type: 'registry', reference: 'redis:7-alpine' }, port: 6379, memory: 256 },
+      ]);
+      expect(result.warnings).toEqual([]);
+    });
+  });
+
+  it('refuses a sidecar on the port of a managed runtime', async () => {
+    await withTempFunctionProject(async (projectFolder) => {
+      const result = await Effect.runPromise(
+        Effect.either(
+          V4ConfigParser.parse(
+            {
+              version: 4,
+              functions: { 'dist/main.js': { runtime: 'php-84' } },
+              containers: { fpm: { image: 'acme/fpm', sidecar: true, port: 9000 } },
+            },
+            projectFolder
+          ).pipe(Effect.provide(V4ConfigParser.Default), Effect.provide(NodeContext.layer))
+        )
+      );
+
+      expect(result._tag === 'Left' && result.left.message).toBe(
+        "Sidecar 'fpm' listens on port 9000, which the php-84 runtime of 'dist/main.js' uses inside the same microVM. Choose another port."
+      );
+    });
+  });
+
+  it('warns when sidecars have no function to run next to', async () => {
+    const result = await parse({ version: 4, containers: { redis: { image: 'redis', sidecar: true } } });
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.warnings).toEqual([
+      'Sidecars run next to functions, and this deployment has none, so no sidecar will start.',
+    ]);
+  });
+
+  it('imports a Compose file and lets containers override its services', async () => {
+    const result = await parse(
+      {
+        version: 4,
+        compose: 'compose.yaml',
+        containers: { cache: { image: 'valkey/valkey:8', sidecar: true, port: 6379 } },
+      },
+      {
+        '/project/compose.yaml': 'services:\n  web:\n    build: .\n    ports: ["3000"]\n  cache:\n    image: redis\n',
+        '/project/Dockerfile': 'FROM node:22',
+      }
+    );
+
+    if (result._tag === 'Left') throw new Error(result.left.message);
+    expect(result.right.entrypoints.map((entrypoint) => entrypoint.container)).toEqual([
+      { name: 'web', source: { type: 'dockerfile', context: '.', dockerfile: 'Dockerfile' }, port: 3000 },
+    ]);
+    expect(result.right.sidecars).toEqual([
+      { name: 'cache', source: { type: 'registry', reference: 'valkey/valkey:8' }, port: 6379, memory: 256 },
+    ]);
+    expect(result.right.routes.map((route) => route.destination)).toEqual(['container:web']);
+  });
+});
+
+describe('V4ConfigParser runtime docker functions', () => {
+  const withProject = async <T>(files: Record<string, string>, run: (projectFolder: string) => Promise<T>) => {
+    const projectFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'network-config-docker-'));
+    try {
+      for (const [file, content] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(projectFolder, file)), { recursive: true });
+        fs.writeFileSync(path.join(projectFolder, file), content);
+      }
+      return await run(projectFolder);
+    } finally {
+      fs.rmSync(projectFolder, { recursive: true, force: true });
+    }
+  };
+  const parseIn = (config: ConfigV4, projectFolder: string) =>
+    Effect.runPromise(
+      Effect.either(
+        V4ConfigParser.parse(config, projectFolder).pipe(
+          Effect.flatMap((parsed) => postProcessConfig(parsed, projectFolder)),
+          Effect.provide(V4ConfigParser.Default),
+          Effect.provide(VercelBuildOutputParser.Default),
+          Effect.provide(RawConfigReader.Default),
+          Effect.provide(NodeContext.layer)
+        )
+      )
+    );
+
+  it('builds a Dockerfile listed under functions and routes to it by its path', async () => {
+    await withProject({ Dockerfile: 'FROM node:22', 'dist/main.js': 'exports.handler = () => {}' }, async (dir) => {
+      const result = await parseIn(
+        {
+          version: 4,
+          functions: { Dockerfile: { runtime: 'docker', port: 3000 }, 'dist/main.js': { runtime: 'node-22' } },
+          containers: { redis: { image: 'redis:7-alpine', sidecar: true, port: 6379 } },
+          routes: [
+            { source: '/api/*', destination: 'dist/main.js' },
+            { source: '/*', destination: '/Dockerfile' },
+          ],
+        },
+        dir
+      );
+
+      if (result._tag === 'Left') throw new Error(result.left.message);
+      expect(result.right.entrypoints).toEqual([
+        expect.objectContaining({ path: 'dist/main.js', runtime: 'node-22', memory: 128 }),
+        {
+          path: 'container:app',
+          displayName: 'app',
+          runtime: 'docker',
+          memory: 512,
+          maxDuration: 30,
+          streaming: true,
+          container: {
+            name: 'app',
+            source: { type: 'dockerfile', context: '.', dockerfile: 'Dockerfile' },
+            port: 3000,
+          },
+        },
+      ]);
+      expect(result.right.routes.map((route) => [route.path, route.destination, route.handler])).toEqual([
+        ['/api/*', 'dist/main.js', 'SERVERLESS_FUNCTION_STREAMING'],
+        ['/*', 'container:app', 'SERVERLESS_FUNCTION_STREAMING'],
+      ]);
+      expect(result.right.sidecars).toEqual([
+        { name: 'redis', source: { type: 'registry', reference: 'redis:7-alpine' }, port: 6379, memory: 256 },
+      ]);
+      expect(result.right.warnings).toEqual([]);
+    });
+  });
+
+  it('turns every Dockerfile a glob matches into its own function, with the settings it declares', async () => {
+    await withProject(
+      { 'services/api/Dockerfile': 'FROM node:22', 'services/worker/Dockerfile.prod': 'FROM node:22' },
+      async (dir) => {
+        const result = await parseIn(
+          {
+            version: 4,
+            functions: {
+              'services/*/Dockerfile*': { runtime: 'docker', memory: 1024, max_duration: 120, streaming: false },
+              'services/worker/Dockerfile.prod': { schedule: 'rate(1 hour)' },
+            },
+            routes: [{ source: '/api/*', destination: 'services/api/Dockerfile' }],
+          },
+          dir
+        );
+
+        if (result._tag === 'Left') throw new Error(result.left.message);
+        expect(result.right.entrypoints).toEqual([
+          {
+            path: 'container:api',
+            displayName: 'api',
+            runtime: 'docker',
+            memory: 1024,
+            maxDuration: 120,
+            streaming: false,
+            container: {
+              name: 'api',
+              source: { type: 'dockerfile', context: 'services/api', dockerfile: 'Dockerfile' },
+            },
+          },
+          {
+            path: 'container:worker-prod',
+            displayName: 'worker-prod',
+            runtime: 'docker',
+            memory: 1024,
+            maxDuration: 120,
+            streaming: false,
+            schedule: 'rate(1 hour)',
+            container: {
+              name: 'worker-prod',
+              source: { type: 'dockerfile', context: 'services/worker', dockerfile: 'Dockerfile.prod' },
+            },
+          },
+        ]);
+        expect(result.right.routes.map((route) => route.destination)).toEqual(['container:api']);
+        expect(result.right.warnings).toEqual([]);
+      }
+    );
+  });
+
+  it('serves every path from a lone Dockerfile function and names the file in its warnings', async () => {
+    await withProject({ 'app/Dockerfile': 'FROM nginx', 'cron/Dockerfile': 'FROM alpine' }, async (dir) => {
+      const lone = await parseIn({ version: 4, functions: { 'app/Dockerfile': { runtime: 'docker' } } }, dir);
+      if (lone._tag === 'Left') throw new Error(lone.left.message);
+      expect(lone.right.routes.map((route) => [route.path, route.destination])).toEqual([['/*', 'container:app']]);
+
+      const two = await parseIn({ version: 4, functions: { '*/Dockerfile': { runtime: 'docker' } } }, dir);
+      if (two._tag === 'Left') throw new Error(two.left.message);
+      expect(two.right.routes).toEqual([]);
+      expect(two.right.warnings).toEqual([
+        "Container function 'app' has no route and no schedule, so nothing reaches it. Add a route with destination 'container:app'.",
+        "Container function 'cron' has no route and no schedule, so nothing reaches it. Add a route with destination 'container:cron'.",
+      ]);
+    });
+  });
+
+  it('refuses settings that do not apply, and names that collide', async () => {
+    await withProject(
+      { Dockerfile: 'FROM nginx', 'a/web/Dockerfile': 'FROM nginx', 'b/web/Dockerfile': 'FROM nginx', 'main.js': '' },
+      async (dir) => {
+        const message = async (config: ConfigV4) => {
+          const result = await parseIn(config, dir);
+          return result._tag === 'Left' ? result.left.message : undefined;
+        };
+
+        expect(await message({ version: 4, functions: { 'main.js': { runtime: 'node-22', port: 3000 } } })).toBe(
+          "Function 'main.js' sets port, which only applies to 'runtime: docker'."
+        );
+        expect(
+          await message({ version: 4, functions: { Dockerfile: { runtime: 'docker', includeFiles: 'assets/**' } } })
+        ).toBe(
+          "Function 'Dockerfile' runs a Dockerfile, so includeFiles do not apply. Copy files in the Dockerfile instead."
+        );
+        expect(await message({ version: 4, functions: { '*/web/Dockerfile': { runtime: 'docker' } } })).toBe(
+          "Functions 'a/web/Dockerfile' and 'b/web/Dockerfile' would both be named 'web'. Declare one of them under 'containers' with an explicit name."
+        );
+        expect(
+          await message({
+            version: 4,
+            functions: { Dockerfile: { runtime: 'docker' } },
+            containers: { app: { image: 'redis', sidecar: true } },
+          })
+        ).toBe(
+          "Function 'Dockerfile' runs as container 'app', which 'containers' or the Compose file already declares. Rename one of them."
+        );
+      }
+    );
   });
 });

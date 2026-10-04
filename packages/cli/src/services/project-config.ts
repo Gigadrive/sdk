@@ -5,10 +5,12 @@ import type {
   ConfigModuleLoadError,
   ConfigSchemaValidationError,
   ConfigVersionError,
+  ContainerConfigError,
   FunctionConfigError,
   NormalizedConfig,
 } from '@gigadrive/network-config';
 import {
+  detectContainerProject,
   detectFramework,
   mergeWithFrameworkDefaults,
   NetworkConfigLive,
@@ -34,9 +36,10 @@ type ParseConfigErrors =
   | ConfigModuleLoadError
   | ConfigVersionError
   | ConfigSchemaValidationError
+  | ContainerConfigError
   | FunctionConfigError;
 
-const wrapParseErrors = <R>(effect: Effect.Effect<NormalizedConfig, ParseConfigErrors, R>) =>
+const wrapParseErrors = <A, R>(effect: Effect.Effect<A, ParseConfigErrors, R>) =>
   effect.pipe(
     Effect.catchTags({
       ConfigFileNotFoundError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath })),
@@ -48,6 +51,8 @@ const wrapParseErrors = <R>(effect: Effect.Effect<NormalizedConfig, ParseConfigE
       ConfigSchemaValidationError: (e) =>
         Effect.fail(new ConfigParseError({ message: e.message, cause: e.validationErrors.join(', ') })),
       FunctionConfigError: (e) => Effect.fail(new ConfigParseError({ message: e.message, cause: e.functionPath })),
+      ContainerConfigError: (e) =>
+        Effect.fail(new ConfigParseError({ message: e.message, cause: e.filePath ?? e.containerName })),
     })
   );
 
@@ -118,13 +123,22 @@ export class ProjectConfigService extends Effect.Service<ProjectConfigService>()
 
         framework = { name: detection.framework.name, slug: detection.framework.slug };
       } else {
-        // Case D: neither config file nor framework detected
-        return yield* Effect.fail(
-          new ConfigNotFoundError({
-            message: 'No config file found and no framework detected.',
-            directory: cwd,
-          })
+        // Case D: neither config file nor framework → a Compose file or a root
+        // Dockerfile deploys as container images. Tried last so a framework
+        // project's local-development Compose file never replaces the framework.
+        const containerProject = yield* wrapParseErrors(
+          detectContainerProject(cwd).pipe(Effect.map((result) => result?.config ?? null))
         );
+        if (containerProject === null) {
+          return yield* Effect.fail(
+            new ConfigNotFoundError({
+              message: 'No config file, framework, Compose file or Dockerfile found.',
+              directory: cwd,
+            })
+          );
+        }
+
+        config = yield* wrapParseErrors(postProcessConfig(containerProject, cwd));
       }
 
       // Report warnings via structured logging

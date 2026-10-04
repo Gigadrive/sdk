@@ -41,3 +41,10 @@ export class FunctionConfigError extends Schema.TaggedError<FunctionConfigError>
   message: Schema.String,
   functionPath: Schema.String,
 }) {}
+
+/** A `containers` entry, or a Compose file imported into one, cannot be deployed as written. */
+export class ContainerConfigError extends Schema.TaggedError<ContainerConfigError>()('ContainerConfigError', {
+  message: Schema.String,
+  containerName: Schema.optional(Schema.String),
+  filePath: Schema.optional(Schema.String),
+}) {}
