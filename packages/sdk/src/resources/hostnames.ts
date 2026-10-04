@@ -1,13 +1,13 @@
 import type { Paginated } from '../http-client';
 
-/** A `*.gigadrive.app` hostname assigned to an application or deployment. */
+/** A hostname routing to an application or deployment: a `*.gigadrive.app` name or an active custom domain. */
 export interface Hostname {
   /** Unique identifier (UUID). */
   id: string;
   /** The fully-qualified hostname (e.g. `"my-app.gigadrive.app"`). */
   hostname: string;
-  /** The kind of hostname: `"DEPLOYMENT"`, `"BRANCH"`, or `"APP"`. */
-  type: 'DEPLOYMENT' | 'BRANCH' | 'APP';
+  /** The kind of hostname: `"DEPLOYMENT"`, `"BRANCH"`, `"APP"`, or `"CUSTOM"` (an active custom domain). */
+  type: 'DEPLOYMENT' | 'BRANCH' | 'APP' | 'CUSTOM';
   /** Whether this hostname currently routes traffic. */
   active: boolean;
   /** The deployment this hostname points to, if any. */

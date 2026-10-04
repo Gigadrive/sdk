@@ -150,6 +150,39 @@ describe('HttpClient', () => {
     await expect(client.get('/fail')).rejects.toMatchObject({ message: 'Bad input', status: 422, code: 'invalid' });
   });
 
+  it('should parse a code sent next to a string error', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'shop.example.com is already attached.', code: 'domain_in_use' }), {
+        status: 409,
+      })
+    );
+
+    const client = createClient();
+
+    await expect(client.get('/fail')).rejects.toMatchObject({
+      message: 'shop.example.com is already attached.',
+      status: 409,
+      code: 'domain_in_use',
+    });
+  });
+
+  it('should parse a reason sent next to the code', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ error: 'Daily limit reached.', code: 'quota_exceeded', reason: 'daily_add_limit' }),
+        { status: 429 }
+      )
+    );
+
+    const client = createClient();
+
+    await expect(client.get('/fail')).rejects.toMatchObject({
+      status: 429,
+      code: 'quota_exceeded',
+      reason: 'daily_add_limit',
+    });
+  });
+
   it('should send PUT request with JSON body', async () => {
     mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
 

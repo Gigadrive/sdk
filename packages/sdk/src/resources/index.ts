@@ -60,6 +60,20 @@ export type { ApiKey, CreateApiKeyInput, CreateApiKeyResult, ListApiKeysQuery } 
 
 export type { ApplicationHostnameList, Hostname, HostnameAvailability, SetProductionHostnameResult } from './hostnames';
 
+export { ApplicationDomainsResource, DomainNotActiveError, OrganizationDomainsResource } from './domains';
+export type {
+  AddCustomDomainInput,
+  CustomDomain,
+  CustomDomainState,
+  CustomDomainTarget,
+  CustomDomainTargetInput,
+  DomainOwnership,
+  DomainProblem,
+  RequiredDnsRecord,
+  UpdateCustomDomainInput,
+  WaitUntilActiveOptions,
+} from './domains';
+
 export { OrganizationsResource } from './organizations';
 export type { CreateOrganizationInput, Organization } from './organizations';
 
@@ -130,6 +144,21 @@ export type {
   StorageUploadSession,
   UploadByteSource,
 } from './storage-upload-sessions';
+
+export { QueuesResource } from './queues';
+export type {
+  QueueAckResult,
+  QueueInfo,
+  QueueMessageInput,
+  QueueMessageRecord,
+  QueueNackResult,
+  QueueSchedule,
+  QueueScheduleInput,
+  QueueScopeOptions,
+  QueueSendResult,
+  QueueSettings,
+  QueueStats,
+} from './queues';
 
 export { StickySessionsResource } from './sticky-sessions';
 export type { CreateStickySessionUrlInput, CreateStickySessionUrlResult } from './sticky-sessions';

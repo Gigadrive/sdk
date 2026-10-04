@@ -252,6 +252,81 @@ const { items: models } = await client.aiGateway.listModels();
 Organization-scoped governance (usage analytics, budgets, policies) lives under
 `client.organizations.aiGateway`.
 
+## Custom domains
+
+Attach a hostname you own to an application. The response lists the DNS records to publish; Gigadrive
+Network then verifies ownership, checks DNS and issues the certificate on its own.
+
+```ts
+import { DomainNotActiveError } from '@gigadrive/sdk';
+
+const domain = await client.applications.domains.add('app-id', { hostname: 'shop.example.com' });
+for (const record of domain.requiredRecords) {
+  console.log(record.type, record.host, record.value);
+}
+
+try {
+  await client.applications.domains.waitUntilActive('app-id', domain.id, {
+    timeoutMs: 15 * 60_000,
+    onState: (current) => console.log(current.state),
+  });
+} catch (error) {
+  if (!(error instanceof DomainNotActiveError)) throw error;
+  // `reason` is `timeout`, `failed`, `suspended` or `removing`; `domain.error` explains what to fix.
+  console.error(error.reason, error.domain.error?.message);
+}
+```
+
+Redirect a domain, or serve a branch instead of production:
+
+```ts
+await client.applications.domains.update('app-id', domain.id, {
+  target: { type: 'redirect', to: 'www.example.com', statusCode: 308 },
+});
+```
+
+Verifying the registrable domain once lets every application of the organization attach hostnames
+below it without another TXT record:
+
+```ts
+const claim = await client.organizations.domains.add('org-id', 'example.com');
+console.log(claim.record.host, claim.record.value); // publish this TXT record
+await client.organizations.domains.verify('org-id', claim.id);
+```
+
+## Queues
+
+Queues deliver work to your app in the background, now or later. A queue with a consumer path is a push queue: Gigadrive Network POSTs each message to that path on your deployment. Without one it is a pull queue that you drain with `receive()`.
+
+```ts
+import { NonRetryableError, queue, RetryLaterError } from '@gigadrive/sdk';
+
+export const emails = queue<{ to: string; template: string }>('emails');
+
+// Send now, after a delay, or at a time (up to a year ahead).
+await emails.send({ to: 'jane@example.com', template: 'welcome' });
+await emails.send({ to: 'jane@example.com', template: 'nudge' }, { delay: '3d', deduplicationKey: 'nudge:jane' });
+
+// app/api/queues/emails/route.ts: the push consumer. Signatures are verified for you.
+export const POST = emails.handler(async (email, { attempt }) => {
+  if (!templates.has(email.template)) throw new NonRetryableError('Unknown template'); // dead-letter now
+  if (await mailer.isThrottled()) throw new RetryLaterError('1m'); // defer without spending an attempt
+  await mailer.send(email); // returning acknowledges the message
+});
+```
+
+Declare the push consumer and any cron schedules in `gigadrive.yaml`, or create them from code with `emails.ensure({ consumerPath: '/api/queues/emails' })` and `emails.schedule(...)`.
+
+Pull consumers lease messages and settle them:
+
+```ts
+const jobs = queue<{ id: string }>('jobs');
+
+await jobs.consume(async (job) => processJob(job.id), { maxMessages: 10, stopWhenEmpty: true });
+```
+
+`client.queues` exposes the full REST surface (queues, messages, dead letters, schedules), and `createWorkflowQueue()` runs the [Workflow SDK](https://workflow-sdk.dev) on Gigadrive Network queues.
+
 ## Pagination
 
 List endpoints accept `page` / `perPage` / `cursor` and return `{ items, total }`

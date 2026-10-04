@@ -73,6 +73,8 @@ export class ApiRequestError extends Schema.TaggedError<ApiRequestError>()('ApiR
   message: Schema.String,
   statusCode: Schema.optional(Schema.Number),
   code: Schema.optional(Schema.String),
+  /** Finer-grained reason next to `code`, for example `daily_add_limit`. */
+  reason: Schema.optional(Schema.String),
 }) {}
 
 // ---------------------------------------------------------------------------
@@ -91,6 +93,35 @@ export class InvalidEnvVarFormatError extends Schema.TaggedError<InvalidEnvVarFo
 export class EnvVarNotFoundError extends Schema.TaggedError<EnvVarNotFoundError>()('EnvVarNotFoundError', {
   message: Schema.String,
 }) {}
+
+/** No custom domain of the application matched the requested hostname or ID. */
+export class DomainNotFoundError extends Schema.TaggedError<DomainNotFoundError>()('DomainNotFoundError', {
+  message: Schema.String,
+}) {}
+
+/** `--wait` gave up: the domain did not start serving in time, or stopped in a state that needs action. */
+export class DomainWaitError extends Schema.TaggedError<DomainWaitError>()('DomainWaitError', {
+  message: Schema.String,
+  state: Schema.String,
+}) {}
+
+/** The domain command's flags contradict each other or are out of range. */
+export class InvalidDomainOptionsError extends Schema.TaggedError<InvalidDomainOptionsError>()(
+  'InvalidDomainOptionsError',
+  { message: Schema.String }
+) {}
+
+/** A destructive command needs confirmation, but there is no terminal to ask on and `--yes` was not passed. */
+export class ConfirmationRequiredError extends Schema.TaggedError<ConfirmationRequiredError>()(
+  'ConfirmationRequiredError',
+  { message: Schema.String }
+) {}
+
+/** No organization was given and the linked project does not name one. */
+export class OrganizationRequiredError extends Schema.TaggedError<OrganizationRequiredError>()(
+  'OrganizationRequiredError',
+  { message: Schema.String }
+) {}
 
 /** The actor has no applications to link. */
 export class NoApplicationsFoundError extends Schema.TaggedError<NoApplicationsFoundError>()(
