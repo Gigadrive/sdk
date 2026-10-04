@@ -259,19 +259,22 @@ export class Queue<T = unknown> {
    *
    * @throws {@link ApiError} when the message is refused, for example with
    *   `code: 'backlog_full'` when your organization's queued storage is full.
+   *   Its `status` is 429 when sending again later may succeed and 400 when it
+   *   will not, so retry logic that keys on the status stays correct.
    */
   async send(payload: T, options?: QueueSendOptions): Promise<QueueSent> {
     const result = await this.resource().send(this.name, this.toMessage(payload, options), {
       ...this.scope,
       autoCreate: this.options.autoCreate,
     });
-    if (result.messageId === null) throw new ApiError(result.error, 429, result.code);
+    if (result.messageId === null) throw new ApiError(result.error, result.retryable ? 429 : 400, result.code);
     return { messageId: result.messageId, deduplicated: result.deduplicated, deliverAt: new Date(result.deliverAt) };
   }
 
   /**
    * Sends many messages, 100 per request. Results come back in input order;
-   * a refused message does not fail the rest. Chunks are split by count only:
+   * a refused message does not fail the rest; its error carries status 429
+   * when it may be sent again later and 400 when it may not. Chunks are split by count only:
    * a request whose message bodies exceed 4 MiB in total is refused whole.
    */
   async sendBatch(messages: readonly ({ payload: T } & QueueSendOptions)[]): Promise<QueueBatchSent[]> {
@@ -286,7 +289,7 @@ export class Queue<T = unknown> {
       for (const result of sent) {
         results.push(
           result.messageId === null
-            ? { messageId: null, error: new ApiError(result.error, 429, result.code) }
+            ? { messageId: null, error: new ApiError(result.error, result.retryable ? 429 : 400, result.code) }
             : { messageId: result.messageId, deduplicated: result.deduplicated, deliverAt: new Date(result.deliverAt) }
         );
       }

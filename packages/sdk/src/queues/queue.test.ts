@@ -109,7 +109,23 @@ describe('Queue.send', () => {
 
     await expect(emails.send({ to: 'jane@example.com' })).rejects.toMatchObject({
       name: 'ApiError',
+      status: 429,
       code: 'backlog_full',
+    });
+  });
+
+  it('reports a refusal that sending again cannot fix as a 400', async () => {
+    http.post.mockResolvedValue({
+      messageId: null,
+      error: 'Message rejected',
+      code: 'message_rejected',
+      retryable: false,
+    });
+
+    await expect(emails.send({ to: 'jane@example.com' })).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 400,
+      code: 'message_rejected',
     });
   });
 
@@ -137,6 +153,7 @@ describe('Queue.send', () => {
     expect(results).toHaveLength(105);
     expect(results[100]).toMatchObject({ messageId: null });
     expect(results[100]!.error).toBeInstanceOf(ApiError);
+    expect(results[100]!.error).toMatchObject({ status: 429, code: 'backlog_full' });
     expect(results[101]).toMatchObject({ messageId: 'm1' });
   });
 });
