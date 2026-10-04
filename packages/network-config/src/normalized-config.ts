@@ -157,11 +157,14 @@ export interface NormalizedConfigService {
 }
 
 /** Service kinds supported by the normalized deployment configuration. */
-export type NormalizedConfigServiceType = 'redis' | 'postgres' | 'storage';
+export type NormalizedConfigServiceType = 'redis' | 'postgres' | 'storage' | 'queues';
 
 /** Fully normalized managed-service declaration consumed by provisioning. */
 export type NormalizedConfigServiceDefinition =
-  NormalizedConfigServiceRedis | NormalizedConfigServicePostgres | NormalizedConfigServiceStorage;
+  | NormalizedConfigServiceRedis
+  | NormalizedConfigServicePostgres
+  | NormalizedConfigServiceStorage
+  | NormalizedConfigServiceQueues;
 
 export type UpstashAWSRegion =
   | 'us-east-1'
@@ -221,6 +224,48 @@ export interface NormalizedConfigStorageBucket {
   name: string;
   /** Access policy to apply when the bucket is first provisioned. */
   visibility: 'public' | 'private';
+}
+
+/**
+ * Declarative queues provisioned in the deployment environment.
+ *
+ * Durations are resolved to seconds and schedule bodies to strings, so the
+ * platform receives one canonical shape. Settings the config omits stay
+ * absent and keep the platform's defaults.
+ */
+export interface NormalizedConfigServiceQueues extends NormalizedConfigService {
+  type: 'queues';
+  /** Queues sorted by name for deterministic deployment plans. */
+  queues: NormalizedConfigQueue[];
+}
+
+/** Desired state for one environment-scoped queue. */
+export interface NormalizedConfigQueue {
+  name: string;
+  /** Push consumer path; absent or `null` declares a pull queue. */
+  consumer?: string | null;
+  visibilityTimeoutSeconds?: number;
+  retentionSeconds?: number;
+  maxAttempts?: number;
+  retryBackoffMinSeconds?: number;
+  retryBackoffMaxSeconds?: number;
+  deduplicationWindowSeconds?: number;
+  concurrency?: number | null;
+  rateLimit?: { count: number; periodSeconds: number } | null;
+  deadLetter?: boolean;
+  /** Schedules sorted by name. */
+  schedules?: NormalizedConfigQueueSchedule[];
+}
+
+/** One cron schedule that sends into a declared queue. */
+export interface NormalizedConfigQueueSchedule {
+  name: string;
+  cron: string;
+  timezone?: string;
+  body?: string;
+  contentType?: string;
+  headers?: Record<string, string>;
+  enabled?: boolean;
 }
 
 /** Default maximum lifetime of one function invocation, in seconds. */

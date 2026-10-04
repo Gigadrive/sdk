@@ -143,6 +143,131 @@ describe('V4ConfigParser', () => {
     expect(result.services).toEqual([{ type: 'storage', buckets: [] }]);
   });
 
+  it('normalizes queue declarations: durations to seconds, schedule bodies to strings, sorted by name', async () => {
+    const config: ConfigV4 = {
+      version: 4,
+      services: {
+        queues: {
+          jobs: null,
+          emails: {
+            consumer: '/api/queues/emails',
+            visibilityTimeout: '2m',
+            retention: '4d',
+            maxAttempts: 5,
+            retryBackoff: { min: 10, max: '1h' },
+            deduplicationWindow: '12h',
+            concurrency: 10,
+            rateLimit: { count: 50 },
+            deadLetter: false,
+            schedules: {
+              'weekly-report': { cron: '@weekly', body: 'plain text', contentType: 'text/plain' },
+              'daily-digest': {
+                cron: '0 8 * * MON-FRI',
+                timezone: 'Europe/Berlin',
+                body: { kind: 'digest' },
+                headers: { 'x-source': 'cron' },
+                enabled: false,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const result = await Effect.runPromise(
+      V4ConfigParser.parse(config, path.join(__dirname, '../v4')).pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(NodeContext.layer)
+      )
+    );
+
+    expect(result.services).toEqual([
+      {
+        type: 'queues',
+        queues: [
+          {
+            name: 'emails',
+            consumer: '/api/queues/emails',
+            visibilityTimeoutSeconds: 120,
+            retentionSeconds: 345_600,
+            maxAttempts: 5,
+            retryBackoffMinSeconds: 10,
+            retryBackoffMaxSeconds: 3_600,
+            deduplicationWindowSeconds: 43_200,
+            concurrency: 10,
+            rateLimit: { count: 50, periodSeconds: 1 },
+            deadLetter: false,
+            schedules: [
+              {
+                name: 'daily-digest',
+                cron: '0 8 * * MON-FRI',
+                timezone: 'Europe/Berlin',
+                body: '{"kind":"digest"}',
+                headers: { 'x-source': 'cron' },
+                enabled: false,
+              },
+              { name: 'weekly-report', cron: '@weekly', body: 'plain text', contentType: 'text/plain' },
+            ],
+          },
+          { name: 'jobs' },
+        ],
+      },
+    ]);
+  });
+
+  it('labels a plain-text schedule body as text and accepts fractional and zero durations', async () => {
+    const config: ConfigV4 = {
+      version: 4,
+      services: {
+        queues: {
+          digests: {
+            retryBackoff: { min: 0, max: '1.5h' },
+            schedules: { nightly: { cron: '@daily', body: 'digest' } },
+          },
+        },
+      },
+    };
+    const result = await Effect.runPromise(
+      V4ConfigParser.parse(config, path.join(__dirname, '../v4')).pipe(
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(NodeContext.layer)
+      )
+    );
+    expect(result.services).toEqual([
+      {
+        type: 'queues',
+        queues: [
+          {
+            name: 'digests',
+            retryBackoffMinSeconds: 0,
+            retryBackoffMaxSeconds: 5_400,
+            schedules: [{ name: 'nightly', cron: '@daily', body: 'digest', contentType: 'text/plain; charset=utf-8' }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('validates queue declarations against the published schema', () => {
+    const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '../v4/schema.json'), 'utf8'));
+    const ajv = new Ajv({ allErrors: true });
+    addFormats(ajv);
+    const validate = ajv.compile(schema);
+    const withQueues = (queues: unknown) => validate({ version: 4, services: { queues } });
+
+    expect(
+      withQueues({ emails: { consumer: '/api/queues/emails', retention: '4d', rateLimit: { count: 5, period: '1m' } } })
+    ).toBe(true);
+    expect(withQueues({ 'orders.v2': null })).toBe(true);
+    expect(withQueues({ emails: { deduplicationWindow: 0, retryBackoff: { max: '1.5h' } } })).toBe(true);
+    expect(withQueues({ emails: { consumer: 'https://example.com/hook' } })).toBe(false);
+    expect(withQueues({ emails: { retention: '10 minutes' } })).toBe(false);
+    expect(withQueues({ emails: { maxAttempts: 0 } })).toBe(false);
+    expect(withQueues({ 'bad name': null })).toBe(false);
+    expect(withQueues({ emails: { schedules: { digest: { timezone: 'UTC' } } } })).toBe(false);
+    expect(withQueues({ emails: { unknownSetting: true } })).toBe(false);
+  });
+
   it('getFunctionSettings', () => {
     const config = loadExample();
 
