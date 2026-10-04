@@ -8,6 +8,7 @@ import { ApplicationsResource } from './resources/applications';
 import { DeploymentsResource } from './resources/deployments';
 import { ImageOptimizationResource } from './resources/image-optimization';
 import { OrganizationsResource } from './resources/organizations';
+import { QueuesResource } from './resources/queues';
 import { StickySessionsResource } from './resources/sticky-sessions';
 
 const DEFAULT_BASE_URL = 'https://api.gigadrive.network';
@@ -194,6 +195,12 @@ export class GigadriveClient {
   readonly stickySessions: StickySessionsResource;
   /** Managed image optimization inspection and cache purge operations. */
   readonly imageOptimization: ImageOptimizationResource;
+  /**
+   * Network Queues: manage queues and schedules, send, receive and
+   * acknowledge messages. `client.queues.queue<T>(name)` returns a typed
+   * handle bound to one queue.
+   */
+  readonly queues: QueuesResource;
 
   constructor(config: GigadriveClientConfig = {}) {
     const baseUrl = config.baseUrl ?? readEnv('GIGADRIVE_API_BASE_URL') ?? DEFAULT_BASE_URL;
@@ -214,5 +221,6 @@ export class GigadriveClient {
     this.apiKeys = new ApiKeysResource(httpClient);
     this.stickySessions = new StickySessionsResource(httpClient);
     this.imageOptimization = new ImageOptimizationResource(httpClient);
+    this.queues = new QueuesResource(httpClient, applicationId);
   }
 }

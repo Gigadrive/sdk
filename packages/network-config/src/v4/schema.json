@@ -396,11 +396,158 @@
               }
             }
           }
+        },
+        "queues": {
+          "type": "object",
+          "description": "Queues to provision in the deployment environment, keyed by name. Use null for a pull queue with default settings. Queues you stop declaring are kept, with their messages.",
+          "propertyNames": {
+            "maxLength": 255,
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.~:@+=-]*$"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "consumer": {
+                    "type": ["string", "null"],
+                    "pattern": "^/(?!/)\\S*$",
+                    "maxLength": 2048,
+                    "description": "Deployment-relative path that receives each message as a signed POST, for example /api/queues/emails. Omit it for a pull queue that you drain with receive."
+                  },
+                  "visibilityTimeout": {
+                    "$ref": "#/$defs/queueDuration",
+                    "description": "How long a push delivery may run, or how long a received message stays leased. Defaults to 60 seconds, at most 12 hours."
+                  },
+                  "retention": {
+                    "$ref": "#/$defs/queueDuration",
+                    "description": "How long an undelivered message is kept. Defaults to 4 days, at most 14 days."
+                  },
+                  "maxAttempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": "Deliveries per message before it moves to the dead-letter list. Defaults to 10."
+                  },
+                  "retryBackoff": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "Exponential backoff between failed deliveries. Defaults to 5 seconds, doubling up to 15 minutes.",
+                    "properties": {
+                      "min": {
+                        "$ref": "#/$defs/queueDuration"
+                      },
+                      "max": {
+                        "$ref": "#/$defs/queueDuration"
+                      }
+                    }
+                  },
+                  "deduplicationWindow": {
+                    "$ref": "#/$defs/queueDuration",
+                    "description": "How long a deduplication key is remembered. Defaults to 24 hours, at most 7 days."
+                  },
+                  "concurrency": {
+                    "type": ["integer", "null"],
+                    "minimum": 1,
+                    "maximum": 1000,
+                    "description": "Most push deliveries in flight at once. Defaults to 100."
+                  },
+                  "rateLimit": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "object",
+                        "required": ["count"],
+                        "additionalProperties": false,
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1000000
+                          },
+                          "period": {
+                            "$ref": "#/$defs/queueDuration"
+                          }
+                        }
+                      }
+                    ],
+                    "description": "Most deliveries started per period. The period defaults to one second."
+                  },
+                  "deadLetter": {
+                    "type": "boolean",
+                    "description": "Keep messages that run out of attempts so you can inspect and redrive them. Defaults to true."
+                  },
+                  "schedules": {
+                    "type": "object",
+                    "description": "Cron schedules that send a message into this queue, keyed by schedule name.",
+                    "propertyNames": {
+                      "maxLength": 128,
+                      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "required": ["cron"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "cron": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255,
+                          "description": "Five-field cron expression, or a macro such as @hourly or @daily."
+                        },
+                        "timezone": {
+                          "type": "string",
+                          "description": "IANA time zone the expression is evaluated in. Defaults to UTC."
+                        },
+                        "body": {
+                          "description": "Message body. Strings are sent as is; any other value is sent as JSON."
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "description": "Content type of the body. Defaults to text/plain for a string body and application/json otherwise."
+                        },
+                        "headers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "description": "Headers delivered with every message from this schedule."
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Set to false to keep the schedule without sending. Defaults to true."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
         }
       }
     }
   },
   "$defs": {
+    "queueDuration": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?(s|m|h|d)$"
+        }
+      ],
+      "description": "A duration in seconds, or a string such as 30s, 10m, 1.5h or 4d."
+    },
     "runtimes": {
       "type": "string",
       "enum": ["php-84", "php-83", "php-81", "node-22", "node-20", "node-18", "node-16", "bun-1"]

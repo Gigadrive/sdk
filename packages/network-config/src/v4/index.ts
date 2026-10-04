@@ -160,6 +160,72 @@ export interface ConfigV4Services {
   postgres?: ConfigV4ServicePostgres | null;
   /** Declarative File Storage buckets for the deployment environment. */
   storage?: ConfigV4ServiceStorage;
+  /**
+   * Queues for the deployment environment, keyed by name. `null` declares a
+   * pull queue with default settings.
+   *
+   * @example
+   * ```yaml
+   * services:
+   *   queues:
+   *     emails:
+   *       consumer: /api/queues/emails
+   *       maxAttempts: 5
+   *       schedules:
+   *         daily-digest:
+   *           cron: '0 8 * * MON-FRI'
+   *           timezone: Europe/Berlin
+   *           body: { kind: digest }
+   *     jobs: null
+   * ```
+   */
+  queues?: Record<string, ConfigV4Queue | null>;
+}
+
+/** A duration in seconds, or a string such as `30s`, `10m`, `1.5h` or `4d`. */
+export type ConfigV4QueueDuration = number | `${number}${'s' | 'm' | 'h' | 'd'}`;
+
+/** Settings for a declaratively provisioned queue. Omitted settings keep the platform defaults. */
+export interface ConfigV4Queue {
+  /**
+   * Deployment-relative path that receives each message as a signed POST, for
+   * example `/api/queues/emails`. Omit it for a pull queue.
+   */
+  consumer?: string | null;
+  /** How long a push delivery may run, or how long a received message stays leased. Defaults to 60 seconds. */
+  visibilityTimeout?: ConfigV4QueueDuration;
+  /** How long an undelivered message is kept. Defaults to 4 days, at most 14 days. */
+  retention?: ConfigV4QueueDuration;
+  /** Deliveries per message before it moves to the dead-letter list. Defaults to 10. */
+  maxAttempts?: number;
+  /** Exponential backoff between failed deliveries. Defaults to 5 seconds up to 15 minutes. */
+  retryBackoff?: { min?: ConfigV4QueueDuration; max?: ConfigV4QueueDuration };
+  /** How long a deduplication key is remembered. Defaults to 24 hours. */
+  deduplicationWindow?: ConfigV4QueueDuration;
+  /** Most push deliveries in flight at once. Defaults to 100. */
+  concurrency?: number | null;
+  /** Most deliveries started per period. The period defaults to one second. */
+  rateLimit?: { count: number; period?: ConfigV4QueueDuration } | null;
+  /** Keep messages that run out of attempts for inspection and redrive. Defaults to `true`. */
+  deadLetter?: boolean;
+  /** Cron schedules that send a message into this queue, keyed by schedule name. */
+  schedules?: Record<string, ConfigV4QueueSchedule>;
+}
+
+/** A recurring send into a queue. */
+export interface ConfigV4QueueSchedule {
+  /** Five-field cron expression, or a macro such as `@hourly`. */
+  cron: string;
+  /** IANA time zone the expression is evaluated in. Defaults to `UTC`. */
+  timezone?: string;
+  /** Message body. Strings are sent as is; any other value is serialized as JSON. */
+  body?: unknown;
+  /** Content type of the body. Defaults to `text/plain` for a string body and `application/json` otherwise. */
+  contentType?: string;
+  /** Headers delivered with every message from this schedule. */
+  headers?: Record<string, string>;
+  /** Set to `false` to keep the schedule without sending. Defaults to `true`. */
+  enabled?: boolean;
 }
 
 /** Declarative File Storage configuration for one deployment environment. */
