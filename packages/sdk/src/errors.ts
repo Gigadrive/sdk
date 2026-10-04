@@ -86,12 +86,18 @@ export class ApiError extends GigadriveError {
   readonly status: number;
   /** An optional machine-readable error code from the API response body. */
   readonly code: string | undefined;
+  /**
+   * An optional finer-grained reason next to {@link code}, for example `daily_add_limit` with
+   * `quota_exceeded`, or `other_organization` with `domain_in_use`.
+   */
+  readonly reason: string | undefined;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, reason?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.reason = reason;
   }
 }
 

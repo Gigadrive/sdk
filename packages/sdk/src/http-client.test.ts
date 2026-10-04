@@ -150,17 +150,36 @@ describe('HttpClient', () => {
     await expect(client.get('/fail')).rejects.toMatchObject({ message: 'Bad input', status: 422, code: 'invalid' });
   });
 
-  it('should parse a top-level code next to a string error', async () => {
+  it('should parse a code sent next to a string error', async () => {
     mockFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: 'Queue not found', code: 'queue_not_found' }), { status: 404 })
+      new Response(JSON.stringify({ error: 'shop.example.com is already attached.', code: 'domain_in_use' }), {
+        status: 409,
+      })
     );
 
     const client = createClient();
 
     await expect(client.get('/fail')).rejects.toMatchObject({
-      message: 'Queue not found',
-      status: 404,
-      code: 'queue_not_found',
+      message: 'shop.example.com is already attached.',
+      status: 409,
+      code: 'domain_in_use',
+    });
+  });
+
+  it('should parse a reason sent next to the code', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ error: 'Daily limit reached.', code: 'quota_exceeded', reason: 'daily_add_limit' }),
+        { status: 429 }
+      )
+    );
+
+    const client = createClient();
+
+    await expect(client.get('/fail')).rejects.toMatchObject({
+      status: 429,
+      code: 'quota_exceeded',
+      reason: 'daily_add_limit',
     });
   });
 

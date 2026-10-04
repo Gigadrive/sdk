@@ -60,6 +60,20 @@ export type { ApiKey, CreateApiKeyInput, CreateApiKeyResult, ListApiKeysQuery } 
 
 export type { ApplicationHostnameList, Hostname, HostnameAvailability, SetProductionHostnameResult } from './hostnames';
 
+export { ApplicationDomainsResource, DomainNotActiveError, OrganizationDomainsResource } from './domains';
+export type {
+  AddCustomDomainInput,
+  CustomDomain,
+  CustomDomainState,
+  CustomDomainTarget,
+  CustomDomainTargetInput,
+  DomainOwnership,
+  DomainProblem,
+  RequiredDnsRecord,
+  UpdateCustomDomainInput,
+  WaitUntilActiveOptions,
+} from './domains';
+
 export { OrganizationsResource } from './organizations';
 export type { CreateOrganizationInput, Organization } from './organizations';
 

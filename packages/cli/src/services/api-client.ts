@@ -23,7 +23,12 @@ const ServiceCredentials = Config.all({
 /** Map any error thrown by an SDK call into a tagged {@link ApiRequestError}. */
 const toApiRequestError = (error: unknown): ApiRequestError => {
   if (error instanceof ApiError) {
-    return new ApiRequestError({ message: error.message, statusCode: error.status, code: error.code });
+    return new ApiRequestError({
+      message: error.message,
+      statusCode: error.status,
+      code: error.code,
+      reason: error.reason,
+    });
   }
   return new ApiRequestError({ message: error instanceof Error ? error.message : String(error) });
 };
