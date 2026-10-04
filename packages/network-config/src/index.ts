@@ -1,5 +1,6 @@
 export * from './asset-manifest';
 export * from './collect-asset-files';
+export * from './containers';
 export * from './define-config';
 export * from './detection';
 export * from './errors';

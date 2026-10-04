@@ -32,3 +32,9 @@ services:
       assets:
         visibility: public
       uploads: ~
+containers:
+  cache:
+    image: redis:7-alpine
+    sidecar: true
+    port: 6379
+    command: redis-server --save ""

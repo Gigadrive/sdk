@@ -1,3 +1,4 @@
+export * from './detect-container-project';
 export * from './detect-framework';
 export * from './detect-package-manager';
 export * from './frameworks';

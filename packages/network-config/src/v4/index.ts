@@ -1,4 +1,5 @@
 import type {
+  ContainerRuntime,
   NeonAWSRegion,
   NormalizedConfigRouteMatchRequirements,
   NormalizedConfigRouteMethod,
@@ -105,6 +106,79 @@ export interface ConfigV4 extends Config {
 
   /** Declares managed services to provision for the deployment environment. */
   services?: ConfigV4Services;
+
+  /**
+   * Container images to run, keyed by name. A container without `sidecar: true`
+   * runs as a function that routes target with `destination: container:<name>`.
+   * A sidecar runs next to every function instance and answers at `<name>:<port>`.
+   * A name is 1 to 63 lowercase letters, digits, `-` or `_`, starts with a
+   * letter (so it never reads as an IP address), and is not `localhost`.
+   *
+   * @example
+   * ```yaml
+   * containers:
+   *   web:
+   *     build: .
+   *     port: 3000
+   *   redis:
+   *     image: redis:7-alpine
+   *     sidecar: true
+   * ```
+   */
+  containers?: Record<string, ConfigV4Container> | null;
+
+  /**
+   * Project-relative path of a Compose file whose services are imported as
+   * `containers`. Entries in `containers` win over imported services of the
+   * same name.
+   */
+  compose?: string | null;
+}
+
+/** One entry of the v4 `containers` map. Exactly one of `image` and `build` is required. */
+export interface ConfigV4Container {
+  /** Registry image reference, e.g. `redis:7-alpine` or `ghcr.io/acme/api:1.4`. */
+  image?: string;
+  /** Build context directory, or the full build settings, for a Dockerfile in the repository. */
+  build?: string | ConfigV4ContainerBuild;
+  /** Run next to every function instance instead of serving routes. Defaults to `false`. */
+  sidecar?: boolean;
+  /** TCP port the container listens on. Defaults to the image's first exposed port, then 8080. */
+  port?: number;
+  /** Replaces the image `ENTRYPOINT`. A string is split into words the way Compose splits it. */
+  entrypoint?: string | string[];
+  /** Replaces the image `CMD`. A string is split into words the way Compose splits it. */
+  command?: string | string[];
+  /** Environment variables baked into the container, merged over the image `ENV`. */
+  env?: Record<string, string>;
+  /** Replaces the image `WORKDIR`. Must be absolute. */
+  working_dir?: string;
+  /**
+   * Replaces the image `USER`: a name, a uid, `name:group` or `uid:gid`. A bare
+   * uid may be written as a number. Root is never used: a root image runs as a
+   * dedicated non-root user.
+   */
+  user?: string | number;
+  /** Memory in MB, a whole number from 128 to 3009. Defaults to 512 for a container function and 256 for a sidecar. */
+  memory?: number;
+  /** Maximum lifetime of one request, in seconds. Container functions only. */
+  max_duration?: number;
+  /** Stream responses. Defaults to `true`. Container functions only. */
+  streaming?: boolean;
+  /** Run on a timer, like a function `schedule`. Container functions only. */
+  schedule?: string;
+}
+
+/** Dockerfile build settings for a container. */
+export interface ConfigV4ContainerBuild {
+  /** Project-relative build context. Defaults to `.`. */
+  context?: string;
+  /** Dockerfile path relative to the context. Defaults to `Dockerfile`. */
+  dockerfile?: string;
+  /** Build stage to stop at. */
+  target?: string;
+  /** Build arguments. */
+  args?: Record<string, string>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -270,9 +344,17 @@ export interface ConfigV4FunctionSettings {
    */
   max_duration?: number;
   /**
-   * The runtime to use for the function.
+   * The runtime to use for the function. `docker` builds the matched file as a
+   * Dockerfile, with its directory as the build context, and runs the image as
+   * the function. Routes target it by the Dockerfile's path, like any other
+   * function file.
    */
-  runtime?: Runtime;
+  runtime?: Runtime | ContainerRuntime;
+  /**
+   * TCP port the image listens on. Only for `runtime: docker`. Defaults to the
+   * image's first exposed port, then 8080.
+   */
+  port?: number;
   /**
    * Enable function response streaming. When omitted, Node and Bun runtimes stream by default.
    */

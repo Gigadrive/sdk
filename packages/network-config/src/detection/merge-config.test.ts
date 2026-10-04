@@ -190,4 +190,93 @@ describe('mergeWithFrameworkDefaults', () => {
     const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, framework));
     expect(result.excludeFiles).toEqual(['tests/', '.ddev']);
   });
+
+  it('should keep user sidecars and never take them from the framework', async () => {
+    const sidecar = { name: 'redis', source: { type: 'registry' as const, reference: 'redis' }, memory: 256 };
+
+    const withSidecars = await Effect.runPromise(
+      mergeWithFrameworkDefaults(makeConfig({ sidecars: [sidecar] }), makeConfig())
+    );
+    const withoutSidecars = await Effect.runPromise(
+      mergeWithFrameworkDefaults(makeConfig(), makeConfig({ sidecars: [sidecar] }))
+    );
+
+    expect(withSidecars.sidecars).toEqual([sidecar]);
+    expect(withoutSidecars).not.toHaveProperty('sidecars');
+  });
+
+  describe('with container functions', () => {
+    const container = {
+      path: 'container:api',
+      displayName: 'api',
+      runtime: 'docker' as const,
+      memory: 512,
+      maxDuration: 30,
+      streaming: true,
+      container: { name: 'api', source: { type: 'registry' as const, reference: 'acme/api' } },
+    };
+    const framework = makeConfig({
+      entrypoints: [{ path: 'server.js', runtime: 'node-22', memory: 1024, maxDuration: 30, streaming: true }],
+      routes: [
+        {
+          path: '/*',
+          destination: 'server.js',
+          handler: 'SERVERLESS_FUNCTION_STREAMING',
+          methods: ['ANY'],
+          headers: {},
+        },
+      ],
+    });
+
+    it('keeps the framework app next to a container function the config declares', async () => {
+      const merged = await Effect.runPromise(
+        mergeWithFrameworkDefaults(makeConfig({ entrypoints: [container] }), framework)
+      );
+
+      expect(merged.entrypoints.map((entrypoint) => entrypoint.path)).toEqual(['server.js', 'container:api']);
+      expect(merged.routes).toEqual(framework.routes);
+    });
+
+    it('puts routes to container functions ahead of the framework routes', async () => {
+      const apiRoute = {
+        path: '/api/*',
+        destination: 'container:api',
+        handler: 'SERVERLESS_FUNCTION_STREAMING' as const,
+        methods: ['ANY' as const],
+        headers: {},
+      };
+      const merged = await Effect.runPromise(
+        mergeWithFrameworkDefaults(makeConfig({ entrypoints: [container], routes: [apiRoute] }), framework)
+      );
+
+      expect(merged.routes.map((route) => [route.path, route.destination])).toEqual([
+        ['/api/*', 'container:api'],
+        ['/*', 'server.js'],
+      ]);
+    });
+
+    it('keeps the user routes as written once they route anything else', async () => {
+      const routes = [
+        {
+          path: '/api/*',
+          destination: 'container:api',
+          handler: 'SERVERLESS_FUNCTION_STREAMING' as const,
+          methods: ['ANY' as const],
+          headers: {},
+        },
+        {
+          path: '/*',
+          destination: 'server.js',
+          handler: 'SERVERLESS_FUNCTION' as const,
+          methods: ['GET' as const],
+          headers: {},
+        },
+      ];
+      const merged = await Effect.runPromise(
+        mergeWithFrameworkDefaults(makeConfig({ entrypoints: [container], routes }), framework)
+      );
+
+      expect(merged.routes).toEqual(routes);
+    });
+  });
 });

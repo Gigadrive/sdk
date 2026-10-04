@@ -22,6 +22,30 @@ const MANAGED_IGNORE_PATTERNS = [
   '**/Thumbs.db',
 ];
 
+/**
+ * Container build inputs that stay in the archive whatever the ignore files
+ * say. Docker sends a Dockerfile even when `.dockerignore` lists it, and that
+ * file, like a Compose file, is commonly listed there.
+ */
+const CONTAINER_BUILD_FILE_PATTERNS = [
+  '!Dockerfile',
+  '!**/Dockerfile',
+  '!**/*.Dockerfile',
+  '!**/Dockerfile.*',
+  '!compose.yaml',
+  '!compose.yml',
+  '!docker-compose.yaml',
+  '!docker-compose.yml',
+];
+
+/**
+ * `.dockerignore` filters a Docker build context, which BuildKit reads on the
+ * server. Applied here with gitignore semantics it would also drop files a
+ * Dockerfile copies: Docker anchors its patterns at the context root and
+ * allow-lists such as `*` then `!src` exclude more here than there.
+ */
+const DOCKER_BUILD_IGNORE_FILE = '.dockerignore';
+
 const readIgnoreFile = (fs: FileSystem.FileSystem, ignorePath: string): Effect.Effect<string[]> =>
   fs.readFileString(ignorePath, 'utf8').pipe(
     Effect.map((content) => content.split('\n').filter((line: string) => line.trim() !== '')),
@@ -33,7 +57,8 @@ const collectIgnorePatterns = (
   pathService: Path.Path,
   dir: string,
   baseDir: string,
-  ignoreRules: Ignore
+  ignoreRules: Ignore,
+  ignoreFileNames: readonly string[]
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const items = yield* fs
@@ -52,7 +77,7 @@ const collectIgnorePatterns = (
       if (stat.isDirectory()) {
         if (ignoreRules.ignores(`${relativePath}/`)) continue;
 
-        for (const ignoreFileName of IGNORE_FILE_NAMES) {
+        for (const ignoreFileName of ignoreFileNames) {
           const ignoreFilePath = pathService.join(fullPath, ignoreFileName);
           const patterns = yield* readIgnoreFile(fs, ignoreFilePath);
           if (patterns.length > 0) {
@@ -66,7 +91,7 @@ const collectIgnorePatterns = (
           }
         }
 
-        yield* collectIgnorePatterns(fs, pathService, fullPath, baseDir, ignoreRules);
+        yield* collectIgnorePatterns(fs, pathService, fullPath, baseDir, ignoreRules, ignoreFileNames);
       }
     }
   }).pipe(Effect.catchAll(() => Effect.void));
@@ -76,16 +101,20 @@ const initializeIgnoreRules = (
   pathService: Path.Path,
   baseDir: string,
   useIgnoreFiles: boolean,
-  useManagedIgnore: boolean
+  useManagedIgnore: boolean,
+  buildsContainerImages: boolean
 ): Effect.Effect<Ignore> =>
   Effect.gen(function* () {
     const ignoreRules = ignore();
+    const ignoreFileNames = buildsContainerImages
+      ? IGNORE_FILE_NAMES.filter((name) => name !== DOCKER_BUILD_IGNORE_FILE)
+      : IGNORE_FILE_NAMES;
     if (useManagedIgnore) {
       ignoreRules.add(MANAGED_IGNORE_PATTERNS);
     }
 
     if (useIgnoreFiles) {
-      for (const ignoreFileName of IGNORE_FILE_NAMES) {
+      for (const ignoreFileName of ignoreFileNames) {
         const ignoreFilePath = pathService.join(baseDir, ignoreFileName);
         const patterns = yield* readIgnoreFile(fs, ignoreFilePath);
         if (patterns.length > 0) {
@@ -95,7 +124,8 @@ const initializeIgnoreRules = (
         }
       }
 
-      yield* collectIgnorePatterns(fs, pathService, baseDir, baseDir, ignoreRules);
+      yield* collectIgnorePatterns(fs, pathService, baseDir, baseDir, ignoreRules, ignoreFileNames);
+      ignoreRules.add(CONTAINER_BUILD_FILE_PATTERNS);
     }
     return ignoreRules;
   });
@@ -159,6 +189,8 @@ export class ArchiveService extends Effect.Service<ArchiveService>()('ArchiveSer
         excludeFiles?: string[];
         useIgnoreFiles?: boolean;
         useManagedIgnore?: boolean;
+        /** The deployment builds Dockerfiles, so `.dockerignore` is left to BuildKit. */
+        buildsContainerImages?: boolean;
       } = {}
     ) {
       yield* Effect.annotateCurrentSpan('inputDir', inputDir);
@@ -170,7 +202,8 @@ export class ArchiveService extends Effect.Service<ArchiveService>()('ArchiveSer
         pathService,
         inputDir,
         options.useIgnoreFiles !== false,
-        options.useManagedIgnore !== false
+        options.useManagedIgnore !== false,
+        options.buildsContainerImages === true
       );
 
       const filesToInclude = options.whitelist

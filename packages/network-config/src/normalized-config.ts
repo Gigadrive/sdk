@@ -118,6 +118,16 @@ export interface NormalizedConfig {
   services?: NormalizedConfigService[];
 
   /**
+   * Container images that run inside the microVM of every function instance of
+   * the deployment, next to the function. Each one is reachable from the
+   * function, and from every other sidecar, at `<name>:<port>`.
+   *
+   * Sidecar state belongs to one instance: it is lost when the instance is
+   * retired, and two replicas of a function never share a sidecar.
+   */
+  sidecars?: NormalizedSidecar[];
+
+  /**
    * Settings related to the archive the user uploads to the build workers.
    */
   userArchive?: {
@@ -274,10 +284,88 @@ export const DEFAULT_FUNCTION_DURATION_SECONDS = 30;
 /** Maximum configurable lifetime of one function invocation, in seconds (eight hours). */
 export const MAX_FUNCTION_DURATION_SECONDS = 28_800;
 
+/**
+ * Runtime tag of an entrypoint that runs a container image instead of a
+ * managed language runtime. Such an entrypoint always carries a
+ * {@link NormalizedConfigEntrypoint.container} spec.
+ */
+export const CONTAINER_RUNTIME = 'docker';
+
+/** Runtime tag of a container entrypoint. */
+export type ContainerRuntime = typeof CONTAINER_RUNTIME;
+
+/**
+ * Prefix of the synthetic `path` a container entrypoint carries. Routes target a
+ * container function with `destination: container:<name>`.
+ */
+export const CONTAINER_ENTRYPOINT_PREFIX = 'container:';
+
+/** Default memory of a container function, in MB. */
+export const DEFAULT_CONTAINER_MEMORY_MB = 512;
+
+/** Default memory of a sidecar, in MB. It is added to the memory of every function it runs next to. */
+export const DEFAULT_SIDECAR_MEMORY_MB = 256;
+
+/** Most sidecars one deployment may declare. */
+export const MAX_SIDECARS = 4;
+
+/** Where the root filesystem of a container comes from. */
+export type NormalizedContainerImageSource =
+  | {
+      type: 'registry';
+      /** Image reference as written, e.g. `redis:7-alpine` or `ghcr.io/acme/api@sha256:...`. */
+      reference: string;
+    }
+  | {
+      type: 'dockerfile';
+      /** Project-relative build context directory, `.` for the project root. */
+      context: string;
+      /** Dockerfile path relative to {@link context}. */
+      dockerfile: string;
+      /** Build stage to stop at, for multi-stage Dockerfiles. */
+      target?: string;
+      /** `--build-arg` values. */
+      buildArgs?: Record<string, string>;
+    };
+
+/**
+ * A container image plus the settings that override its image config. The
+ * overrides are baked into the signed launch metadata at build time.
+ */
+export interface NormalizedContainerSpec {
+  /** Name from the `containers` map. Also the hostname a sidecar answers to. */
+  name: string;
+  source: NormalizedContainerImageSource;
+  /** TCP port the process listens on. Defaults to the image's first exposed port, then 8080. */
+  port?: number;
+  /** Replaces the image `ENTRYPOINT`. */
+  entrypoint?: string[];
+  /** Replaces the image `CMD`. */
+  command?: string[];
+  /** Replaces the image `WORKDIR`. */
+  workingDirectory?: string;
+  /** Replaces the image `USER`: a name, a uid, `name:group` or `uid:gid`. */
+  user?: string;
+  /** Merged over the image `ENV`. */
+  environmentVariables?: Record<string, string>;
+}
+
+/** A container that runs next to every function instance of the deployment. */
+export interface NormalizedSidecar extends NormalizedContainerSpec {
+  /** Memory reserved for the sidecar, in MB. Added to each function's memory. */
+  memory: number;
+}
+
 export interface NormalizedConfigEntrypoint {
   displayName?: string;
+  /**
+   * Project-relative file of the function, or `container:<name>` for a
+   * container function.
+   */
   path: string;
-  runtime: Runtime;
+  runtime: Runtime | ContainerRuntime;
+  /** Image to run, present exactly when {@link runtime} is `docker`. */
+  container?: NormalizedContainerSpec;
   memory: number;
   /**
    * Maximum lifetime of one HTTP request, response stream, or WebSocket connection, in seconds.

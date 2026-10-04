@@ -1,10 +1,18 @@
 import { getFilesForPattern } from '@gigadrive/build-utils';
 import { Effect } from 'effect';
 import { minimatch } from 'minimatch';
+import { posix } from 'node:path';
 import safeRegex from 'safe-regex2';
 import { collectAssetFiles } from '../collect-asset-files';
-import { FunctionConfigError } from '../errors';
 import {
+  containerEntrypointPath,
+  dockerFunctionContainerName,
+  normalizeContainers,
+  readComposeContainers,
+} from '../containers';
+import { ContainerConfigError, FunctionConfigError } from '../errors';
+import {
+  CONTAINER_RUNTIME,
   DEFAULT_FUNCTION_DURATION_SECONDS,
   type NormalizedConfigEntrypoint,
   type NormalizedConfigQueue,
@@ -14,7 +22,13 @@ import {
   type NormalizedImagePolicy,
 } from '../normalized-config';
 import { AVAILABLE_REGIONS, type Region } from '../regions';
-import type { ConfigV4, ConfigV4FunctionSettings, ConfigV4Queue, ConfigV4QueueDuration } from '../v4';
+import type {
+  ConfigV4,
+  ConfigV4Container,
+  ConfigV4FunctionSettings,
+  ConfigV4Queue,
+  ConfigV4QueueDuration,
+} from '../v4';
 
 const DEFAULT_FUNCTION_SETTINGS: Required<Pick<ConfigV4FunctionSettings, 'memory' | 'max_duration'>> &
   Pick<ConfigV4FunctionSettings, 'schedule' | 'symlinks' | 'excludeFiles' | 'includeFiles'> = {
@@ -259,12 +273,24 @@ const mapRoute = (
 
 // -- Effectful helpers ------------------------------------------------------------------------
 
+/** A `functions` entry with `runtime: docker`: its Dockerfile, and the container it becomes. */
+interface DockerFunction {
+  readonly file: string;
+  readonly name: string;
+  readonly container: ConfigV4Container;
+}
+
 /**
  * Resolves function entrypoints from the config's `functions` section.
+ *
+ * Files matched under `runtime: docker` are Dockerfiles. They are returned as
+ * `dockerFunctions` instead, and become container functions alongside the
+ * `containers` map.
  */
 const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: ConfigV4, projectFolder: string) {
   const entrypoints: NormalizedConfigEntrypoint[] = [];
-  if (config.functions == null) return entrypoints;
+  const dockerFunctions: DockerFunction[] = [];
+  if (config.functions == null) return { entrypoints, dockerFunctions };
 
   for (const [fnPath, func] of Object.entries(config.functions)) {
     if (getFunctionSettings(fnPath, config) == null) {
@@ -295,6 +321,39 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
         });
       }
 
+      if (settings.runtime === CONTAINER_RUNTIME) {
+        const unsupported = (['symlinks', 'includeFiles'] as const).filter((key) => settings[key] !== undefined);
+        if (unsupported.length > 0) {
+          return yield* new FunctionConfigError({
+            message: `Function '${file}' runs a Dockerfile, so ${unsupported.join(' and ')} do not apply. Copy files in the Dockerfile instead.`,
+            functionPath: file,
+          });
+        }
+        // Only what the config declares: an unset `memory` takes the container default, not 128 MB.
+        const declared = Object.entries(config.functions)
+          .filter(([pattern]) => matchesPattern(file, pattern))
+          .reduce<ConfigV4FunctionSettings>((merged, [, value]) => ({ ...merged, ...value }), {});
+        dockerFunctions.push({
+          file,
+          name: dockerFunctionContainerName(file),
+          container: {
+            build: { context: posix.dirname(file), dockerfile: posix.basename(file) },
+            ...(declared.port !== undefined && { port: declared.port }),
+            ...(declared.memory !== undefined && { memory: declared.memory }),
+            ...(declared.max_duration !== undefined && { max_duration: declared.max_duration }),
+            ...(declared.streaming !== undefined && { streaming: declared.streaming }),
+            ...(func.schedule !== undefined && { schedule: func.schedule }),
+          },
+        });
+        continue;
+      }
+      if (settings.port !== undefined) {
+        return yield* new FunctionConfigError({
+          message: `Function '${file}' sets port, which only applies to 'runtime: docker'.`,
+          functionPath: file,
+        });
+      }
+
       const runtime = settings.runtime ?? 'node-20';
       const streaming = settings.streaming ?? runtimeStreamsByDefault(runtime);
 
@@ -317,7 +376,19 @@ const parseEntrypoints = Effect.fn('parseEntrypoints')(function* (config: Config
     }
   }
 
-  return entrypoints;
+  // Globs list files in directory order, so sort for a stable config.
+  dockerFunctions.sort((left, right) => (left.file < right.file ? -1 : left.file > right.file ? 1 : 0));
+  for (const [index, { file, name }] of dockerFunctions.entries()) {
+    const clash = dockerFunctions.slice(0, index).find((candidate) => candidate.name === name);
+    if (clash !== undefined) {
+      return yield* new FunctionConfigError({
+        message: `Functions '${clash.file}' and '${file}' would both be named '${name}'. Declare one of them under 'containers' with an explicit name.`,
+        functionPath: file,
+      });
+    }
+  }
+
+  return { entrypoints, dockerFunctions };
 });
 
 /**
@@ -333,6 +404,61 @@ const collectAssets = Effect.fn('collectAssets')(function* (config: ConfigV4, pr
     .map((assetName) => `${config.assets}/${assetName}`);
 });
 
+/**
+ * Ports a managed runtime binds inside the function microVM, which a sidecar
+ * running next to it must not take: the guest runtime's HTTP port, and the
+ * php-fpm port for PHP functions.
+ */
+const reservedRuntimePorts = (entrypoint: NormalizedConfigEntrypoint): number[] =>
+  entrypoint.runtime === CONTAINER_RUNTIME ? [] : entrypoint.runtime.startsWith('php-') ? [8080, 9000] : [8080];
+
+/**
+ * Resolves the `compose` import and the `containers` map into container
+ * entrypoints, sidecars and the routes a lone container function implies.
+ */
+const parseContainers = Effect.fn('parseContainers')(function* (
+  config: ConfigV4,
+  projectFolder: string,
+  fileEntrypoints: readonly NormalizedConfigEntrypoint[],
+  dockerFunctions: readonly DockerFunction[]
+) {
+  const warnings: string[] = [];
+  let containers: Record<string, ConfigV4Container> = {};
+
+  if (config.compose != null) {
+    const imported = yield* readComposeContainers(config.compose, projectFolder);
+    containers = imported.containers;
+    warnings.push(...imported.warnings);
+  }
+  containers = { ...containers, ...(config.containers ?? {}) };
+  for (const { file, name, container } of dockerFunctions) {
+    if (containers[name] !== undefined) {
+      return yield* new ContainerConfigError({
+        message: `Function '${file}' runs as container '${name}', which 'containers' or the Compose file already declares. Rename one of them.`,
+        containerName: name,
+      });
+    }
+    containers[name] = container;
+  }
+
+  const result = yield* normalizeContainers(containers, projectFolder);
+  warnings.push(...result.warnings);
+
+  for (const entrypoint of fileEntrypoints) {
+    for (const port of reservedRuntimePorts(entrypoint)) {
+      const sidecar = result.sidecars.find((candidate) => candidate.port === port);
+      if (sidecar !== undefined) {
+        return yield* new ContainerConfigError({
+          message: `Sidecar '${sidecar.name}' listens on port ${port}, which the ${entrypoint.runtime} runtime of '${entrypoint.path}' uses inside the same microVM. Choose another port.`,
+          containerName: sidecar.name,
+        });
+      }
+    }
+  }
+
+  return { ...result, warnings };
+});
+
 // -- Service ----------------------------------------------------------------------------------
 
 export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigParser', {
@@ -346,8 +472,24 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
      * @param projectFolder - Absolute path to the project root
      */
     parse: Effect.fn('V4ConfigParser.parse')(function* (config: ConfigV4, projectFolder: string) {
-      const entrypoints = yield* parseEntrypoints(config, projectFolder);
+      const { entrypoints: fileEntrypoints, dockerFunctions } = yield* parseEntrypoints(config, projectFolder);
+      const containers = yield* parseContainers(config, projectFolder, fileEntrypoints, dockerFunctions);
+      const entrypoints = [...fileEntrypoints, ...containers.entrypoints];
       const assets = yield* collectAssets(config, projectFolder);
+      // A route reaches a `runtime: docker` function by its Dockerfile path, like any function file.
+      const dockerFunctionPaths = new Map(
+        dockerFunctions.map(({ file, name }) => [file, containerEntrypointPath(name)])
+      );
+      const routes = (config.routes ?? []).map((route) =>
+        mapRoute(
+          {
+            ...route,
+            destination: dockerFunctionPaths.get(normalizeRouteDestination(route.destination)) ?? route.destination,
+          },
+          entrypoints
+        )
+      );
+      const warnings = [...containers.warnings];
 
       return {
         regions: resolveRegions(config.regions),
@@ -361,10 +503,11 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         commands: config.build_commands ?? [],
         images: normalizeImagePolicy(config.images),
         services: normalizeServices(config.services),
+        ...(containers.sidecars.length > 0 && { sidecars: containers.sidecars }),
         entrypoints,
         errors: [],
-        warnings: [],
-        routes: (config.routes ?? []).map((route) => mapRoute(route, entrypoints)),
+        warnings,
+        routes,
       };
     }),
   }),
