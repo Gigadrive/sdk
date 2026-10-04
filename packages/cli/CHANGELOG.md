@@ -1,5 +1,59 @@
 # gigadrive
 
+## 2.7.0
+
+### Minor Changes
+
+- Custom domains for Gigadrive Network applications. ([#537](https://github.com/Gigadrive/sdk/pull/537))
+
+  - **SDK:** `client.applications.domains` lists, adds, updates, checks, removes and claims custom
+    domains, and `waitUntilActive()` polls until a domain serves traffic. It throws
+    `DomainNotActiveError` when the domain fails, is suspended or removed, or the wait runs out of
+    time; rate limits, server errors and network failures are retried until the timeout, and aborting
+    or timing out cancels the request in flight. `client.organizations.domains` manages the domains an
+    organization verified with a TXT record. `Hostname.type` now includes `'CUSTOM'`, and `ApiError`
+    also exposes the `code` and `reason` the API sends next to a string `error`.
+  - **CLI:** `gigadrive domains list|add|update|claim|inspect|check|rm` and `gigadrive domains owners
+list|add|verify|rm`. `domains add` prints the DNS records to publish as a table, supports
+    `--production`, `--branch`, or `--redirect-to` with `--status` and `--drop-path` (conflicting
+    flags are refused), and `--wait` to follow the domain until it is live. `list`, `add`, `update`,
+    `claim`, `inspect`, `check`, `owners list` and `owners add` accept `--json`, which prints only the
+    result on stdout. Removing asks for confirmation, or requires
+    `--yes` when not running in a terminal.
+
+- `gigadrive.yaml` now accepts a top-level `containers` map for running Docker images on Gigadrive Network. ([#545](https://github.com/Gigadrive/sdk/pull/545))
+
+  Each entry runs one image, from a registry (`image: redis:7-alpine`) or built from a Dockerfile in the repository (`build: .`, or `build: { context, dockerfile, target, args }`). Optional settings are `port`, `entrypoint`, `command`, `env`, `working_dir`, `user` and `memory`.
+
+  - A container without `sidecar: true` runs as a function. Routes target it with `destination: container:<name>`. It also takes `max_duration`, `streaming` and `schedule`. A project that is nothing but one container function gets a catch-all route.
+  - A container with `sidecar: true` runs next to every function instance, inside the same microVM, and answers at `<name>:<port>`. That makes it the place for an adjacent Redis or a search engine. A deployment may declare at most four sidecars, and a sidecar may not use a port the function's runtime binds.
+
+  A new top-level `compose` key imports the services of a Compose file as containers. The service marked `x-gigadrive: { public: true }` becomes the function, or else the only service that builds from source; when that is ambiguous, the config is rejected until one is marked. Every other service becomes a sidecar. Entries under `containers` win over imported services of the same name.
+
+  `detectContainerProject()` recognizes a project with a Compose file that declares an app, or failing that a root `Dockerfile`, and returns a deployable configuration. The CLI tries it only when a project has neither a `gigadrive.yaml` nor a detected framework, so a framework project that keeps a Compose file for local databases deploys exactly as before. The CLI also keeps `Dockerfile`, `Dockerfile.*`, `*.Dockerfile` and Compose files in the upload, and leaves `.dockerignore` to the image build when a deployment builds images, which matches what `docker build` sends.
+
+  Exported additions:
+
+  - `NormalizedConfig.sidecars`
+  - `NormalizedConfigEntrypoint.container`
+  - `NormalizedContainerSpec`, `NormalizedSidecar` and `NormalizedContainerImageSource`
+  - `CONTAINER_RUNTIME`, `CONTAINER_ENTRYPOINT_PREFIX` and related constants
+  - `ContainerConfigError`
+  - `normalizeContainers`, `readComposeContainers`, `splitCommandWords` and `containerEntrypointPath`
+  - `detectContainerProject`
+
+  **Type change:** `NormalizedConfigEntrypoint.runtime` is now `Runtime | 'docker'`. Configs that declare no containers produce exactly the same output as before. Code that passes an entrypoint's runtime into a function typed `Runtime` must first handle the `docker` case. Such an entrypoint carries a `container` spec instead of a file path.
+
+- A Dockerfile can be a function like any other: list it under `functions` with `runtime: docker` (for example `functions: { Dockerfile: { runtime: docker, port: 3000 } }`) and route to it by its path. The build context is the Dockerfile's directory, and a pattern such as `services/*/Dockerfile` makes one function per Dockerfile. `port` is accepted only with `runtime: docker`. ([#545](https://github.com/Gigadrive/sdk/pull/545))
+
+  Container functions declared next to a detected framework now join the framework's app instead of replacing it, and routes to them take precedence over the framework's routes. Container names start with a letter, because a name such as `1234` resolves as an IP address before `/etc/hosts`.
+
+### Patch Changes
+
+- Updated dependencies [[`af8d481`](https://github.com/Gigadrive/sdk/commit/af8d48139be5ead86bd5dc0a587df824c8f7ba9e), [`40d1484`](https://github.com/Gigadrive/sdk/commit/40d1484fe0cffadd48346afe04bf02a9ae22f99b), [`e2b4b22`](https://github.com/Gigadrive/sdk/commit/e2b4b22f47ea598439f07eed6bb27eb3f390143d), [`7df86dc`](https://github.com/Gigadrive/sdk/commit/7df86dc2d25ce53cdd28818345aa07dda33011f8), [`4b92f44`](https://github.com/Gigadrive/sdk/commit/4b92f4483abaaa60eaafadf4dad704f4c1d9a74c), [`730734c`](https://github.com/Gigadrive/sdk/commit/730734c5f4d2998ca1b43987f8c8c276c1f8c9b1), [`ee1da4b`](https://github.com/Gigadrive/sdk/commit/ee1da4b89d7ff328512a3af74ff79f827faa244a)]:
+  - @gigadrive/sdk@0.9.0
+  - @gigadrive/network-config@5.1.0
+
 ## 2.6.2
 
 ### Patch Changes

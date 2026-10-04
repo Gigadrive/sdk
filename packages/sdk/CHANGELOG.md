@@ -1,5 +1,74 @@
 # @gigadrive/sdk
 
+## 0.9.0
+
+### Minor Changes
+
+- Custom domains for Gigadrive Network applications. ([#537](https://github.com/Gigadrive/sdk/pull/537))
+
+  - **SDK:** `client.applications.domains` lists, adds, updates, checks, removes and claims custom
+    domains, and `waitUntilActive()` polls until a domain serves traffic. It throws
+    `DomainNotActiveError` when the domain fails, is suspended or removed, or the wait runs out of
+    time; rate limits, server errors and network failures are retried until the timeout, and aborting
+    or timing out cancels the request in flight. `client.organizations.domains` manages the domains an
+    organization verified with a TXT record. `Hostname.type` now includes `'CUSTOM'`, and `ApiError`
+    also exposes the `code` and `reason` the API sends next to a string `error`.
+  - **CLI:** `gigadrive domains list|add|update|claim|inspect|check|rm` and `gigadrive domains owners
+list|add|verify|rm`. `domains add` prints the DNS records to publish as a table, supports
+    `--production`, `--branch`, or `--redirect-to` with `--status` and `--drop-path` (conflicting
+    flags are refused), and `--wait` to follow the domain until it is live. `list`, `add`, `update`,
+    `claim`, `inspect`, `check`, `owners list` and `owners add` accept `--json`, which prints only the
+    result on stdout. Removing asks for confirmation, or requires
+    `--yes` when not running in a terminal.
+
+- Add Network Queues. ([#544](https://github.com/Gigadrive/sdk/pull/544))
+
+  `@gigadrive/sdk` gains a typed queue client. `queue<T>(name)` returns a handle that works with no configuration inside a
+  deployment:
+
+  - `send(payload, { delay, at, groupKey, deduplicationKey, deploymentId, headers })` and `sendBatch()` for immediate,
+    delayed and scheduled sends (up to a year ahead), ordering groups and deduplication. `cancel(messageId)` deletes a
+    message that has not been processed.
+  - `handler(fn)` builds a push consumer (`(request: Request) => Promise<Response>`, such as a Next.js route handler).
+    It verifies the delivery signature with `GIGADRIVE_QUEUE_SIGNING_SECRET`. Throw `RetryLaterError('5m')` to defer a
+    message without spending an attempt, or `NonRetryableError` to dead-letter it.
+  - `receive()` and `consume()` for pull queues, with `ack`, `retry`, `defer`, `deadLetter` and `extendLease` on each
+    message. `consume()` acknowledges messages that finish together in one batch request
+    (`client.queues.ackBatch()`, up to 100 messages, one billed operation per started ten acknowledged messages),
+    retrying a batch that failed in transit or with a 5xx or 429.
+  - `ensure()`, `pause()`, `resume()`, `purge()`, `redrive()`, `schedule()` and `unschedule()` for management and cron
+    schedules.
+
+  `client.queues` exposes the same API over REST, and `createWorkflowQueue()` implements the Workflow SDK World `Queue`
+  interface on top of it, pinning every message to the deployment that sent it. `verifyQueueSignature()` and `signQueueDelivery()` are exported for custom servers and tests.
+  `ApiError.code` now also reads a top-level `code` next to a string `error`.
+
+  `@gigadrive/network-config` accepts `services.queues` in `gigadrive.yaml`: queues keyed by name with an optional
+  `consumer` path, delivery and retry settings (durations such as `10m` or seconds), concurrency, rate limits and cron
+  `schedules`. They normalize to a `queues` service with durations in seconds and schedule bodies as strings.
+
+- `client.storage.upload()` and `uploadBatch()` now support empty (zero-byte) files such as `.gitkeep` or `__init__.py`. ([#534](https://github.com/Gigadrive/sdk/pull/534))
+
+  The Network API stores an empty object while it creates the upload session. It returns the session already
+  `completed`, with `upload: null` and the stored `object`. The SDK skips the tus transfer and any
+  `waitForCompletion` polling in that case, so an empty file takes one API call. It returns `object` and `url` from
+  the response. An API deployment that doesn't send the top-level `publicObjectUrl` yet costs one extra bucket lookup
+  to build `url`. Every input kind (`path`, `stream`, `Buffer`,
+  `Uint8Array`, `ArrayBuffer`, `Blob`) sends `contentLength: 0` with the empty SHA-256. An empty `stream` only needs
+  `contentLength: 0`, because the SDK fills in the digest.
+
+  `CreateUploadSessionResponse.upload` is now nullable. The response has a new `object: StorageObject | null` field
+  and an optional top-level `publicObjectUrl`. If you call `client.storage.uploadSessions.create()` directly, check `upload` before you start a transfer.
+
+### Patch Changes
+
+- A refused queue send now raises `ApiError` with status 400 when the refusal is not retryable, and keeps 429 for refusals that may succeed later, so retry logic that keys on the status no longer retries a message the platform will never accept. ([#546](https://github.com/Gigadrive/sdk/pull/546))
+
+- `client.storage.uploadSessions.uploadToUrl()` and `resumeFromUrl()` now close the file they open for a `path` source ([#535](https://github.com/Gigadrive/sdk/pull/535))
+  when the upload finishes, fails, or is aborted. Before, a failed or aborted path upload left the file open.
+- Updated dependencies [[`40d1484`](https://github.com/Gigadrive/sdk/commit/40d1484fe0cffadd48346afe04bf02a9ae22f99b), [`e2b4b22`](https://github.com/Gigadrive/sdk/commit/e2b4b22f47ea598439f07eed6bb27eb3f390143d), [`7df86dc`](https://github.com/Gigadrive/sdk/commit/7df86dc2d25ce53cdd28818345aa07dda33011f8)]:
+  - @gigadrive/network-config@5.1.0
+
 ## 0.8.6
 
 ### Patch Changes
