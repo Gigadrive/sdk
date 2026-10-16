@@ -142,8 +142,8 @@ importers:
         version: 5.9.3
     devDependencies:
       '@types/adm-zip':
-        specifier: ^0.5.7
-        version: 0.5.8
+        specifier: ^0.6.0
+        version: 0.6.0
       '@types/archiver':
         specifier: ^6.0.4
         version: 6.0.4
@@ -3915,8 +3915,9 @@ packages:
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
 
-  '@types/adm-zip@0.5.8':
-    resolution: {integrity: sha512-RVVH7QvZYbN+ihqZ4kX/dMiowf6o+Jk1fNwiSdx0NahBJLU787zkULhGhJM8mf/obmLGmgdMM0bXsQTmyfbR7Q==}
+  '@types/adm-zip@0.6.0':
+    resolution: {integrity: sha512-4BJwT30zsKqyYk+PgJS+LQzVrLh0bHragg9etHGg679uuBbNDbSaLsJy+DaJQZM8AvESHB+t3ruVzbrn6BUsMQ==}
+    deprecated: This is a stub types definition. adm-zip provides its own type definitions, so you do not need this installed.
 
   '@types/archiver@6.0.4':
     resolution: {integrity: sha512-ULdQpARQ3sz9WH4nb98mJDYA0ft2A8C4f4fovvUcFwINa1cgGjY36JCAYuP5YypRq4mco1lJp1/7jEMS2oR0Hg==}
@@ -10588,9 +10589,9 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@types/adm-zip@0.5.8':
+  '@types/adm-zip@0.6.0':
     dependencies:
-      '@types/node': 24.19.2
+      adm-zip: 0.6.1
 
   '@types/archiver@6.0.4':
     dependencies:
