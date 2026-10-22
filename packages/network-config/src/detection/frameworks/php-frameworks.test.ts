@@ -109,13 +109,13 @@ describe('PHP framework presets', () => {
     }
   );
 
-  it('should ask the platform for a CakePHP security salt', async () => {
+  it('should run CakePHP out of debug mode with a platform security salt', async () => {
     const result = await detectProject({
       '/project/composer.json': composerJson({ 'cakephp/cakephp': '^5.0' }),
       '/project/webroot/index.php': '<?php',
     });
 
-    expect(result.config.environmentVariables).toEqual({ SECURITY_SALT: '{{gigadrive.secret:hex}}' });
+    expect(result.config.environmentVariables).toEqual({ DEBUG: 'false', SECURITY_SALT: '{{gigadrive.secret:hex}}' });
   });
 
   it('should rank every framework preset above the generic PHP fallback', async () => {

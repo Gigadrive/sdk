@@ -21,7 +21,13 @@ export const cakephp: FrameworkDefinition = {
         'logs',
       ],
       excludeFiles: ['tests/', 'tmp/', 'logs/'],
-      // config/app.php reads the salt from env; app_local.php is not committed.
-      environmentVariables: { SECURITY_SALT: generatedSecret('hex') },
+      environmentVariables: {
+        // The app_local.php that `composer install` copies from the example
+        // reads env('DEBUG', true), which would run every deployment in debug
+        // mode with stack traces in error pages.
+        DEBUG: 'false',
+        // config/app.php reads the salt from env; app_local.php is not committed.
+        SECURITY_SALT: generatedSecret('hex'),
+      },
     }),
 };
