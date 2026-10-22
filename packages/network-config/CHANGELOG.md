@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 5.3.1
+
+### Patch Changes
+
+- The CakePHP preset defaults `DEBUG=false`. The `config/app_local.php` that `composer install` creates from the example reads `env('DEBUG', true)`, so a deployment without the variable ran in debug mode. ([#582](https://github.com/Gigadrive/sdk/pull/582))
+
 ## 5.3.0
 
 ### Minor Changes
