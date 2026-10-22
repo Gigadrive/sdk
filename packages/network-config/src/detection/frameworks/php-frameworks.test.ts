@@ -172,9 +172,7 @@ describe('generic PHP fallback', () => {
     expect(result.config.entrypoints).toEqual([expect.objectContaining({ path: 'index.php' })]);
     expect(result.config.routes).toEqual([expect.objectContaining({ path: '/*', destination: 'index.php' })]);
     expect(result.config.excludeFiles).toEqual(expect.arrayContaining(['composer.json', 'composer.lock']));
-    // composer.json and composer.lock stay listed here; excludeFiles keeps them off the edge.
-    expect(result.config.assets?.paths).toEqual(expect.arrayContaining(['./style.css']));
-    expect(result.config.assets?.paths).not.toEqual(expect.arrayContaining(['./lib/db.php', './index.php']));
+    expect(result.config.assets?.paths).toEqual(['./style.css']);
   });
 
   it('should not detect a Composer project without a front controller', async () => {
@@ -202,6 +200,7 @@ describe('generic PHP fallback', () => {
       '/project/index.php': '<?php',
       '/project/style.css': 'body{}',
       '/project/.env': 'DB_PASSWORD=secret',
+      '/project/auth.json': '{"http-basic":{}}',
       '/project/.git/config': '[core]',
       '/project/config/.env.local': 'SECRET=1',
       '/project/vendor/autoload.php': '<?php',
