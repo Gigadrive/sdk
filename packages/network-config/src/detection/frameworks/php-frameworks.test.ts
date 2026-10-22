@@ -109,6 +109,15 @@ describe('PHP framework presets', () => {
     }
   );
 
+  it('should ask the platform for a CakePHP security salt', async () => {
+    const result = await detectProject({
+      '/project/composer.json': composerJson({ 'cakephp/cakephp': '^5.0' }),
+      '/project/webroot/index.php': '<?php',
+    });
+
+    expect(result.config.environmentVariables).toEqual({ SECURITY_SALT: '{{gigadrive.secret:hex}}' });
+  });
+
   it('should rank every framework preset above the generic PHP fallback', async () => {
     const result = await detectProject({
       '/project/composer.json': composerJson({ 'slim/slim': '^4.14', 'laminas/laminas-mvc': '^3.8' }),

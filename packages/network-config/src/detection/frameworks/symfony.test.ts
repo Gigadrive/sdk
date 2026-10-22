@@ -54,6 +54,7 @@ describe('Symfony framework detection', () => {
     expect(result.config.environmentVariables).toMatchObject({
       APP_ENV: 'prod',
       APP_DEBUG: 'false',
+      APP_SECRET: '{{gigadrive.secret:hex}}',
       MESSENGER_TRANSPORT_DSN: 'doctrine://default?auto_setup=0',
     });
   });

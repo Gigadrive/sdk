@@ -1,3 +1,4 @@
+import { generatedSecret } from '../generated-secret';
 import type { FrameworkDefinition } from '../types';
 import { phpFrontControllerDefaults } from './php-front-controller';
 
@@ -20,5 +21,7 @@ export const cakephp: FrameworkDefinition = {
         'logs',
       ],
       excludeFiles: ['tests/', 'tmp/', 'logs/'],
+      // config/app.php reads the salt from env; app_local.php is not committed.
+      environmentVariables: { SECURITY_SALT: generatedSecret('hex') },
     }),
 };
