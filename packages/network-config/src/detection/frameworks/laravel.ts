@@ -17,6 +17,18 @@ export const laravel: FrameworkDefinition = {
     populateAssetCache: true,
     excludeFiles: ['tests/', 'storage/', '.ddev', 'node_modules/'],
     routes: [{ source: '/*', destination: 'public/index.php' }],
+    package: {
+      // storage/ is excluded, so the directories Laravel writes compiled
+      // views, file caches, sessions and logs to are created empty.
+      writablePaths: [
+        'bootstrap/cache',
+        'storage/app/public',
+        'storage/framework/cache/data',
+        'storage/framework/sessions',
+        'storage/framework/views',
+        'storage/logs',
+      ],
+    },
     environmentVariables: {
       APP_NAME: 'Laravel',
       APP_ENV: 'production',

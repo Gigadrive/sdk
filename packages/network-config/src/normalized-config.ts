@@ -391,6 +391,13 @@ export interface NormalizedConfigEntrypoint {
     excludeFiles?: string[];
     /** Shared deployment artifacts that must be mounted before this overlay. */
     sharedArtifactIds?: string[];
+    /**
+     * Project-relative directories the function writes to at runtime, such as
+     * a framework's cache, session and log directories. The package creates
+     * each one and makes it writable by the runtime user; what a copy of the
+     * function writes there is private to that copy and lost when it stops.
+     */
+    writablePaths?: string[];
   };
 }
 

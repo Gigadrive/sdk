@@ -45,7 +45,7 @@ describe('Symfony framework detection', () => {
         memory: 512,
         maxDuration: 30,
         streaming: false,
-        symlinks: { var: '/tmp' },
+        package: { writablePaths: ['var/cache', 'var/log'] },
       }),
     ]);
     expect(result.config.routes).toEqual([expect.objectContaining({ path: '/*', destination: 'public/index.php' })]);

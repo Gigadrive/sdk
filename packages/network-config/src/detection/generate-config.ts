@@ -23,6 +23,24 @@ const getInstallCommand = (pm: PackageManager): string => {
   }
 };
 
+/** Composer files at the project root: the manifest, the lock and its credentials. */
+const COMPOSER_ROOT_FILES = new Set(['composer.json', 'composer.lock', 'auth.json']);
+
+/**
+ * Whether a project-relative path is one a PHP document root must never
+ * serve: any dot-segment (`.env`, `.git/`, `.htaccess`), a dependency
+ * directory at the project root, or a root Composer file.
+ */
+const isPrivatePhpProjectFile = (projectPath: string) => {
+  const segments = projectPath.split('/').filter((segment) => segment !== '' && segment !== '.');
+  return (
+    segments.some((segment) => segment.startsWith('.')) ||
+    segments[0] === 'vendor' ||
+    segments[0] === 'node_modules' ||
+    (segments.length === 1 && COMPOSER_ROOT_FILES.has(segments[0] ?? ''))
+  );
+};
+
 /**
  * Generates a NormalizedConfig from a framework definition and detected package manager.
  * Prepends the install command and builds a complete deployment configuration.
@@ -43,8 +61,10 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
 ) {
   const defaults = refinedDefaults ?? framework.getDefaultConfig(packageManager);
 
+  // An empty install command means there is nothing to install, e.g. PHP
+  // files without a Composer manifest.
   const installCmd = defaults.installCommand ?? getInstallCommand(packageManager);
-  const commands = [installCmd, ...defaults.commands];
+  const commands = installCmd ? [installCmd, ...defaults.commands] : [...defaults.commands];
 
   yield* Effect.logDebug(`Generating config for ${framework.name}`, {
     runtime: defaults.runtime,
@@ -115,6 +135,9 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
         // outranks the front controller's wildcard, so publishing one would
         // serve its source instead of running it.
         if (framework.language === 'php' && /\.(php|phtml|phar)$/i.test(file)) continue;
+        // A PHP document root can be the project root, which also holds the
+        // dependencies and dotfiles (.env, .git) that must never be served.
+        if (framework.language === 'php' && isPrivatePhpProjectFile(`${assetsDir}/${file}`)) continue;
 
         paths.push(`${assetsDir}/${file}`);
 

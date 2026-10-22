@@ -103,6 +103,8 @@ export interface FrameworkDefaultConfig {
     filePathMap?: Record<string, string>;
     includeFiles?: string[];
     excludeFiles?: string[];
+    /** Project-relative directories the function may write to at runtime. */
+    writablePaths?: string[];
   };
   /** Advanced framework output that replaces the one-entrypoint defaults. */
   normalizedConfig?: Partial<NormalizedConfig>;
