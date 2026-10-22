@@ -45,7 +45,7 @@ describe('Symfony framework detection', () => {
         memory: 512,
         maxDuration: 30,
         streaming: false,
-        symlinks: { var: '/tmp' },
+        package: { writablePaths: ['var/cache', 'var/log'] },
       }),
     ]);
     expect(result.config.routes).toEqual([expect.objectContaining({ path: '/*', destination: 'public/index.php' })]);
@@ -58,20 +58,22 @@ describe('Symfony framework detection', () => {
     });
   });
 
-  it('should require bin/console in addition to symfony/framework-bundle', async () => {
+  it('should fall back to generic PHP without bin/console', async () => {
     const result = await detectProjectError({
       '/project/composer.json': composerJson({ 'symfony/framework-bundle': '^7.0' }),
     });
 
-    expect(result).toHaveProperty('error');
+    // A Composer project nothing more specific claims deploys as generic PHP.
+    expect(result).toMatchObject({ framework: { slug: 'php' } });
   });
 
-  it('should not detect Symfony from bin/console without symfony/framework-bundle', async () => {
+  it('should fall back to generic PHP for bin/console without symfony/framework-bundle', async () => {
     const result = await detectProjectError({
       '/project/composer.json': composerJson({ php: '^8.3' }),
       '/project/bin/console': '#!/usr/bin/env php',
     });
 
-    expect(result).toHaveProperty('error');
+    // A Composer project nothing more specific claims deploys as generic PHP.
+    expect(result).toMatchObject({ framework: { slug: 'php' } });
   });
 });

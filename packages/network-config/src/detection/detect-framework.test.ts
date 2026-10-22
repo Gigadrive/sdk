@@ -171,7 +171,7 @@ describe('detectFramework', () => {
   });
 
   it('should require all detectors to match for Laravel', async () => {
-    // Has the package but not the artisan file
+    // Has the package but not the artisan file, so the generic PHP preset takes it
     const fs = makeTestFs({
       '/project/composer.json': JSON.stringify({
         require: { 'laravel/framework': '^11.0' },
@@ -185,7 +185,7 @@ describe('detectFramework', () => {
       )
     );
 
-    expect(result).toHaveProperty('error');
+    expect(result).toMatchObject({ framework: { slug: 'php' } });
   });
 
   it('should not crash when a framework definition has an invalid matchContent regex', async () => {

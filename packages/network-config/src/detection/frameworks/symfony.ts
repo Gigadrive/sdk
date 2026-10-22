@@ -17,12 +17,13 @@ export const symfony: FrameworkDefinition = {
     assetsDir: 'public',
     populateAssetCache: true,
     excludeFiles: ['tests/*', '.ddev', 'var'],
-    symlinks: { var: '/tmp' },
     routes: [{ source: '/*', destination: 'public/index.php' }],
+    // The kernel's cache and log directories. A symlink to /tmp used to stand
+    // in for them, which the build rejected as pointing outside the project.
+    package: { writablePaths: ['var/cache', 'var/log'] },
     environmentVariables: {
       APP_ENV: 'prod',
       APP_DEBUG: 'false',
-      APP_SECRET: 'please_change_this_value_in_your_settings',
       MESSENGER_TRANSPORT_DSN: 'doctrine://default?auto_setup=0',
     },
   }),
