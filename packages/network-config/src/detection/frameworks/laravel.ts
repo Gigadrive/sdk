@@ -1,3 +1,4 @@
+import { generatedSecret } from '../generated-secret';
 import type { FrameworkDefinition } from '../types';
 
 export const laravel: FrameworkDefinition = {
@@ -30,6 +31,8 @@ export const laravel: FrameworkDefinition = {
       ],
     },
     environmentVariables: {
+      // Encrypts cookies and sessions; Laravel cannot serve a page without it.
+      APP_KEY: generatedSecret('laravel-app-key'),
       APP_NAME: 'Laravel',
       APP_ENV: 'production',
       APP_DEBUG: 'false',
@@ -38,6 +41,9 @@ export const laravel: FrameworkDefinition = {
       LOG_LEVEL: 'debug',
       BROADCAST_DRIVER: 'log',
       SESSION_DRIVER: 'cookie',
+      // The skeleton defaults both to `database`, which needs a migrated database.
+      CACHE_STORE: 'file',
+      QUEUE_CONNECTION: 'sync',
     },
   }),
 };

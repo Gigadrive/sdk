@@ -71,6 +71,9 @@ describe('Laravel framework detection', () => {
     expect(result.config.assets).toMatchObject({ prefixToStrip: 'public/', populateCache: true });
     expect(result.config.excludeFiles).toEqual(['tests/', 'storage/', '.ddev', 'node_modules/']);
     expect(result.config.environmentVariables).toMatchObject({
+      APP_KEY: '{{gigadrive.secret:laravel-app-key}}',
+      CACHE_STORE: 'file',
+      QUEUE_CONNECTION: 'sync',
       APP_ENV: 'production',
       APP_DEBUG: 'false',
       LOG_CHANNEL: 'stderr',

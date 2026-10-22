@@ -1,3 +1,4 @@
+import { generatedSecret } from '../generated-secret';
 import type { FrameworkDefinition } from '../types';
 
 export const symfony: FrameworkDefinition = {
@@ -24,6 +25,8 @@ export const symfony: FrameworkDefinition = {
     environmentVariables: {
       APP_ENV: 'prod',
       APP_DEBUG: 'false',
+      // CSRF tokens, signed URLs and remember-me cookies.
+      APP_SECRET: generatedSecret('hex'),
       MESSENGER_TRANSPORT_DSN: 'doctrine://default?auto_setup=0',
     },
   }),
