@@ -29,31 +29,38 @@ const refinePhpDocumentRoot = (defaults: FrameworkDefaultConfig, projectFolder: 
 
 const getDefaultConfig = () => phpFrontControllerDefaults({ documentRoot: '.', excludeFiles: COMPOSER_FILES });
 
+/** The front controller for one candidate document root. */
+const frontControllerPath = (documentRoot: string) =>
+  documentRoot === '.' ? 'index.php' : `${documentRoot}/index.php`;
+
 /**
- * A Composer project that no specific PHP framework claimed. Ranked above the
- * Vite preset, so a PHP application with a Vite front end still runs its PHP.
+ * A Composer project that no specific PHP framework claimed, one definition
+ * per document root because detectors only combine with AND. A Composer
+ * project without a front controller in any of them is not detected at all.
+ * Ranked above the Vite preset, so a PHP application with a Vite front end
+ * still runs its PHP.
  */
-export const php: FrameworkDefinition = {
+export const phpComposerProjects: FrameworkDefinition[] = DOCUMENT_ROOTS.map((documentRoot) => ({
   slug: 'php',
   name: 'PHP',
   language: 'php',
-  detectors: [{ path: 'composer.json' }],
+  detectors: [{ path: 'composer.json' }, { path: frontControllerPath(documentRoot) }],
   priority: 7,
   getDefaultConfig,
   refineDefaultConfig: refinePhpDocumentRoot,
-};
+}));
 
 /**
- * Plain PHP files without Composer, one definition per document root because
- * detectors only combine with AND. The refinement still picks the first root
- * in {@link DOCUMENT_ROOTS} order, whichever definition matched.
+ * Plain PHP files without Composer, one definition per document root. There
+ * is no manifest, so there is no install step either.
  */
 export const phpSites: FrameworkDefinition[] = DOCUMENT_ROOTS.map((documentRoot) => ({
   slug: 'php-site',
   name: 'PHP',
   language: 'php',
-  detectors: [{ path: documentRoot === '.' ? 'index.php' : `${documentRoot}/index.php` }],
+  detectors: [{ path: frontControllerPath(documentRoot) }],
   priority: 6,
-  getDefaultConfig,
-  refineDefaultConfig: refinePhpDocumentRoot,
+  getDefaultConfig: () => ({ ...getDefaultConfig(), installCommand: '' }),
+  refineDefaultConfig: (defaults, projectFolder) =>
+    refinePhpDocumentRoot(defaults, projectFolder).pipe(Effect.map((refined) => ({ ...refined, installCommand: '' }))),
 }));

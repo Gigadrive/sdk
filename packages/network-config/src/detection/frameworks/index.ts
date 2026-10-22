@@ -12,7 +12,7 @@ import { mezzio } from './mezzio';
 import { nestjs } from './nestjs';
 import { nextjs } from './nextjs';
 import { nuxt } from './nuxt';
-import { php, phpSites } from './php';
+import { phpComposerProjects, phpSites } from './php';
 import { remix } from './remix';
 import { slim } from './slim';
 import { sveltekit } from './sveltekit';
@@ -43,7 +43,7 @@ export const FRAMEWORK_DEFINITIONS: FrameworkDefinition[] = [
   elysia,
   fastify,
   express,
-  php,
+  ...phpComposerProjects,
   ...phpSites,
   vite,
 ].sort((a, b) => b.priority - a.priority);

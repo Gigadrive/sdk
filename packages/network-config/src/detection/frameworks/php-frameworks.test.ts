@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composerJson, detectProject, packageJson } from './test-utils';
+import { composerJson, detectProject, detectProjectError, packageJson } from './test-utils';
 
 const cases = [
   {
@@ -172,8 +172,44 @@ describe('generic PHP fallback', () => {
     expect(result.config.entrypoints).toEqual([expect.objectContaining({ path: 'index.php' })]);
     expect(result.config.routes).toEqual([expect.objectContaining({ path: '/*', destination: 'index.php' })]);
     expect(result.config.excludeFiles).toEqual(expect.arrayContaining(['composer.json', 'composer.lock']));
+    // composer.json and composer.lock stay listed here; excludeFiles keeps them off the edge.
     expect(result.config.assets?.paths).toEqual(expect.arrayContaining(['./style.css']));
     expect(result.config.assets?.paths).not.toEqual(expect.arrayContaining(['./lib/db.php', './index.php']));
+  });
+
+  it('should not detect a Composer project without a front controller', async () => {
+    const result = await detectProjectError({
+      '/project/composer.json': composerJson({ 'monolog/monolog': '^3.0' }),
+      '/project/src/App.php': '<?php',
+    });
+
+    expect(result).toHaveProperty('error');
+  });
+
+  it('should fall back to generic PHP when a framework is missing its marker file', async () => {
+    const result = await detectProject({
+      '/project/composer.json': composerJson({ 'laravel/framework': '^13.0' }),
+      '/project/public/index.php': '<?php',
+    });
+
+    expect(result.framework.slug).toBe('php');
+    expect(result.config.entrypoints).toEqual([expect.objectContaining({ path: 'public/index.php' })]);
+  });
+
+  it('should never publish dotfiles or dependencies from a project-root document root', async () => {
+    const result = await detectProject({
+      '/project/composer.json': composerJson({}),
+      '/project/index.php': '<?php',
+      '/project/style.css': 'body{}',
+      '/project/.env': 'DB_PASSWORD=secret',
+      '/project/.git/config': '[core]',
+      '/project/config/.env.local': 'SECRET=1',
+      '/project/vendor/autoload.php': '<?php',
+      '/project/vendor/acme/lib/readme.txt': 'docs',
+      '/project/node_modules/pkg/index.js': 'x',
+    });
+
+    expect(result.config.assets?.paths).toEqual(['./style.css']);
   });
 
   it('should detect plain PHP files without Composer', async () => {
@@ -185,6 +221,8 @@ describe('generic PHP fallback', () => {
 
     expect(result.framework).toMatchObject({ slug: 'php-site', language: 'php' });
     expect(result.packageManager).toBe('composer');
+    // There is no manifest, so there is nothing to install.
+    expect(result.config.commands).toEqual([]);
     expect(result.config.entrypoints).toEqual([expect.objectContaining({ path: 'index.php' })]);
     expect(result.config.assets?.paths).toEqual(['./logo.png']);
   });
