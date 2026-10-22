@@ -78,22 +78,20 @@ describe('Laravel framework detection', () => {
     });
   });
 
-  it('should fall back to generic PHP without the artisan file', async () => {
+  it('should require the artisan file in addition to laravel/framework', async () => {
     const result = await detectProjectError({
       '/project/composer.json': composerJson({ 'laravel/framework': '^11.0' }),
     });
 
-    // A Composer project nothing more specific claims deploys as generic PHP.
-    expect(result).toMatchObject({ framework: { slug: 'php' } });
+    expect(result).toHaveProperty('error');
   });
 
-  it('should fall back to generic PHP for artisan without laravel/framework', async () => {
+  it('should not detect Laravel from artisan without laravel/framework', async () => {
     const result = await detectProjectError({
       '/project/composer.json': composerJson({ php: '^8.3' }),
       '/project/artisan': '#!/usr/bin/env php',
     });
 
-    // A Composer project nothing more specific claims deploys as generic PHP.
-    expect(result).toMatchObject({ framework: { slug: 'php' } });
+    expect(result).toHaveProperty('error');
   });
 });
