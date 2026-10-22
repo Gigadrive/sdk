@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  # Lets a maintainer start a release when GitHub drops the push event,
+  # as it did for the merge of #577 during an Actions incident.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
