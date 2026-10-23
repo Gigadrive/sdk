@@ -79,7 +79,7 @@ export const commandDurationMs = (info: CommandInfo): number | null => {
 export class Command {
   private current: CommandInfo;
   private pump: Promise<void> | undefined;
-  private pumpError: unknown;
+  private pumpError: Error | undefined;
 
   /** @internal Use {@link MicroVM.spawn} or `vm.commands.get(id)`. */
   constructor(
@@ -139,7 +139,7 @@ export class Command {
    * ```
    */
   async *logs(options: CommandLogsOptions = {}): AsyncGenerator<CommandLogChunk> {
-    const decoders: Record<CommandStream, TextDecoder> = { stdout: new TextDecoder(), stderr: new TextDecoder() };
+    const decoders = { stdout: new TextDecoder(), stderr: new TextDecoder() };
     for await (const event of this.resource.logs(this.microvmId, this.id, options)) {
       if (event.type === 'exit') {
         this.current = { ...this.current, status: 'exited', exitCode: event.exitCode, signal: event.signal };
@@ -199,7 +199,7 @@ export class Command {
     }
     if (this.pump) {
       await this.pump;
-      if (this.pumpError !== undefined) throw this.pumpError;
+      if (this.pumpError) throw this.pumpError;
     }
     if (options.throwOnError && this.current.exitCode !== 0) {
       throw CommandFailedError.fromInfo(this.current);
@@ -257,7 +257,7 @@ export class Command {
         await (chunk.stream === 'stdout' ? onStdout : onStderr)?.(chunk.text, chunk);
       }
     })().catch((error: unknown) => {
-      this.pumpError = error;
+      this.pumpError = error instanceof Error ? error : new Error(String(error));
     });
   }
 }
