@@ -11,6 +11,9 @@ const LOCKFILE_MAP: Array<{ files: string[]; pm: PackageManager }> = [
   { files: ['yarn.lock'], pm: 'yarn' },
   { files: ['package-lock.json'], pm: 'npm' },
   { files: ['composer.lock'], pm: 'composer' },
+  // A Gemfile is checked last and counts even without its lockfile: Bundler
+  // resolves and writes Gemfile.lock on the first install.
+  { files: ['Gemfile.lock', 'Gemfile'], pm: 'bundler' },
 ];
 
 /**

@@ -162,7 +162,8 @@ export const schema = {
           },
           streaming: {
             type: 'boolean',
-            description: 'Enable function response streaming. When omitted, Node and Bun runtimes stream by default.',
+            description:
+              'Enable function response streaming. When omitted, Node, Bun and Ruby runtimes stream by default.',
           },
           schedule: {
             $ref: '#/$defs/schedule',
@@ -677,7 +678,19 @@ export const schema = {
     },
     runtimes: {
       type: 'string',
-      enum: ['php-84', 'php-83', 'php-81', 'node-22', 'node-20', 'node-18', 'node-16', 'bun-1'],
+      enum: [
+        'php-84',
+        'php-83',
+        'php-81',
+        'ruby-40',
+        'ruby-34',
+        'ruby-33',
+        'node-22',
+        'node-20',
+        'node-18',
+        'node-16',
+        'bun-1',
+      ],
     },
     matchRequirements: {
       description: 'An array of requirements that are needed to match',

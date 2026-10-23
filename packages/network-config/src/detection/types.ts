@@ -35,7 +35,11 @@ export class FrameworkNotDetectedError extends Schema.TaggedError<FrameworkNotDe
 // ---------------------------------------------------------------------------
 
 export interface FrameworkDetectionItem {
-  /** Check manifest dependencies for this package (routed by framework language) */
+  /**
+   * Check manifest dependencies for this package (routed by framework language):
+   * `package.json` for Node, `composer.json` for PHP, and `Gemfile.lock` (or
+   * `Gemfile` without a lockfile) for Ruby.
+   */
   matchPackage?: string;
   /** Check if this file exists (relative to project root) */
   path?: string;
@@ -43,9 +47,9 @@ export interface FrameworkDetectionItem {
   matchContent?: string;
 }
 
-export type FrameworkLanguage = 'node' | 'php';
+export type FrameworkLanguage = 'node' | 'php' | 'ruby';
 
-export type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun' | 'composer';
+export type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun' | 'composer' | 'bundler';
 
 export interface FrameworkDefinition {
   slug: string;

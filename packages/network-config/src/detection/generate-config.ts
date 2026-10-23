@@ -17,6 +17,10 @@ const getInstallCommand = (pm: PackageManager): string => {
       return 'yarn install';
     case 'composer':
       return 'composer install';
+    case 'bundler':
+      // BUNDLE_PATH, BUNDLE_WITHOUT and BUNDLE_DEPLOYMENT come from the build
+      // environment, so the command carries no flags.
+      return 'bundle install';
     case 'npm':
     default:
       return 'npm install';
@@ -38,6 +42,26 @@ const isPrivatePhpProjectFile = (projectPath: string) => {
     segments[0] === 'vendor' ||
     segments[0] === 'node_modules' ||
     (segments.length === 1 && COMPOSER_ROOT_FILES.has(segments[0] ?? ''))
+  );
+};
+
+/** Bundler manifests and lockfiles, in either naming scheme. */
+const BUNDLER_FILES = new Set(['Gemfile', 'Gemfile.lock', 'gems.rb', 'gems.locked']);
+
+/**
+ * Whether a project-relative path is one a Ruby application must never serve
+ * as a static asset, even when its asset directory is the project root: any
+ * dot-segment (`.env`, `.git/`, `.bundle/`), the project's `vendor/` tree
+ * (where gems install), Ruby sources and rackup files, and Bundler manifests.
+ */
+const isPrivateRubyProjectFile = (projectPath: string) => {
+  const segments = projectPath.split('/').filter((segment) => segment !== '' && segment !== '.');
+  const fileName = segments.at(-1) ?? '';
+  return (
+    segments.some((segment) => segment.startsWith('.')) ||
+    segments[0] === 'vendor' ||
+    /\.(rb|ru)$/i.test(fileName) ||
+    BUNDLER_FILES.has(fileName)
   );
 };
 
@@ -138,6 +162,10 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
         // A PHP document root can be the project root, which also holds the
         // dependencies and dotfiles (.env, .git) that must never be served.
         if (framework.language === 'php' && isPrivatePhpProjectFile(`${assetsDir}/${file}`)) continue;
+        // A Ruby asset directory is normally `public/`, but one pointed at the
+        // project root would otherwise publish the application's sources,
+        // installed gems and credentials.
+        if (framework.language === 'ruby' && isPrivateRubyProjectFile(`${assetsDir}/${file}`)) continue;
 
         paths.push(`${assetsDir}/${file}`);
 

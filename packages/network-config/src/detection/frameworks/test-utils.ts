@@ -8,9 +8,22 @@ export const packageJson = (dependencies: Record<string, string>) => JSON.string
 
 export const composerJson = (requires: Record<string, string>) => JSON.stringify({ require: requires });
 
+/** A `Gemfile.lock` whose `GEM` section resolved the given gems, each at version 1.0.0. */
+export const gemfileLock = (gems: string[]) =>
+  [
+    'GEM',
+    '  remote: https://rubygems.org/',
+    '  specs:',
+    ...gems.map((gem) => `    ${gem} (1.0.0)`),
+    '',
+    'PLATFORMS',
+    '  ruby',
+    '',
+  ].join('\n');
+
 export const nodePackageManagerCases: Array<{
   name: string;
-  packageManager: Exclude<PackageManager, 'composer'>;
+  packageManager: Exclude<PackageManager, 'composer' | 'bundler'>;
   lockfile: Record<string, string>;
   installCommand: string;
 }> = [

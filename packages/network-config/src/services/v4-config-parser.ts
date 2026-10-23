@@ -46,7 +46,7 @@ const toArray = (value: string | string[] | undefined): string[] | undefined => 
 };
 
 const runtimeStreamsByDefault = (runtime: ConfigV4FunctionSettings['runtime'] | undefined): boolean =>
-  runtime == null || runtime.startsWith('node-') || runtime.startsWith('bun-');
+  runtime == null || runtime.startsWith('node-') || runtime.startsWith('bun-') || runtime.startsWith('ruby-');
 
 const normalizeImagePolicy = (images: ConfigV4['images']): NormalizedImagePolicy | undefined => {
   if (!images) return undefined;

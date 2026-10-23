@@ -74,6 +74,50 @@ describe('generateConfig', () => {
     expect(result.commands[0]).toBe('composer install');
   });
 
+  it('should prepend bundle install for bundler', async () => {
+    const result = await generate(mockFramework, 'bundler');
+    expect(result.commands[0]).toBe('bundle install');
+  });
+
+  it('should never publish Ruby sources, Bundler files, gems or dotfiles from a Ruby asset directory', async () => {
+    const rubyFramework: FrameworkDefinition = {
+      ...mockFramework,
+      language: 'ruby',
+      getDefaultConfig: () => ({
+        runtime: 'ruby-34',
+        memory: 256,
+        maxDuration: 30,
+        streaming: true,
+        commands: [],
+        entrypoint: 'config.ru',
+        // A user pointing the asset directory at the project root.
+        assetsDir: '.',
+        routes: [{ source: '/*', destination: 'config.ru' }],
+        environmentVariables: { RACK_ENV: 'production' },
+      }),
+    };
+
+    const result = await generate(rubyFramework, 'bundler', {
+      '/project/config.ru': 'run App',
+      '/project/app.rb': 'class App; end',
+      '/project/lib/helpers.RB': 'module Helpers; end',
+      '/project/Gemfile': "gem 'rack'",
+      '/project/Gemfile.lock': 'GEM',
+      '/project/gems.rb': "gem 'rack'",
+      '/project/gems.locked': 'GEM',
+      '/project/.env': 'SECRET=1',
+      '/project/.bundle/config': 'BUNDLE_PATH: vendor/bundle',
+      '/project/.git/HEAD': 'ref: refs/heads/main',
+      '/project/vendor/bundle/ruby/3.4.0/gems/rack-3.1.0/README.md': 'readme',
+      '/project/public/.well-known/security.txt': 'Contact: x',
+      '/project/public/robots.txt': 'User-agent: *',
+      '/project/public/assets/vendor/lib.js': 'lib()',
+      '/project/README.md': 'readme',
+    });
+
+    expect(result.assets?.paths).toEqual(['./README.md', './public/assets/vendor/lib.js', './public/robots.txt']);
+  });
+
   it('should set all available regions', async () => {
     const result = await generate(mockFramework, 'npm');
     expect(result.regions).toEqual([...AVAILABLE_REGIONS]);
