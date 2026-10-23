@@ -85,7 +85,14 @@ const fakeApi = (...routes: Route[]) => {
   const calls: Array<{ method: string; url: URL; body: unknown }> = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
     const url = new URL(String(input));
-    const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : init?.body;
+    let body: unknown = init?.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body) as unknown;
+      } catch {
+        // A raw text body; keep it as is.
+      }
+    }
     calls.push({ method: init?.method ?? 'GET', url, body });
     for (const route of routes) {
       const response = await route(url, init);

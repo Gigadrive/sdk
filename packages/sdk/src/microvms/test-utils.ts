@@ -50,14 +50,38 @@ export const exit = (exitCode: number | null, signal: string | null = null): str
   `event: exit\ndata: ${JSON.stringify({ exitCode, signal })}\n\n`;
 
 /** A client whose `fetch` is a mock; inspect calls with {@link request}. */
-export const setup = (config: { applicationId?: string } = {}) => {
+export const setup = (
+  config: { applicationId?: string } = {}
+): { fetch: Mock<typeof globalThis.fetch>; client: GigadriveClient } => {
   const fetch = vi.fn<typeof globalThis.fetch>();
   const client = new GigadriveClient({ bearerToken: 'test-token', baseUrl: BASE_URL, fetch, ...config });
   return { fetch, client };
 };
 
+/** One request the mocked fetch received. */
+export interface RecordedRequest {
+  url: URL;
+  path: string;
+  query: Record<string, string>;
+  method: string;
+  headers: Record<string, string>;
+  body: unknown;
+  /** The body parsed as JSON, or `undefined` when it is not a JSON string. */
+  json: unknown;
+  init: RequestInit | undefined;
+}
+
+const parseJson = (body: unknown): unknown => {
+  if (typeof body !== 'string') return undefined;
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return undefined;
+  }
+};
+
 /** The n-th request the mocked fetch received. */
-export const request = (fetch: Mock<typeof globalThis.fetch>, index = 0) => {
+export const request = (fetch: Mock<typeof globalThis.fetch>, index = 0): RecordedRequest => {
   const call = fetch.mock.calls[index];
   if (!call) throw new Error(`fetch was called ${fetch.mock.calls.length} times, wanted call ${index}`);
   const [input, init] = call;
@@ -70,7 +94,7 @@ export const request = (fetch: Mock<typeof globalThis.fetch>, index = 0) => {
     method: init?.method ?? 'GET',
     headers: (init?.headers ?? {}) as Record<string, string>,
     body,
-    json: typeof body === 'string' ? (JSON.parse(body) as unknown) : undefined,
+    json: parseJson(body),
     init,
   };
 };
