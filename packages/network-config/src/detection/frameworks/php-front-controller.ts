@@ -8,7 +8,9 @@ import type { FrameworkDefaultConfig } from '../types';
  * skipped, so they run instead of being served), every other path reaches the
  * front controller, and `writablePaths` become directories the application can
  * write its cache, sessions and logs to at runtime. Without them a framework
- * that writes inside its own tree fails on the first request.
+ * that writes inside its own tree fails on the first request. The runtime is
+ * `php-84` until `composer.json` `require.php` says otherwise (see
+ * `withComposerPhpRuntime`).
  *
  * @param options.documentRoot - Directory holding the front controller, relative
  *   to the project root. `.` publishes the project root itself.
