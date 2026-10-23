@@ -314,3 +314,29 @@ export class DeploymentAuthError extends Schema.TaggedError<DeploymentAuthError>
 export class DeploymentFailedError extends Schema.TaggedError<DeploymentFailedError>()('DeploymentFailedError', {
   message: Schema.String,
 }) {}
+
+// ---------------------------------------------------------------------------
+// microVM errors
+// ---------------------------------------------------------------------------
+
+/** A microVM command's flags or arguments are invalid (bad duration, `KEY=VALUE`, port, ...). */
+export class InvalidMicroVmOptionsError extends Schema.TaggedError<InvalidMicroVmOptionsError>()(
+  'InvalidMicroVmOptionsError',
+  { message: Schema.String }
+) {}
+
+/** `microvms cp` needs exactly one side in the form `vm:<id>:<path>`. */
+export class InvalidCopyTargetError extends Schema.TaggedError<InvalidCopyTargetError>()('InvalidCopyTargetError', {
+  message: Schema.String,
+}) {}
+
+/** Reading or writing a local file for `microvms cp` failed. */
+export class LocalFileError extends Schema.TaggedError<LocalFileError>()('LocalFileError', {
+  message: Schema.String,
+  path: Schema.String,
+}) {}
+
+/** `microvms shell` needs an interactive terminal on stdin and stdout. */
+export class TerminalRequiredError extends Schema.TaggedError<TerminalRequiredError>()('TerminalRequiredError', {
+  message: Schema.String,
+}) {}

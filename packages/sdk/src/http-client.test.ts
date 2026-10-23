@@ -249,4 +249,28 @@ describe('HttpClient', () => {
     await expect(client.postRaw('/upload', body)).rejects.toThrow(ApiError);
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
+
+  it('sends a ReadableStream body with duplex: half, and other bodies without it', async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const client = createClient();
+    const stream = new Blob(['abc']).stream();
+
+    await client.put('/files', stream, { headers: { 'Content-Type': 'application/octet-stream' } });
+    await client.put('/files', new Uint8Array([1]));
+
+    expect((mockFetch.mock.calls[0]![1] as RequestInit & { duplex?: string }).duplex).toBe('half');
+    expect(mockFetch.mock.calls[1]![1]).not.toHaveProperty('duplex');
+  });
+
+  it('fetchPublic sends no credentials and does not throw on errors', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('down', { status: 502 }));
+    const tokenManager = createMockTokenManager();
+    const client = createClient(tokenManager);
+
+    const response = await client.fetchPublic('https://3000-abc.vm.example/', { method: 'GET' });
+
+    expect(response.status).toBe(502);
+    expect(mockFetch).toHaveBeenCalledWith('https://3000-abc.vm.example/', { method: 'GET' });
+    expect(tokenManager.getToken).not.toHaveBeenCalled();
+  });
 });

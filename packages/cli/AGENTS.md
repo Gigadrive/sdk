@@ -29,6 +29,8 @@ packages/cli/
     lib/
       dotenv.ts                 # .env serialize/parse helpers (pure)
       domain-output.ts          # custom domain state labels + DNS record table (pure)
+      microvm.ts                # microVM cp targets, tables, exit codes, StdinBatcher (pure)
+      microvm-session.ts        # attachCommand: stream a remote command, forward stdin/resizes
     commands/
       login/index.ts            # `gigadrive login`
       logout/index.ts           # `gigadrive logout`
@@ -40,6 +42,7 @@ packages/cli/
       deployments/index.ts      # `gigadrive deployments list|inspect`
       domains/index.ts          # `gigadrive domains list|add|update|claim|inspect|check|rm|owners`
       ai/index.ts               # `gigadrive ai usage|budgets|policies|models|chat`
+      microvms/index.ts         # `gigadrive microvms|vm create|ls|get|exec|shell|cp|stop|rm|extend|images`
       build/index.ts            # `gigadrive build`
       debug/index.ts            # `gigadrive debug` (parent)
       debug/config/index.ts     # `gigadrive debug config`

@@ -17,6 +17,32 @@ describe('public exports', () => {
     expect(typeof sdk.parseSSEStream).toBe('function');
   });
 
+  it('exports the microVM API', () => {
+    for (const name of [
+      'MicroVM',
+      'Command',
+      'MicroVmFiles',
+      'MicroVmCommands',
+      'MicroVmsResource',
+      'MicroVmCommandsResource',
+      'MicroVmFilesResource',
+      'MicroVmImagesResource',
+      'MicroVmNotRunningError',
+      'MicroVmNotFoundError',
+      'MicroVmFileNotFoundError',
+      'MicroVmQuotaExceededError',
+      'MicroVmPortNotExposedError',
+      'MicroVmTimeoutError',
+      'MicroVmStartError',
+      'MicroVmImageBuildError',
+      'CommandFailedError',
+      'durationToMs',
+      'parseSSEEvents',
+    ]) {
+      expect(typeof (sdk as Record<string, unknown>)[name]).toBe('function');
+    }
+  });
+
   it('exports every resource class', () => {
     const classes = [
       'OrganizationsResource',
