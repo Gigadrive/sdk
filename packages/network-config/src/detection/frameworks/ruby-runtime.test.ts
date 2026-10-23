@@ -1,7 +1,14 @@
 import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
+import * as packageRoot from '../../index';
 import { makeTestFs, TestPathLayer } from '../../test-utils';
-import { detectRubyRuntime, rubyRuntimeForRequirement, rubyRuntimeForVersion } from './ruby-runtime';
+import {
+  DEFAULT_RUBY_RUNTIME,
+  detectRubyRuntime,
+  rubyRuntimeForRequirement,
+  rubyRuntimeForVersion,
+  rubyRuntimeFromProjectFiles,
+} from './ruby-runtime';
 import { detectProject } from './test-utils';
 
 const runDetectRubyRuntime = (files: Record<string, string>) =>
@@ -67,6 +74,110 @@ describe('rubyRuntimeForRequirement', () => {
 
   it.each(['~> 3.2.0', '< 3.3', '~> 2.7', '>= 5.0', 'latest', ''])('should pick no runtime for %j', (requirement) => {
     expect(rubyRuntimeForRequirement(requirement)).toBeUndefined();
+  });
+});
+
+describe('rubyRuntimeFromProjectFiles', () => {
+  const fromFiles = (files: Record<string, string>) =>
+    rubyRuntimeFromProjectFiles((relativePath) => (relativePath in files ? files[relativePath] : undefined));
+
+  it.each([
+    // .ruby-version formats.
+    { name: '.ruby-version 3.3.6', files: { '.ruby-version': '3.3.6\n' }, runtime: 'ruby-33' },
+    { name: '.ruby-version ruby-3.3.6', files: { '.ruby-version': 'ruby-3.3.6' }, runtime: 'ruby-33' },
+    { name: '.ruby-version 3.3', files: { '.ruby-version': '3.3' }, runtime: 'ruby-33' },
+    { name: '.ruby-version ruby-3.4.1', files: { '.ruby-version': 'ruby-3.4.1' }, runtime: 'ruby-34' },
+    { name: '.ruby-version with trailing text', files: { '.ruby-version': '4.0.0 # pinned\r\n' }, runtime: 'ruby-40' },
+    { name: '.ruby-version older than every runtime', files: { '.ruby-version': '3.2.2' }, runtime: 'ruby-33' },
+    { name: '.ruby-version newer than every runtime', files: { '.ruby-version': '4.1.0' }, runtime: 'ruby-40' },
+    // .tool-versions.
+    { name: '.tool-versions', files: { '.tool-versions': 'nodejs 22.11.0\nruby 3.3.6\n' }, runtime: 'ruby-33' },
+    // Gemfile ruby directive.
+    { name: 'Gemfile exact version', files: { Gemfile: 'ruby "3.3.6"' }, runtime: 'ruby-33' },
+    { name: 'Gemfile ~> 3.3', files: { Gemfile: "ruby '~> 3.3'" }, runtime: 'ruby-34' },
+    { name: 'Gemfile ~> 3.3.1', files: { Gemfile: "ruby '~> 3.3.1'" }, runtime: 'ruby-33' },
+    { name: 'Gemfile >= 3.2', files: { Gemfile: 'ruby ">= 3.2"' }, runtime: 'ruby-40' },
+    { name: 'Gemfile several requirements', files: { Gemfile: "ruby '>= 3.2', '< 3.4'" }, runtime: 'ruby-33' },
+    {
+      name: 'Gemfile file: directive',
+      files: { Gemfile: 'ruby file: ".ruby-version"\ngem "rails"', '.ruby-version': 'ruby-3.4.1' },
+      runtime: 'ruby-34',
+    },
+    {
+      name: 'Gemfile file: directive naming another file',
+      files: { Gemfile: 'ruby file: "config/ruby-version"', 'config/ruby-version': '3.3.6' },
+      runtime: 'ruby-33',
+    },
+    {
+      name: 'Gemfile file: directive naming .tool-versions',
+      files: { Gemfile: 'ruby file: ".tool-versions"', '.tool-versions': 'ruby 4.0.0' },
+      runtime: 'ruby-40',
+    },
+    // Gemfile.lock RUBY VERSION.
+    {
+      name: 'Gemfile.lock RUBY VERSION',
+      files: { 'Gemfile.lock': gemfileLockWithRuby('3.3.6p108') },
+      runtime: 'ruby-33',
+    },
+    // Precedence and fall-through.
+    {
+      name: '.ruby-version before everything else',
+      files: {
+        '.ruby-version': '3.3.6',
+        '.tool-versions': 'ruby 3.4.1',
+        Gemfile: 'ruby "4.0.0"',
+        'Gemfile.lock': gemfileLockWithRuby('4.0.0'),
+      },
+      runtime: 'ruby-33',
+    },
+    {
+      name: '.tool-versions before the Gemfile',
+      files: { '.tool-versions': 'ruby 3.4.1', Gemfile: 'ruby "4.0.0"' },
+      runtime: 'ruby-34',
+    },
+    {
+      name: 'the Gemfile before Gemfile.lock',
+      files: { Gemfile: "ruby '~> 3.3.0'", 'Gemfile.lock': gemfileLockWithRuby('4.0.0') },
+      runtime: 'ruby-33',
+    },
+    {
+      name: 'unusable sources skipped',
+      files: {
+        '.ruby-version': 'jruby-9.4.5.0',
+        '.tool-versions': 'nodejs 22.11.0',
+        Gemfile: "ruby '~> 3.2.0'",
+        'Gemfile.lock': gemfileLockWithRuby('3.4.1p0'),
+      },
+      runtime: 'ruby-34',
+    },
+  ])('should pick $runtime from $name', ({ files, runtime }) => {
+    expect(fromFiles(files)).toBe(runtime);
+  });
+
+  it.each([
+    { name: 'no files', files: {} },
+    { name: 'a Gemfile without a ruby directive', files: { Gemfile: "gem 'sinatra'" } },
+    { name: 'a dynamic ruby directive', files: { Gemfile: 'ruby RUBY_VERSION' } },
+    { name: 'a missing version file', files: { Gemfile: 'ruby file: ".ruby-version"' } },
+    { name: 'only non-MRI versions', files: { '.ruby-version': 'truffleruby-24.1.0' } },
+  ])('should return undefined for $name', ({ files }) => {
+    expect(fromFiles(files)).toBeUndefined();
+  });
+
+  it('should only ask for project-relative files', () => {
+    const requested: string[] = [];
+    rubyRuntimeFromProjectFiles((relativePath) => {
+      requested.push(relativePath);
+      return relativePath === 'Gemfile' ? 'ruby file: ".ruby-version"' : undefined;
+    });
+
+    expect(requested).toEqual(['.ruby-version', '.tool-versions', 'Gemfile', '.ruby-version', 'Gemfile.lock']);
+  });
+
+  it('should be exported from the package root with the default runtime', () => {
+    expect(packageRoot.rubyRuntimeFromProjectFiles).toBe(rubyRuntimeFromProjectFiles);
+    expect(packageRoot.DEFAULT_RUBY_RUNTIME).toBe('ruby-34');
+    expect(DEFAULT_RUBY_RUNTIME).toBe('ruby-34');
   });
 });
 

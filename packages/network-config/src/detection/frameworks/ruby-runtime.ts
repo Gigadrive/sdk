@@ -1,5 +1,5 @@
 import { FileSystem, Path } from '@effect/platform';
-import { Effect, Option } from 'effect';
+import { Effect } from 'effect';
 import type { Runtime } from '../../runtime';
 import type { FrameworkDefaultConfig, FrameworkDefinition } from '../types';
 import { compareRubyVersions, parseRubyRequirement, parseRubyVersion, rubyRequirementAllows } from './ruby-requirement';
@@ -99,105 +99,136 @@ const GEMFILE_RUBY_FILE = /^(?:file:|:file\s*=>|File\.read\s*\(?)\s*(['"])([^'"]
 /** The quoted strings leading a `ruby` directive, before any keyword argument such as `engine:`. */
 const LEADING_STRINGS = /^\s*(['"])([^'"]*)\1\s*(?:,|\)|$)/;
 
+/** The fixed files a Ruby version can come from, in the order they are consulted. */
+const RUBY_VERSION_FILES = ['.ruby-version', '.tool-versions', 'Gemfile', 'Gemfile.lock'];
+
+/** The arguments of a Gemfile's `ruby` directive, e.g. `"~> 3.3"` or `file: ".ruby-version"`. */
+const gemfileRubyDirective = (gemfile: string) => GEMFILE_RUBY_DIRECTIVE.exec(gemfile)?.[1]?.trim();
+
+/** The project-relative file a Gemfile's `ruby` directive reads its version from, if it names one. */
+const gemfileRubyVersionFile = (gemfile: string) => {
+  const directive = gemfileRubyDirective(gemfile);
+  return directive === undefined ? undefined : GEMFILE_RUBY_FILE.exec(directive)?.[2];
+};
+
+/** Picks the runtime for the content of a `.ruby-version` or `.tool-versions` file, by the file's name. */
+const runtimeFromVersionFile = (file: string, content: string | undefined) => {
+  if (content === undefined) {
+    return undefined;
+  }
+  const parse = file.split('/').at(-1) === '.tool-versions' ? versionFromToolVersionsFile : versionFromRubyVersionFile;
+  const version = parse(content);
+  return version === undefined ? undefined : rubyRuntimeForVersion(version);
+};
+
+/**
+ * Picks the runtime for the Gemfile `ruby` directive: a requirement such as
+ * `ruby "~> 3.3"` (several comma-separated strings are combined), or the file
+ * named by `ruby file: ".ruby-version"`, read through `readFile`.
+ */
+const runtimeFromGemfile = (gemfile: string | undefined, readFile: (relativePath: string) => string | undefined) => {
+  const directive = gemfile === undefined ? undefined : gemfileRubyDirective(gemfile);
+  if (directive === undefined) {
+    return undefined;
+  }
+
+  const versionFile = GEMFILE_RUBY_FILE.exec(directive)?.[2];
+  if (versionFile !== undefined) {
+    return runtimeFromVersionFile(versionFile, readFile(versionFile));
+  }
+
+  const requirements: string[] = [];
+  let rest = directive;
+  for (let match = LEADING_STRINGS.exec(rest); match; match = LEADING_STRINGS.exec(rest)) {
+    requirements.push(match[2]);
+    rest = rest.slice(match[0].length);
+  }
+  return requirements.length === 0 ? undefined : rubyRuntimeForRequirement(requirements.join(','));
+};
+
+/** Picks the runtime for the `RUBY VERSION` a `Gemfile.lock` records. */
+const runtimeFromGemfileLock = (lockfile: string | undefined) => {
+  const version = lockfile === undefined ? undefined : versionFromGemfileLock(lockfile);
+  return version === undefined ? undefined : rubyRuntimeForVersion(version);
+};
+
+/**
+ * Picks the Ruby runtime a project asks for, from file contents the caller
+ * supplies. Pure and synchronous, so a build can choose its Ruby with exactly
+ * the rules the presets use; {@link detectRubyRuntime} is the same function
+ * over the Effect file system. The first of these that names a usable version
+ * wins:
+ *
+ * 1. `.ruby-version` (`3.3.6`, `ruby-3.3.6`, `3.3`; trailing whitespace and
+ *    anything after a space ignored)
+ * 2. `.tool-versions` (`ruby 3.3.6`)
+ * 3. the Gemfile `ruby` directive (`ruby "3.3.6"`, `ruby "~> 3.3"`,
+ *    `ruby ">= 3.2", "< 4.0"`, or `ruby file: ".ruby-version"`, whose file is
+ *    read through `readFile`)
+ * 4. the `RUBY VERSION` a `Gemfile.lock` records (`ruby 3.3.6p108`)
+ *
+ * Concrete versions map with {@link rubyRuntimeForVersion} and requirements
+ * with {@link rubyRuntimeForRequirement}. A source naming no usable version is
+ * skipped.
+ *
+ * @param readFile - Returns the content of a project-relative file, or
+ *   `undefined` when it is missing or unreadable.
+ * @returns The runtime, or `undefined` when the project names no usable
+ *   version, in which case callers use {@link DEFAULT_RUBY_RUNTIME}.
+ *
+ * @example
+ * ```ts
+ * const runtime =
+ *   rubyRuntimeFromProjectFiles((file) => files.get(file)) ?? DEFAULT_RUBY_RUNTIME;
+ * ```
+ */
+export const rubyRuntimeFromProjectFiles = (
+  readFile: (relativePath: string) => string | undefined
+): Runtime | undefined =>
+  runtimeFromVersionFile('.ruby-version', readFile('.ruby-version')) ??
+  runtimeFromVersionFile('.tool-versions', readFile('.tool-versions')) ??
+  runtimeFromGemfile(readFile('Gemfile'), readFile) ??
+  runtimeFromGemfileLock(readFile('Gemfile.lock'));
+
 /**
  * Reads a project file.
  *
- * @returns The content, or `None` when the file is missing or unreadable.
+ * @returns The content, or `undefined` when the file is missing or unreadable.
  */
 const readProjectFile = Effect.fn('readProjectFile')(
   function* (projectFolder: string, file: string) {
     const fs = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
-    return Option.some(yield* fs.readFileString(pathService.join(projectFolder, file)));
+    return yield* fs.readFileString(pathService.join(projectFolder, file));
   },
-  Effect.catchAll(() => Effect.succeed(Option.none<string>()))
+  Effect.catchAll(() => Effect.succeed(undefined))
 );
 
 /**
- * Picks the runtime for a `.ruby-version` or `.tool-versions` file, by its
- * name.
- */
-const runtimeFromVersionFile = Effect.fn('runtimeFromVersionFile')(function* (projectFolder: string, file: string) {
-  const content = yield* readProjectFile(projectFolder, file);
-  const parse = file.split('/').at(-1) === '.tool-versions' ? versionFromToolVersionsFile : versionFromRubyVersionFile;
-  return Option.flatMapNullable(content, (text) => {
-    const version = parse(text);
-    return version === undefined ? undefined : rubyRuntimeForVersion(version);
-  });
-});
-
-/**
- * Picks the runtime for the Gemfile `ruby` directive: a requirement such as
- * `ruby "~> 3.3"` (several comma-separated strings are combined), or the file
- * named by `ruby file: ".ruby-version"`.
- */
-const runtimeFromGemfile = Effect.fn('runtimeFromGemfile')(function* (projectFolder: string) {
-  const gemfile = yield* readProjectFile(projectFolder, 'Gemfile');
-  const directive = Option.flatMapNullable(gemfile, (content) => GEMFILE_RUBY_DIRECTIVE.exec(content)?.[1]?.trim());
-  if (Option.isNone(directive)) {
-    return Option.none<Runtime>();
-  }
-
-  const versionFile = GEMFILE_RUBY_FILE.exec(directive.value)?.[2];
-  if (versionFile !== undefined) {
-    return yield* runtimeFromVersionFile(projectFolder, versionFile);
-  }
-
-  const requirements: string[] = [];
-  let rest = directive.value;
-  for (let match = LEADING_STRINGS.exec(rest); match; match = LEADING_STRINGS.exec(rest)) {
-    requirements.push(match[2]);
-    rest = rest.slice(match[0].length);
-  }
-  return requirements.length === 0
-    ? Option.none<Runtime>()
-    : Option.fromNullable(rubyRuntimeForRequirement(requirements.join(',')));
-});
-
-/** Picks the runtime for the `RUBY VERSION` a `Gemfile.lock` records. */
-const runtimeFromGemfileLock = Effect.fn('runtimeFromGemfileLock')(function* (projectFolder: string) {
-  const lockfile = yield* readProjectFile(projectFolder, 'Gemfile.lock');
-  return Option.flatMapNullable(lockfile, (content) => {
-    const version = versionFromGemfileLock(content);
-    return version === undefined ? undefined : rubyRuntimeForVersion(version);
-  });
-});
-
-/**
- * Picks the Ruby runtime a project asks for. The first of these that names a
- * usable version wins:
- *
- * 1. `.ruby-version` (`3.3.6`, `ruby-3.3.6`, `3.3`)
- * 2. `.tool-versions` (`ruby 3.3.6`)
- * 3. the Gemfile `ruby` directive (`ruby "3.3.6"`, `ruby "~> 3.3"`,
- *    `ruby file: ".ruby-version"`)
- * 4. the `RUBY VERSION` a `Gemfile.lock` records (`ruby 3.3.6p108`)
- *
- * Concrete versions map with {@link rubyRuntimeForVersion} and requirements
- * with {@link rubyRuntimeForRequirement}. Missing or unreadable files are
- * skipped, never an error.
+ * Picks the Ruby runtime a project asks for by reading its files with the
+ * Effect file system and handing them to {@link rubyRuntimeFromProjectFiles},
+ * so presets and builds share one implementation. Missing or unreadable files
+ * are skipped, never an error.
  *
  * The runtime of a static Ruby preset (Jekyll, Bridgetown) appears nowhere in
  * the generated config, since it has no function, so a build that needs to
- * choose its Ruby calls this directly.
+ * choose its Ruby calls this (or {@link rubyRuntimeFromProjectFiles}) directly.
  *
  * @param projectFolder - Absolute path to the project root
  * @returns The runtime, or `undefined` when the project names no usable version.
  */
 export const detectRubyRuntime = Effect.fn('detectRubyRuntime')(function* (projectFolder: string) {
-  const sources = [
-    runtimeFromVersionFile(projectFolder, '.ruby-version'),
-    runtimeFromVersionFile(projectFolder, '.tool-versions'),
-    runtimeFromGemfile(projectFolder),
-    runtimeFromGemfileLock(projectFolder),
-  ];
-  for (const source of sources) {
-    const runtime = yield* source;
-    if (Option.isSome(runtime)) {
-      return runtime.value;
-    }
+  const files = new Map<string, string | undefined>();
+  for (const file of RUBY_VERSION_FILES) {
+    files.set(file, yield* readProjectFile(projectFolder, file));
   }
-  return undefined;
+  // The Gemfile may name the file its version comes from.
+  const gemfile = files.get('Gemfile');
+  const versionFile = gemfile === undefined ? undefined : gemfileRubyVersionFile(gemfile);
+  if (versionFile !== undefined && !files.has(versionFile)) {
+    files.set(versionFile, yield* readProjectFile(projectFolder, versionFile));
+  }
+  return rubyRuntimeFromProjectFiles((file) => files.get(file));
 });
 
 /**

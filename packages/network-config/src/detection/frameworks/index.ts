@@ -29,7 +29,13 @@ import { symfony } from './symfony';
 import { vite } from './vite';
 import { yii } from './yii';
 
-export { detectRubyRuntime } from './ruby-runtime';
+export {
+  DEFAULT_RUBY_RUNTIME,
+  detectRubyRuntime,
+  rubyRuntimeForRequirement,
+  rubyRuntimeForVersion,
+  rubyRuntimeFromProjectFiles,
+} from './ruby-runtime';
 
 /**
  * All supported framework definitions, sorted by priority descending.

@@ -177,7 +177,9 @@ directory is the project root.
 Static site generators (Jekyll, Bridgetown) have no entrypoint and no routes:
 their build output is the deployment. Their `runtime` still picks the Ruby the
 build runs on. It appears nowhere in the generated config, so a build reads it
-with `detectRubyRuntime(projectFolder)`.
+with `rubyRuntimeFromProjectFiles(readFile)` (pure and synchronous, exported
+from the package root) or `detectRubyRuntime(projectFolder)`, falling back to
+`DEFAULT_RUBY_RUNTIME`.
 
 Secrets such as Rails' `SECRET_KEY_BASE` use `generatedSecret('hex')`; the
 platform supports only the `laravel-app-key` and `hex` formats.
@@ -209,7 +211,10 @@ with `Gem::Requirement` semantics: `~> 3.3` (`>= 3.3, < 4.0`) → `ruby-34`,
 `~> 3.3.1` (`>= 3.3.1, < 3.4`) → `ruby-33`, `>= 3.2` → `ruby-40`. A source
 that names no usable version (`jruby-9.4.5.0`, `ruby RUBY_VERSION`, or a
 requirement no runtime satisfies) is skipped, and without any the preset keeps
-its default. Versions and requirements are parsed by the dependency-free
+its default. The rules live in the pure `rubyRuntimeFromProjectFiles`, which
+`withRubyRuntime` and `detectRubyRuntime` call after reading the files, so
+builds and presets share one implementation. Versions and requirements are
+parsed by the dependency-free
 `frameworks/ruby-requirement.ts`.
 
 ## Detectors
