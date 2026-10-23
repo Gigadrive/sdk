@@ -120,6 +120,21 @@ pnpm format:fix                             # formatting correct
 | `package.writablePaths` | `string[]`                       | no       | Directories the function writes to at runtime (cache, sessions, logs). The platform creates each one and makes it writable by the runtime user; writes are private to one running copy and lost when it stops. PHP presets build these with `phpFrontControllerDefaults`.                                                                                             |
 | `excludeFiles`          | `string[]`                       | no       | Glob patterns for files to exclude from the function package.                                                                                                                                                                                                                                                                                                         |
 
+## PHP runtime selection
+
+Every PHP preset (`language: 'php'`) picks its runtime from the project's
+`composer.json` `require.php` constraint. `FRAMEWORK_DEFINITIONS` wraps each
+one with `withComposerPhpRuntime` (`frameworks/php-runtime.ts`), which runs
+after the preset's own `refineDefaultConfig`, so a new PHP preset gets this
+without extra code: declare `runtime: 'php-84'` as its default.
+
+The newest PHP runtime whose newest patch release the constraint allows wins:
+`^8.2` → `php-84`, `~8.3.0` or `>=8.1 <8.4` → `php-83`. A missing or
+unparseable constraint, or one allowing neither 8.4 nor 8.3, keeps the
+preset's default. `php-81` is deprecated and never picked. Constraints are
+evaluated by the dependency-free `composerConstraintAllows`
+(`frameworks/composer-constraint.ts`).
+
 ## Detectors
 
 Detectors answer the question: "Is this project using framework X?"
