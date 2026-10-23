@@ -39,6 +39,21 @@ describe('detectPackageManager', () => {
     expect(result).toBe('composer');
   });
 
+  it('should detect bundler from Gemfile.lock', async () => {
+    const result = await run({ '/project/Gemfile': '', '/project/Gemfile.lock': '' });
+    expect(result).toBe('bundler');
+  });
+
+  it('should detect bundler from a Gemfile without a lockfile', async () => {
+    const result = await run({ '/project/Gemfile': "source 'https://rubygems.org'" });
+    expect(result).toBe('bundler');
+  });
+
+  it('should prefer every Node and Composer lockfile over a Gemfile', async () => {
+    const result = await run({ '/project/composer.lock': '', '/project/Gemfile.lock': '', '/project/Gemfile': '' });
+    expect(result).toBe('composer');
+  });
+
   it('should fallback to npm when no lockfile is found', async () => {
     const result = await run({});
     expect(result).toBe('npm');

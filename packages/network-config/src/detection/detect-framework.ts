@@ -4,7 +4,14 @@ import { detectPackageManager } from './detect-package-manager';
 import { FRAMEWORK_DEFINITIONS } from './frameworks';
 import { generateConfig } from './generate-config';
 import { readDependencies } from './read-dependencies';
-import type { FrameworkDefinition, FrameworkDetectionItem, ManifestParseError, ManifestReadError } from './types';
+import type {
+  FrameworkDefinition,
+  FrameworkDetectionItem,
+  FrameworkLanguage,
+  ManifestParseError,
+  ManifestReadError,
+  PackageManager,
+} from './types';
 import { FrameworkNotDetectedError } from './types';
 
 /**
@@ -82,6 +89,23 @@ const matchesFramework = Effect.fn('matchesFramework')(function* (
 });
 
 /**
+ * The package manager a detected framework installs with. PHP always uses
+ * Composer and Ruby always uses Bundler, whatever other lockfiles the project
+ * carries. A Node framework uses the detected one, except that a Gemfile (a
+ * Node project that keeps one for Fastlane, say) never makes it run Bundler.
+ */
+const packageManagerForLanguage = (language: FrameworkLanguage, detected: PackageManager): PackageManager => {
+  switch (language) {
+    case 'php':
+      return 'composer';
+    case 'ruby':
+      return 'bundler';
+    case 'node':
+      return detected === 'bundler' ? 'npm' : detected;
+  }
+};
+
+/**
  * Detects the framework used in a project by checking framework definitions
  * against the project's dependencies and file structure.
  *
@@ -94,12 +118,12 @@ const matchesFramework = Effect.fn('matchesFramework')(function* (
 export const detectFramework = Effect.fn('detectFramework')(function* (projectFolder: string) {
   yield* Effect.logDebug(`Detecting framework in ${projectFolder}`);
 
-  // Memoize dependency reads so each manifest (package.json, composer.json) is read at most once.
+  // Memoize dependency reads so each manifest (package.json, composer.json, Gemfile.lock) is read at most once.
   // Uses \0 (null byte) as delimiter to avoid conflicts with ':' in Windows paths (e.g. C:\...)
   const cachedReadDeps = yield* Effect.cachedFunction((key: string) => {
     const sepIndex = key.lastIndexOf('\0');
     const folder = key.slice(0, sepIndex);
-    const language = key.slice(sepIndex + 1) as 'node' | 'php';
+    const language = key.slice(sepIndex + 1) as FrameworkLanguage;
     return readDependencies(folder, language);
   });
 
@@ -110,7 +134,7 @@ export const detectFramework = Effect.fn('detectFramework')(function* (projectFo
       yield* Effect.log(`Detected framework: ${framework.name}`, { slug: framework.slug });
 
       const detectedPackageManager = yield* detectPackageManager(projectFolder);
-      const packageManager = framework.language === 'php' ? 'composer' : detectedPackageManager;
+      const packageManager = packageManagerForLanguage(framework.language, detectedPackageManager);
       const defaults = framework.getDefaultConfig(packageManager);
       const refinedDefaults = framework.refineDefaultConfig
         ? yield* framework.refineDefaultConfig(defaults, projectFolder)
