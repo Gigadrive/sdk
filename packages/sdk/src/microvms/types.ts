@@ -85,7 +85,7 @@ export interface CreateMicroVmInput {
   memoryMb?: number;
   /** Writable disk in MiB, 1024 to 51200. Default 10240. */
   diskMb?: number;
-  /** Lifetime in milliseconds before the microVM stops automatically. Default 300000 (5 minutes). */
+  /** Lifetime in milliseconds before the microVM stops automatically. Default 300000 (5 minutes), at most 24 hours and the plan's maximum. */
   timeoutMs?: number;
   /** Up to 8 ports to expose with public preview URLs (10000 and 10001 are reserved). */
   ports?: number[];
@@ -111,6 +111,8 @@ export interface MicroVmPage {
   items: MicroVmInfo[];
   /** Pass to the next `list` call to continue; absent on the last page. */
   nextCursor?: string;
+  /** Whether another page follows. */
+  hasMore: boolean;
 }
 
 /** Signals that can be sent to a command. */
@@ -128,7 +130,10 @@ export interface CommandInfo {
   id: string;
   cmd: string;
   args: string[];
+  /** Working directory the command runs in. */
   cwd: string | null;
+  /** User the command runs as. */
+  user?: string;
   status: 'running' | 'exited';
   /** Exit code, or `null` while running or when a signal killed the process. */
   exitCode: number | null;
@@ -137,8 +142,9 @@ export interface CommandInfo {
   pid: number | null;
   /** Whether the command runs in a pseudo-terminal. */
   pty: boolean;
-  /** Whether the command was killed because it exceeded its `timeoutMs`. */
-  timedOut?: boolean;
+  /** Whether the command was killed because it ran past its `timeoutMs`. */
+  timedOut: boolean;
+  /** ISO 8601 start time. */
   startedAt: string | number;
   finishedAt: string | number | null;
 }
@@ -170,11 +176,15 @@ export interface StartCommandInput {
 export interface CommandRunResult {
   id: string;
   exitCode: number | null;
-  /** Signal that killed the process, when present. */
-  signal?: string | null;
+  /** Signal that killed the process, if any. */
+  signal: string | null;
+  /** Whether the command was killed because it ran past its `timeoutMs`. */
+  timedOut: boolean;
+  /** UTF-8 decoded stdout, at most 1 MiB. */
   stdout: string;
+  /** UTF-8 decoded stderr, at most 1 MiB. */
   stderr: string;
-  /** Whether the output was cut to the retained window. */
+  /** Whether output was left out (over 1 MiB, or no longer retained). */
   truncated: boolean;
   durationMs: number;
 }
@@ -203,6 +213,15 @@ export type CommandLogEvent =
       offset: number;
     }
   | {
+      /** Output before the requested offsets is no longer retained (each stream keeps its last 8 MiB). */
+      type: 'truncated';
+    }
+  | {
+      /** With `follow: false` on a running command: the buffered output was sent; the command keeps running. */
+      type: 'end';
+      reason: string;
+    }
+  | {
       type: 'exit';
       exitCode: number | null;
       signal: string | null;
@@ -222,9 +241,17 @@ export interface FileEntry {
   size: number;
   /** Octal permission bits, e.g. `0644`. */
   mode: string;
+  /** ISO 8601 modification time. */
   modifiedAt: string | number;
-  /** Link target, for symlinks. */
-  target?: string;
+  /** Link target, for symlinks; otherwise `null`. */
+  target?: string | null;
+}
+
+/** A directory listing. */
+export interface FileListing {
+  entries: FileEntry[];
+  /** The listing hit its size limit; list a narrower directory. */
+  truncated: boolean;
 }
 
 /** Result of a file write. */
@@ -237,7 +264,7 @@ export interface FileWriteResult {
 /** Where a custom image comes from. */
 export type MicroVmImageSource = { type: 'registry'; ref: string } | { type: 'dockerfile'; dockerfile: string };
 
-/** Build state of an image. */
+/** Build state of an image. A new image starts `pending`. */
 export type MicroVmImageStatus = 'pending' | 'building' | 'ready' | 'failed';
 
 /** A bootable microVM image. Built-in images have no application. */
@@ -250,8 +277,14 @@ export interface MicroVmImage {
   applicationId: string | null;
   organizationId: string | null;
   source?: MicroVmImageSource | null;
-  /** Last build failure. */
+  /** Registry digest the build resolved. */
+  sourceDigest?: string | null;
+  /** Size of the unpacked root filesystem. */
+  sizeBytes?: number | null;
+  /** Why the last build failed. */
   error?: string | null;
+  buildStartedAt?: string | null;
+  buildFinishedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

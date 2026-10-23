@@ -1,7 +1,7 @@
 import type { HttpClient } from '../http-client';
 import { BaseResource } from '../resources/base-resource';
 import { abortReason, durationToMs, type MicroVmDuration, sleep } from './duration';
-import { MicroVmImageBuildError, MicroVmTimeoutError, toMicroVmError } from './errors';
+import { MicroVmBusyError, MicroVmImageBuildError, MicroVmTimeoutError, toMicroVmError } from './errors';
 import { type CommandLogStreamOptions, streamCommandLogs } from './logs';
 import type {
   CommandInfo,
@@ -11,6 +11,7 @@ import type {
   CreateMicroVmImageInput,
   CreateMicroVmInput,
   FileEntry,
+  FileListing,
   FileWriteResult,
   ListMicroVmsQuery,
   MicroVmImage,
@@ -40,6 +41,26 @@ const typed = <T>(promise: Promise<T>, filePath?: string): Promise<T> =>
     throw toMicroVmError(error, filePath);
   });
 
+/** Pauses before each retry of a read the microVM answered `microvm_busy`. */
+const BUSY_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000];
+
+/**
+ * Runs an idempotent request (a read, or a wait), retrying with backoff while
+ * the microVM answers `microvm_busy` (429/503). Mutations are never retried.
+ */
+const read = async <T>(run: () => Promise<T>, signal?: AbortSignal, filePath?: string): Promise<T> => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await typed(run(), filePath);
+    } catch (error) {
+      if (!(error instanceof MicroVmBusyError) || attempt >= BUSY_RETRY_DELAYS_MS.length || signal?.aborted) {
+        throw error;
+      }
+      await sleep(BUSY_RETRY_DELAYS_MS[attempt], signal);
+    }
+  }
+};
+
 /** Accepts `{ data }`, `{ items }` or a bare array, since list routes differ in their envelope. */
 const unwrapList = <T>(body: unknown, key: 'data' | 'entries' = 'data'): T[] => {
   if (Array.isArray(body)) return body as T[];
@@ -51,9 +72,11 @@ const unwrapList = <T>(body: unknown, key: 'data' | 'entries' = 'data'): T[] => 
   return [];
 };
 
-/** The guest reports `commandId`; the public API reports `id`. Accept both. */
-const normalizeCommand = (raw: CommandInfo & { commandId?: string }): CommandInfo =>
-  raw.id === undefined && raw.commandId !== undefined ? { ...raw, id: raw.commandId } : raw;
+/** The guest reports `commandId`; the public API reports `id`. Accept both, and default `timedOut`. */
+const normalizeCommand = (raw: CommandInfo & { commandId?: string }): CommandInfo => {
+  const withId = raw.id === undefined && raw.commandId !== undefined ? { ...raw, id: raw.commandId } : raw;
+  return typeof withId.timedOut === 'boolean' ? withId : { ...withId, timedOut: false };
+};
 
 // ---------------------------------------------------------------------------
 // Commands
@@ -92,13 +115,18 @@ export class MicroVmCommandsResource extends BaseResource {
 
   /** List the microVM's commands, newest first (`GET /microvms/:id/commands`). */
   async list(microvmId: string, options: MicroVmRequestOptions = {}): Promise<CommandInfo[]> {
-    const body = await typed(this.httpClient.get<unknown>(`${vmPath(microvmId)}/commands`, options));
+    const body = await read(
+      () => this.httpClient.get<unknown>(`${vmPath(microvmId)}/commands`, options),
+      options.signal
+    );
     return unwrapList<CommandInfo>(body).map(normalizeCommand);
   }
 
   /** Get one command (`GET /microvms/:id/commands/:cmdId`). */
   async get(microvmId: string, commandId: string, options: MicroVmRequestOptions = {}): Promise<CommandInfo> {
-    return normalizeCommand(await typed(this.httpClient.get<CommandInfo>(commandPath(microvmId, commandId), options)));
+    return normalizeCommand(
+      await read(() => this.httpClient.get<CommandInfo>(commandPath(microvmId, commandId), options), options.signal)
+    );
   }
 
   /**
@@ -149,12 +177,14 @@ export class MicroVmCommandsResource extends BaseResource {
     options: { timeoutMs?: number } & MicroVmRequestOptions = {}
   ): Promise<CommandInfo> {
     const { signal, timeoutMs } = options;
-    const raw = await typed(
-      this.httpClient.post<CommandInfo>(
-        `${commandPath(microvmId, commandId)}/wait`,
-        timeoutMs === undefined ? {} : { timeoutMs },
-        { signal }
-      )
+    const raw = await read(
+      () =>
+        this.httpClient.post<CommandInfo>(
+          `${commandPath(microvmId, commandId)}/wait`,
+          timeoutMs === undefined ? {} : { timeoutMs },
+          { signal }
+        ),
+      signal
     );
     return normalizeCommand(raw);
   }
@@ -273,26 +303,34 @@ export class MicroVmFilesResource extends BaseResource {
     );
   }
 
-  /** List a directory (`GET /microvms/:id/files`). */
+  /**
+   * List a directory (`GET /microvms/:id/files`). `truncated` is set when the
+   * listing hit its size limit; list a narrower directory then.
+   */
   async list(
     microvmId: string,
     path: string,
     options: { recursive?: boolean; depth?: number } & MicroVmRequestOptions = {}
-  ): Promise<FileEntry[]> {
-    const body = await typed(
-      this.httpClient.get<unknown>(`${vmPath(microvmId)}/files`, {
-        query: { path, recursive: options.recursive ? true : undefined, depth: options.depth },
-        signal: options.signal,
-      }),
+  ): Promise<FileListing> {
+    const body = await read(
+      () =>
+        this.httpClient.get<unknown>(`${vmPath(microvmId)}/files`, {
+          query: { path, recursive: options.recursive ? true : undefined, depth: options.depth },
+          signal: options.signal,
+        }),
+      options.signal,
       path
     );
-    return unwrapList<FileEntry>(body, 'entries');
+    const truncated = (body as { truncated?: unknown } | null)?.truncated === true;
+    return { entries: unwrapList<FileEntry>(body, 'entries'), truncated };
   }
 
   /** Describe a file or directory without following a final symlink (`GET /microvms/:id/files/stat`). */
   stat(microvmId: string, path: string, options: MicroVmRequestOptions = {}): Promise<FileEntry> {
-    return typed(
-      this.httpClient.get<FileEntry>(`${vmPath(microvmId)}/files/stat`, { query: { path }, signal: options.signal }),
+    return read(
+      () =>
+        this.httpClient.get<FileEntry>(`${vmPath(microvmId)}/files/stat`, { query: { path }, signal: options.signal }),
+      options.signal,
       path
     );
   }
@@ -328,11 +366,13 @@ export class MicroVmFilesResource extends BaseResource {
   }
 
   private open(microvmId: string, path: string, options: ReadFileOptions): Promise<Response> {
-    return typed(
-      this.httpClient.requestStream('GET', `${vmPath(microvmId)}/files/content`, {
-        query: { path, offset: options.offset, length: options.length },
-        signal: options.signal,
-      }),
+    return read(
+      () =>
+        this.httpClient.requestStream('GET', `${vmPath(microvmId)}/files/content`, {
+          query: { path, offset: options.offset, length: options.length },
+          signal: options.signal,
+        }),
+      options.signal,
       path
     );
   }
@@ -377,11 +417,13 @@ export class MicroVmImagesResource extends BaseResource {
 
   /** List the built-in images and the application's custom images (`GET /microvm-images`). */
   async list(query: { applicationId?: string } = {}, options: MicroVmRequestOptions = {}): Promise<MicroVmImage[]> {
-    const body = await typed(
-      this.httpClient.get<unknown>('/microvm-images', {
-        query: { applicationId: query.applicationId ?? this.defaultApplicationId },
-        signal: options.signal,
-      })
+    const body = await read(
+      () =>
+        this.httpClient.get<unknown>('/microvm-images', {
+          query: { applicationId: query.applicationId ?? this.defaultApplicationId },
+          signal: options.signal,
+        }),
+      options.signal
     );
     return unwrapList<MicroVmImage>(body);
   }
@@ -411,7 +453,10 @@ export class MicroVmImagesResource extends BaseResource {
 
   /** Get one image (`GET /microvm-images/:id`). */
   get(imageId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmImage> {
-    return typed(this.httpClient.get<MicroVmImage>(`/microvm-images/${encodeURIComponent(imageId)}`, options));
+    return read(
+      () => this.httpClient.get<MicroVmImage>(`/microvm-images/${encodeURIComponent(imageId)}`, options),
+      options.signal
+    );
   }
 
   /** Delete a custom image (`DELETE /microvm-images/:id`). */
@@ -450,11 +495,12 @@ export class MicroVmImagesResource extends BaseResource {
 // microVMs
 // ---------------------------------------------------------------------------
 
+/** `{ data, pagination: { nextCursor, hasMore } }`; `items`/`nextCursor` are accepted too. */
 interface RawMicroVmPage {
   data?: MicroVmInfo[];
   items?: MicroVmInfo[];
   nextCursor?: string | null;
-  pagination?: { nextCursor?: string | null; cursor?: string | null; next?: string | null } | null;
+  pagination?: { nextCursor?: string | null; hasMore?: boolean } | null;
 }
 
 /**
@@ -511,20 +557,26 @@ export class MicroVmsResource extends BaseResource {
 
   /** List one page of microVMs, newest first (`GET /microvms`). */
   async list(query: ListMicroVmsQuery = {}, options: MicroVmRequestOptions = {}): Promise<MicroVmPage> {
-    const body = await typed(
-      this.httpClient.get<RawMicroVmPage>('/microvms', {
-        query: {
-          applicationId: query.applicationId ?? this.defaultApplicationId,
-          status: query.status,
-          cursor: query.cursor,
-          limit: query.limit,
-        },
-        signal: options.signal,
-      })
+    const body = await read(
+      () =>
+        this.httpClient.get<RawMicroVmPage>('/microvms', {
+          query: {
+            applicationId: query.applicationId ?? this.defaultApplicationId,
+            status: query.status,
+            cursor: query.cursor,
+            limit: query.limit,
+          },
+          signal: options.signal,
+        }),
+      options.signal
     );
-    const nextCursor =
-      body.pagination?.nextCursor ?? body.pagination?.cursor ?? body.pagination?.next ?? body.nextCursor;
-    return { items: body.data ?? body.items ?? [], ...(nextCursor ? { nextCursor } : {}) };
+    const nextCursor = body.pagination?.nextCursor ?? body.nextCursor ?? undefined;
+    const hasMore = body.pagination?.hasMore ?? nextCursor !== undefined;
+    return {
+      items: body.data ?? body.items ?? [],
+      ...(nextCursor && hasMore ? { nextCursor } : {}),
+      hasMore: hasMore && nextCursor !== undefined,
+    };
   }
 
   /**
@@ -549,7 +601,7 @@ export class MicroVmsResource extends BaseResource {
 
   /** Get one microVM (`GET /microvms/:id`). */
   get(microvmId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmInfo> {
-    return typed(this.httpClient.get<MicroVmInfo>(vmPath(microvmId), options));
+    return read(() => this.httpClient.get<MicroVmInfo>(vmPath(microvmId), options), options.signal);
   }
 
   /**

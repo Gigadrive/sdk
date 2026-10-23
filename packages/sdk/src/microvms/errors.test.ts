@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, GigadriveError } from '../errors';
 import {
   CommandFailedError,
+  MicroVmBusyError,
   MicroVmFileNotFoundError,
   MicroVmImageBuildError,
+  MicroVmImageNotReadyError,
   MicroVmNotFoundError,
   MicroVmNotRunningError,
   MicroVmPortNotExposedError,
   MicroVmQuotaExceededError,
   MicroVmStartError,
+  MicroVmUnreachableError,
   toMicroVmError,
 } from './errors';
 
@@ -28,6 +31,12 @@ describe('toMicroVmError', () => {
     expect(toMicroVmError(new ApiError('gone', 404))).toBeInstanceOf(MicroVmNotFoundError);
     expect(toMicroVmError(new ApiError('gone', 404), '/a')).toBeInstanceOf(MicroVmFileNotFoundError);
     expect(toMicroVmError(new ApiError('limit', 429, 'quota_exceeded'))).toBeInstanceOf(MicroVmQuotaExceededError);
+    expect(toMicroVmError(new ApiError('busy', 503, 'microvm_busy'))).toBeInstanceOf(MicroVmBusyError);
+    expect(toMicroVmError(new ApiError('down', 502, 'microvm_unreachable'))).toBeInstanceOf(MicroVmUnreachableError);
+    expect(toMicroVmError(new ApiError('wait', 409, 'image_not_ready'))).toBeInstanceOf(MicroVmImageNotReadyError);
+    expect(toMicroVmError(new ApiError('limit', 403, 'plan_limit_exceeded'))).toBeInstanceOf(MicroVmQuotaExceededError);
+    expect(toMicroVmError(new ApiError('gone', 404, 'not_found'), '/a')).not.toBeInstanceOf(MicroVmFileNotFoundError);
+    expect(toMicroVmError(new ApiError('gone', 404, 'guest_not_found'), '/a')).toBeInstanceOf(MicroVmFileNotFoundError);
     const other = new ApiError('bad', 400, 'invalid_argument');
     expect(toMicroVmError(other)).toBe(other);
   });
@@ -59,10 +68,11 @@ describe('CommandFailedError', () => {
       id: 'cmd_1',
       cmd: 'false',
       args: [],
-      cwd: null,
+      cwd: '/workspace',
       status: 'exited',
       exitCode: 1,
       signal: null,
+      timedOut: false,
       pid: 1,
       pty: false,
       startedAt: 0,

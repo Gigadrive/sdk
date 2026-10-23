@@ -35,6 +35,24 @@ export const durationToMs = (value: MicroVmDuration): number => {
   return Math.ceil(ms);
 };
 
+/** The longest lifetime a microVM can have: 24 hours (plans may allow less). */
+export const MICROVM_MAX_TIMEOUT_MS = 24 * 3_600_000;
+
+/**
+ * Converts a microVM lifetime to milliseconds and checks it is between 1 ms
+ * and {@link MICROVM_MAX_TIMEOUT_MS}.
+ *
+ * @throws {RangeError} When the duration is invalid, zero or longer than 24 hours.
+ * @internal
+ */
+export const microvmTimeoutMs = (value: MicroVmDuration): number => {
+  const ms = durationToMs(value);
+  if (ms < 1 || ms > MICROVM_MAX_TIMEOUT_MS) {
+    throw new RangeError(`A microVM timeout must be between 1 ms and 24 hours (got ${String(value)}).`);
+  }
+  return ms;
+};
+
 /** Resolves after `ms`, or rejects with the signal's reason as soon as `signal` aborts. @internal */
 export const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise<void>((resolve, reject) => {

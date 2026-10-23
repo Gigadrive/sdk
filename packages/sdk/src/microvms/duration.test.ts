@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { durationToMs, sleep } from './duration';
+import { durationToMs, microvmTimeoutMs, sleep } from './duration';
 
 describe('durationToMs', () => {
   it('treats numbers as milliseconds and parses unit strings', () => {
@@ -17,6 +17,15 @@ describe('durationToMs', () => {
     expect(() => durationToMs(Number.NaN)).toThrow(RangeError);
     expect(() => durationToMs('10' as '10m')).toThrow(/Invalid duration/);
     expect(() => durationToMs('5d' as '5m')).toThrow(/Invalid duration/);
+  });
+});
+
+describe('microvmTimeoutMs', () => {
+  it('accepts up to 24 hours', () => {
+    expect(microvmTimeoutMs('24h')).toBe(86_400_000);
+    expect(microvmTimeoutMs(1)).toBe(1);
+    expect(() => microvmTimeoutMs('25h')).toThrow(/24 hours/);
+    expect(() => microvmTimeoutMs(0)).toThrow(RangeError);
   });
 });
 

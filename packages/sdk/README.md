@@ -351,24 +351,28 @@ your own) and its application from `applicationId`, the client's
 nothing needs configuring. Built-in images: `node22`, `node24`, `python3.13`,
 `python3.12`, `bun1`, `debian12`, `ubuntu24.04`.
 
-| Task                  | Call                                                                                                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create, connect, list | `MicroVM.create({ image, vcpus, memoryMb, diskMb, timeout, ports, env, metadata, network })`, `MicroVM.get(id)`, `for await (const vm of MicroVM.list())`                                         |
-| Run and wait          | `vm.run('ls -la')`, `vm.run('npm', ['test'], { cwd, env, user, sudo, timeout, onStdout, onStderr, stdin, throwOnError, signal })` → `{ exitCode, signal, stdout, stderr, truncated, durationMs }` |
-| Run in the background | `vm.spawn(cmd, args, { stdin, pty, onStdout })` → `Command`: `logs()`, `output()`, `stdout()`, `stderr()`, `wait()`, `kill(signal)`, `write(data)`, `end()`, `resize(cols, rows)`                 |
-| Reattach              | `vm.commands.get(commandId)`, `vm.commands.list()`                                                                                                                                                |
-| Files                 | `vm.files.write(path, string \| Uint8Array \| Blob \| ReadableStream)`, `writeMany`, `read`, `readText`, `readStream`, `list(path, { recursive })`, `stat`, `exists`, `mkdir`, `remove`, `move`   |
-| Ports                 | `vm.url(port)`, `vm.waitForPort(port)`                                                                                                                                                            |
-| Lifetime              | `vm.extendTimeout('30m')`, `vm.stop()`, `vm.delete()`, `await using vm = ...`                                                                                                                     |
-| Images                | `client.microvms.images.create({ name, from: 'python:3.13' \| { dockerfile } })`, `.waitUntilReady(id)`, `.list()`, `.get(id)`, `.delete(id)`                                                     |
+| Task                  | Call                                                                                                                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create, connect, list | `MicroVM.create({ image, vcpus, memoryMb, diskMb, timeout, ports, env, metadata, network })`, `MicroVM.get(id)`, `for await (const vm of MicroVM.list())`                                                   |
+| Run and wait          | `vm.run('ls -la')`, `vm.run('npm', ['test'], { cwd, env, user, sudo, timeout, onStdout, onStderr, stdin, throwOnError, signal })` → `{ exitCode, signal, timedOut, stdout, stderr, truncated, durationMs }` |
+| Run in the background | `vm.spawn(cmd, args, { stdin, pty, onStdout })` → `Command`: `logs()`, `output()`, `stdout()`, `stderr()`, `wait()`, `kill(signal)`, `write(data)`, `end()`, `resize(cols, rows)`                           |
+| Reattach              | `vm.commands.get(commandId)`, `vm.commands.list()`                                                                                                                                                          |
+| Files                 | `vm.files.write(path, string \| Uint8Array \| Blob \| ReadableStream)`, `writeMany`, `read`, `readText`, `readStream`, `list(path, { recursive })`, `stat`, `exists`, `mkdir`, `remove`, `move`             |
+| Ports                 | `vm.url(port)`, `vm.waitForPort(port)`                                                                                                                                                                      |
+| Lifetime              | `vm.extendTimeout('30m')`, `vm.stop()`, `vm.delete()`, `await using vm = ...`                                                                                                                               |
+| Images                | `client.microvms.images.create({ name, from: 'python:3.13' \| { dockerfile } })`, `.waitUntilReady(id)`, `.list()`, `.get(id)`, `.delete(id)`                                                               |
 
 Command output stays in the microVM, so `command.logs()` can be read from
 another process with `vm.commands.get(id)`, and a dropped connection resumes
 at the next unread byte. A non-zero exit code is a normal result; pass
 `throwOnError: true` to get a `CommandFailedError`. Other typed errors:
 `MicroVmNotRunningError`, `MicroVmNotFoundError`, `MicroVmFileNotFoundError`,
-`MicroVmQuotaExceededError`, `MicroVmPortNotExposedError`,
+`MicroVmQuotaExceededError`, `MicroVmBusyError`, `MicroVmUnreachableError`,
+`MicroVmImageNotReadyError`, `MicroVmPortNotExposedError`,
 `MicroVmTimeoutError`, `MicroVmStartError` and `MicroVmImageBuildError`.
+Reads and log streams are retried with backoff while a microVM answers
+`microvm_busy`. A microVM lives at most 24 hours (`MICROVM_MAX_TIMEOUT_MS`),
+or less on your plan.
 
 `client.microvms` is the low-level REST surface, one method per route
 (`create`, `list`, `listAll`, `get`, `extendTimeout`, `stop`, `delete`,

@@ -80,6 +80,7 @@ export class Command {
   private current: CommandInfo;
   private pump: Promise<void> | undefined;
   private pumpError: Error | undefined;
+  private skippedOutput = false;
 
   /** @internal Use {@link MicroVM.spawn} or `vm.commands.get(id)`. */
   constructor(
@@ -119,6 +120,19 @@ export class Command {
     return this.current.pid;
   }
 
+  /** Whether the command was killed because it ran past its `timeout`. */
+  get timedOut(): boolean {
+    return this.current.timedOut;
+  }
+
+  /**
+   * Whether a {@link logs} read found older output already dropped (each
+   * stream keeps its last 8 MiB), so what it delivered starts mid-stream.
+   */
+  get truncated(): boolean {
+    return this.skippedOutput;
+  }
+
   /** Fetch the latest state from the API. */
   async refresh(): Promise<CommandInfo> {
     this.current = await this.resource.get(this.microvmId, this.id);
@@ -127,7 +141,8 @@ export class Command {
 
   /**
    * Stream the command's output, from the beginning of the retained output by
-   * default, until it exits. Reconnects transparently after a dropped
+   * default, until it exits. With `follow: false` it delivers what is
+   * buffered and ends, even while the command keeps running. Reconnects transparently after a dropped
    * connection. Breaking out of the loop closes the stream; the command keeps
    * running.
    *
@@ -145,6 +160,12 @@ export class Command {
         this.current = { ...this.current, status: 'exited', exitCode: event.exitCode, signal: event.signal };
         continue;
       }
+      if (event.type === 'truncated') {
+        this.skippedOutput = true;
+        continue;
+      }
+      // `end`: a `follow: false` snapshot of a command that is still running.
+      if (event.type === 'end') continue;
       const text = decoders[event.stream].decode(event.data, { stream: true });
       yield { stream: event.stream, data: event.data, text, offset: event.offset };
     }

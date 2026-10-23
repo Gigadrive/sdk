@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../errors';
 import {
+  MicroVmBusyError,
   MicroVmFileNotFoundError,
   MicroVmImageBuildError,
+  MicroVmImageNotReadyError,
   MicroVmNotFoundError,
   MicroVmNotRunningError,
   MicroVmQuotaExceededError,
   MicroVmTimeoutError,
+  MicroVmUnreachableError,
 } from './errors';
 import { apiError, commandInfo, exit, json, out, request, setup, sseResponse, vmInfo } from './test-utils';
 
@@ -82,11 +85,11 @@ describe('MicroVmsResource', () => {
 
   it('lists a page from the { data, pagination } envelope', async () => {
     const { fetch, client } = setup();
-    fetch.mockResolvedValueOnce(json({ data: [vmInfo()], pagination: { nextCursor: 'c2' } }));
+    fetch.mockResolvedValueOnce(json({ data: [vmInfo()], pagination: { nextCursor: 'c2', hasMore: true } }));
 
     const page = await client.microvms.list({ status: 'running', limit: 10, applicationId: 'app-1' });
 
-    expect(page).toEqual({ items: [vmInfo()], nextCursor: 'c2' });
+    expect(page).toEqual({ items: [vmInfo()], nextCursor: 'c2', hasMore: true });
     expect(request(fetch).path).toBe('/microvms');
     expect(request(fetch).query).toEqual({ status: 'running', limit: '10', applicationId: 'app-1' });
   });
@@ -95,14 +98,25 @@ describe('MicroVmsResource', () => {
     const { fetch, client } = setup();
     fetch.mockResolvedValueOnce(json({ items: [vmInfo()], nextCursor: null }));
 
-    await expect(client.microvms.list()).resolves.toEqual({ items: [vmInfo()] });
+    await expect(client.microvms.list()).resolves.toEqual({ items: [vmInfo()], hasMore: false });
+  });
+
+  it('stops paging when hasMore is false even with a cursor', async () => {
+    const { fetch, client } = setup();
+    fetch.mockResolvedValueOnce(json({ data: [vmInfo()], pagination: { nextCursor: 'stale', hasMore: false } }));
+
+    const ids: string[] = [];
+    for await (const vm of client.microvms.listAll()) ids.push(vm.id);
+
+    expect(ids).toEqual(['vm-1']);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('iterates every page with listAll', async () => {
     const { fetch, client } = setup();
     fetch
-      .mockResolvedValueOnce(json({ data: [vmInfo({ id: 'a' })], pagination: { nextCursor: 'c2' } }))
-      .mockResolvedValueOnce(json({ data: [vmInfo({ id: 'b' })], pagination: { nextCursor: null } }));
+      .mockResolvedValueOnce(json({ data: [vmInfo({ id: 'a' })], pagination: { nextCursor: 'c2', hasMore: true } }))
+      .mockResolvedValueOnce(json({ data: [vmInfo({ id: 'b' })], pagination: { nextCursor: null, hasMore: false } }));
 
     const ids: string[] = [];
     for await (const vm of client.microvms.listAll({ status: 'running' })) ids.push(vm.id);
@@ -195,6 +209,66 @@ describe('MicroVmsResource', () => {
       expect(error).not.toBeInstanceOf(MicroVmFileNotFoundError);
     });
 
+    it('treats a not_found 404 on a file route as the microVM missing, and guest_not_found as the file', async () => {
+      const { fetch, client } = setup();
+      fetch
+        .mockResolvedValueOnce(apiError(404, 'microVM not found', 'not_found'))
+        .mockResolvedValueOnce(apiError(404, 'No such file', 'guest_not_found'));
+
+      const vmError = await client.microvms.files.read('vm-x', '/a').catch((e: unknown) => e);
+      const fileError = await client.microvms.files.read('vm-1', '/a').catch((e: unknown) => e);
+
+      expect(vmError).toBeInstanceOf(MicroVmNotFoundError);
+      expect(vmError).not.toBeInstanceOf(MicroVmFileNotFoundError);
+      expect(fileError).toBeInstanceOf(MicroVmFileNotFoundError);
+    });
+
+    it('maps microvm_unreachable and image_not_ready', async () => {
+      const { fetch, client } = setup();
+      fetch
+        .mockResolvedValueOnce(apiError(502, 'The microVM is unreachable', 'microvm_unreachable'))
+        .mockResolvedValueOnce(apiError(409, 'The image is still building', 'image_not_ready'));
+
+      await expect(client.microvms.commands.signal('vm-1', 'cmd_1', 'SIGTERM')).rejects.toBeInstanceOf(
+        MicroVmUnreachableError
+      );
+      const error = await client.microvms.create({ image: 'py-ml' }).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(MicroVmImageNotReadyError);
+      expect(error).not.toBeInstanceOf(MicroVmNotRunningError);
+    });
+
+    it('retries reads while the microVM is busy', async () => {
+      const { fetch, client } = setup();
+      fetch
+        .mockResolvedValueOnce(apiError(503, 'Busy', 'microvm_busy'))
+        .mockResolvedValueOnce(apiError(429, 'Busy', 'microvm_busy'))
+        .mockResolvedValueOnce(json(vmInfo()));
+
+      await expect(client.microvms.get('vm-1')).resolves.toMatchObject({ id: 'vm-1' });
+      expect(fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not retry mutations while busy, and surfaces MicroVmBusyError', async () => {
+      const { fetch, client } = setup();
+      fetch.mockImplementation(() => Promise.resolve(apiError(429, 'Busy', 'microvm_busy')));
+
+      const error = await client.microvms.commands.start('vm-1', { cmd: 'ls' }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(MicroVmBusyError);
+      expect(error).toMatchObject({ status: 429, code: 'microvm_busy' });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a 429 quota_exceeded a quota error, not busy', async () => {
+      const { fetch, client } = setup();
+      fetch.mockResolvedValueOnce(apiError(429, 'Too many microVMs', 'quota_exceeded'));
+
+      const error = await client.microvms.get('vm-1').catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(MicroVmQuotaExceededError);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
     it('maps quota errors', async () => {
       const { fetch, client } = setup();
       fetch.mockResolvedValueOnce(apiError(402, 'Concurrent microVM limit reached', 'quota_exceeded'));
@@ -215,7 +289,16 @@ describe('MicroVmsResource', () => {
 describe('MicroVmCommandsResource', () => {
   it('runs a command synchronously with wait: true', async () => {
     const { fetch, client } = setup();
-    const result = { id: 'cmd_1', exitCode: 0, stdout: 'v22\n', stderr: '', truncated: false, durationMs: 12 };
+    const result = {
+      id: 'cmd_1',
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      stdout: 'v22\n',
+      stderr: '',
+      truncated: false,
+      durationMs: 12,
+    };
     fetch.mockResolvedValueOnce(json(result));
 
     await expect(
@@ -401,9 +484,12 @@ describe('MicroVmFilesResource', () => {
   it('lists entries, recursively', async () => {
     const { fetch, client } = setup();
     const entry = { path: '/app/a', name: 'a', type: 'file', size: 1, mode: '0644', modifiedAt: 1 };
-    fetch.mockResolvedValueOnce(json({ entries: [entry] }));
+    fetch.mockResolvedValueOnce(json({ entries: [entry], truncated: true }));
 
-    await expect(client.microvms.files.list('vm-1', '/app', { recursive: true, depth: 3 })).resolves.toEqual([entry]);
+    await expect(client.microvms.files.list('vm-1', '/app', { recursive: true, depth: 3 })).resolves.toEqual({
+      entries: [entry],
+      truncated: true,
+    });
     expect(request(fetch).path).toBe('/microvms/vm-1/files');
     expect(request(fetch).query).toEqual({ path: '/app', recursive: 'true', depth: '3' });
   });

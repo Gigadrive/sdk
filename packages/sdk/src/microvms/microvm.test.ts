@@ -184,6 +184,14 @@ describe('MicroVM accessors', () => {
     expect(() => vm.url(8080)).toThrow(/Exposed ports: 3000/);
   });
 
+  it('refuses lifetimes over 24 hours before calling the API', async () => {
+    const { vm, fetch, client } = await createVm();
+
+    await expect(vm.extendTimeout('25h')).rejects.toThrow(RangeError);
+    await expect(MicroVM.create({ client, timeout: 86_400_001 })).rejects.toThrow(/24 hours/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('refreshes, extends, stops and deletes', async () => {
     const { vm, fetch } = await createVm();
     fetch
@@ -231,6 +239,7 @@ describe('MicroVM.run', () => {
       commandId: 'cmd_1',
       exitCode: 0,
       signal: null,
+      timedOut: false,
       stdout: 'a\nb\n',
       stderr: '',
       truncated: false,
@@ -310,6 +319,7 @@ describe('MicroVM.run', () => {
       commandId: 'cmd_s',
       exitCode: 0,
       signal: null,
+      timedOut: false,
       stdout: 'one\ntwo\n',
       stderr: 'warn\n',
       truncated: false,
@@ -333,6 +343,36 @@ describe('MicroVM.run', () => {
     const result = await vm.run('echo €', { onStdout: () => undefined });
 
     expect(result.stdout).toBe('€');
+  });
+
+  it('reports timedOut from the synchronous result', async () => {
+    const { vm, fetch } = await createVm();
+    fetch.mockResolvedValueOnce(
+      json({
+        id: 'c',
+        exitCode: null,
+        signal: 'SIGKILL',
+        timedOut: true,
+        stdout: '',
+        stderr: '',
+        truncated: false,
+        durationMs: 1000,
+      })
+    );
+
+    await expect(vm.run('sleep 10', { timeout: '1s' })).resolves.toMatchObject({ timedOut: true, signal: 'SIGKILL' });
+  });
+
+  it('marks truncated output from a truncated event', async () => {
+    const { vm, fetch } = await createVm();
+    fetch
+      .mockResolvedValueOnce(json(commandInfo(), 201))
+      .mockResolvedValueOnce(sseResponse(['event: truncated\ndata: {}\n\n', out('stdout', 'x', 0), exit(0)]))
+      .mockResolvedValueOnce(json(commandInfo({ status: 'exited', exitCode: 0, timedOut: true })));
+
+    const result = await vm.run('x', { onStdout: () => undefined });
+
+    expect(result.truncated).toBe(true);
   });
 
   it('marks truncated output when the stream starts past the requested offset', async () => {
@@ -425,6 +465,8 @@ describe('MicroVM.spawn and Command', () => {
     expect(command.id).toBe('cmd_0123456789abcdef');
     expect(command.status).toBe('running');
     expect(command.pid).toBe(42);
+    expect(command.timedOut).toBe(false);
+    expect(command.truncated).toBe(false);
     expect(request(fetch).json).toEqual({ cmd: 'node', args: ['server.js'], cwd: '/app', stdin: true, wait: false });
   });
 

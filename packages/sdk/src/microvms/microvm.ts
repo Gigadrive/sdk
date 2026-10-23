@@ -1,6 +1,6 @@
 import { GigadriveClient, type GigadriveClientConfig } from '../client';
 import { Command, commandDurationMs, type CommandOutputCallback } from './command';
-import { abortReason, durationToMs, type MicroVmDuration, sleep } from './duration';
+import { abortReason, durationToMs, type MicroVmDuration, microvmTimeoutMs, sleep } from './duration';
 import {
   CommandFailedError,
   MicroVmFileNotFoundError,
@@ -124,9 +124,14 @@ export interface CommandResult {
   exitCode: number | null;
   /** Signal that killed the process, if any. */
   signal: string | null;
+  /** Whether the command was killed because it ran past its `timeout`. */
+  timedOut: boolean;
   stdout: string;
   stderr: string;
-  /** Whether older output was dropped (each stream keeps its last 8 MiB). */
+  /**
+   * Whether output was left out: over 1 MiB per stream for a call without
+   * callbacks, or output older than the retained 8 MiB per stream.
+   */
   truncated: boolean;
   durationMs: number;
 }
@@ -258,9 +263,13 @@ export class MicroVmFiles {
     return results;
   }
 
-  /** List a directory. `recursive` descends into subdirectories (up to `depth` levels). */
-  list(path = '.', options?: { recursive?: boolean; depth?: number }): Promise<FileEntry[]> {
-    return this.resource.list(this.microvmId, path, options);
+  /**
+   * List a directory. `recursive` descends into subdirectories (up to `depth`
+   * levels). Very large listings are cut off; `client.microvms.files.list`
+   * reports that as `truncated`.
+   */
+  async list(path = '.', options?: { recursive?: boolean; depth?: number }): Promise<FileEntry[]> {
+    return (await this.resource.list(this.microvmId, path, options)).entries;
   }
 
   /** Describe a file or directory. @throws {@link MicroVmFileNotFoundError} */
@@ -364,6 +373,8 @@ export class MicroVM {
   /**
    * Create a microVM and wait until it runs.
    *
+   * @throws {RangeError} When `timeout` is longer than 24 hours.
+   *
    * The application is taken from `applicationId`, the client's
    * `applicationId` or `GIGADRIVE_APPLICATION_ID`; inside a Gigadrive
    * deployment or Function nothing needs configuring.
@@ -389,7 +400,7 @@ export class MicroVM {
       {
         ...input,
         ...(timeout !== undefined
-          ? { timeoutMs: durationToMs(timeout) }
+          ? { timeoutMs: microvmTimeoutMs(timeout) }
           : timeoutMs !== undefined
             ? { timeoutMs }
             : {}),
@@ -528,6 +539,7 @@ export class MicroVM {
           commandId: raw.id,
           exitCode: raw.exitCode,
           signal: raw.signal ?? null,
+          timedOut: raw.timedOut === true,
           stdout: raw.stdout,
           stderr: raw.stderr,
           truncated: raw.truncated,
@@ -565,8 +577,9 @@ export class MicroVM {
           commandId: command.id,
           exitCode: final.exitCode,
           signal: final.signal,
+          timedOut: final.timedOut === true,
           ...output,
-          truncated,
+          truncated: truncated || command.truncated,
           durationMs: commandDurationMs(final) ?? Date.now() - startedAt,
         },
         options.throwOnError
@@ -615,7 +628,7 @@ export class MicroVM {
    * ```
    */
   async extendTimeout(duration: MicroVmDuration): Promise<MicroVmInfo> {
-    this.current = await this.resource.extendTimeout(this.id, durationToMs(duration));
+    this.current = await this.resource.extendTimeout(this.id, microvmTimeoutMs(duration));
     return this.current;
   }
 

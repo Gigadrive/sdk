@@ -13,7 +13,11 @@ const collect = async (events: AsyncGenerator<CommandLogEvent>) => {
     seen.push(
       event.type === 'output'
         ? `${event.stream}@${event.offset}:${decoder.decode(event.data)}`
-        : `exit:${event.exitCode}:${event.signal}`
+        : event.type === 'exit'
+          ? `exit:${event.exitCode}:${event.signal}`
+          : event.type === 'end'
+            ? `end:${event.reason}`
+            : 'truncated'
     );
   }
   return seen;
@@ -183,6 +187,34 @@ describe('streamCommandLogs', () => {
       message: 'guest unreachable',
       code: 'sandbox_unreachable',
     });
+  });
+
+  it('reports truncation from the server', async () => {
+    const open = opener(sseResponse(['event: truncated\ndata: {}\n\n', out('stdout', 'tail', 9_000), exit(0)]));
+
+    await expect(collect(streamCommandLogs(open))).resolves.toEqual(['truncated', 'stdout@9000:tail', 'exit:0:null']);
+  });
+
+  it('ends at an end event (follow=false snapshot of a running command) without reconnecting', async () => {
+    const open = opener(sseResponse([out('stdout', 'so far', 0), 'event: end\ndata: {"reason":"snapshot"}\n\n']));
+    const resolveExit = vi.fn();
+
+    await expect(collect(streamCommandLogs(open, { follow: false, resolveExit }))).resolves.toEqual([
+      'stdout@0:so far',
+      'end:snapshot',
+    ]);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(resolveExit).not.toHaveBeenCalled();
+  });
+
+  it('reconnects after a retryable error event', async () => {
+    const open = opener(
+      sseResponse([out('stdout', 'a', 0), 'event: error\ndata: {"message":"guest hiccup","retryable":true}\n\n']),
+      sseResponse([out('stdout', 'b', 1), exit(0)])
+    );
+
+    await expect(collect(streamCommandLogs(open))).resolves.toEqual(['stdout@0:a', 'stdout@1:b', 'exit:0:null']);
+    expect(open).toHaveBeenNthCalledWith(2, { follow: true, stdoutOffset: 1, stderrOffset: 0, signal: undefined });
   });
 
   it('ignores unknown events and malformed payloads', async () => {

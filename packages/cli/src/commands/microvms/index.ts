@@ -6,6 +6,7 @@ import {
   type FileEntry,
   type GigadriveClient,
   MicroVM,
+  MICROVM_MAX_TIMEOUT_MS,
   type MicroVmDuration,
   type MicroVmImage,
   type MicroVmStatus,
@@ -97,8 +98,17 @@ export const errorMessage = (
       if (error.code === 'microvm_not_running') {
         return `${error.message}\nThe microVM has stopped. Create a new one with "gigadrive microvms create".`;
       }
-      if (error.code === 'quota_exceeded' || error.code === 'microvm_quota_exceeded') {
+      if (error.code === 'quota_exceeded' || error.code === 'plan_limit_exceeded') {
         return `${error.message}\nStop microVMs you no longer need, or raise your plan's limits at ${CONSOLE_URL}.`;
+      }
+      if (error.code === 'microvm_busy') {
+        return `${error.message}\nThe microVM is busy. Wait a moment and try again.`;
+      }
+      if (error.code === 'microvm_unreachable') {
+        return `${error.message}\nThe microVM could not be reached. Try again; if it keeps failing, check "gigadrive microvms get <id>".`;
+      }
+      if (error.code === 'image_not_ready') {
+        return `${error.message}\nThe image is not built yet. Check it with "gigadrive microvms images ls".`;
       }
       return `Failed to ${action}: ${error.message}`;
     default:
@@ -130,6 +140,15 @@ const optionalDuration = (flag: string, value: Option.Option<string>) =>
     onNone: () => Effect.succeed(undefined),
     onSome: (text) => parseDuration(flag, text),
   });
+
+/** Parses a microVM lifetime: a duration of at most 24 hours. */
+export const parseLifetime = (flag: string, value: string) =>
+  parseDuration(flag, value).pipe(
+    Effect.filterOrFail(
+      (ms) => ms >= 1 && ms <= MICROVM_MAX_TIMEOUT_MS,
+      () => new InvalidMicroVmOptionsError({ message: `${flag} can be at most 24h (got "${value}").` })
+    )
+  );
 
 const keyValues = (flag: string, entries: ReadonlyArray<string>) => {
   const parsed = parseKeyValues(entries);
@@ -191,7 +210,10 @@ export const createInput = (flags: CreateFlags) =>
   Effect.gen(function* () {
     const env = yield* keyValues('--env', flags.env);
     const metadata = yield* keyValues('--metadata', flags.metadata);
-    const timeoutMs = yield* optionalDuration('--timeout', flags.timeout);
+    const timeoutMs = yield* Option.match(flags.timeout, {
+      onNone: () => Effect.succeed(undefined),
+      onSome: (text) => parseLifetime('--timeout', text),
+    });
     const badPort = flags.ports.find((port) => !Number.isInteger(port) || port < 1 || port > 65535);
     if (badPort !== undefined) {
       return yield* new InvalidMicroVmOptionsError({ message: `--port must be between 1 and 65535 (got ${badPort}).` });
@@ -574,11 +596,16 @@ const download = (client: GigadriveClient, source: Extract<CopyTarget, { kind: '
 
     const files: Array<{ remote: string; local: string }> = [];
     if (entry.type === 'directory') {
-      const entries = yield* Effect.tryPromise({
+      const listing = yield* Effect.tryPromise({
         try: () => client.microvms.files.list(source.microvmId, entry.path, { recursive: true }),
         catch: toApiRequestError,
       });
-      for (const child of entries) {
+      if (listing.truncated) {
+        yield* Console.error(
+          `${entry.path} has too many files to list at once; only part of it is copied. Copy its subdirectories separately.`
+        );
+      }
+      for (const child of listing.entries) {
         if (child.type !== 'file') continue;
         files.push({
           remote: child.path,
@@ -678,7 +705,7 @@ const removeCommand = Command.make('rm', { microvmIds: microvmIdsArg }, ({ micro
 /** Sets a microVM's remaining lifetime. */
 export const extendMicroVm = (microvmId: string, duration: string) =>
   Effect.gen(function* () {
-    const timeoutMs = yield* parseDuration('The duration', duration);
+    const timeoutMs = yield* parseLifetime('The duration', duration);
     const apiClient = yield* ApiClientService;
     const vm = yield* apiClient.request((client) => client.microvms.extendTimeout(microvmId, timeoutMs));
     yield* Console.log(`${vm.id} now stops at ${vm.expiresAt ?? 'an unknown time'}.`);

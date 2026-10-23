@@ -54,10 +54,12 @@ const commandInfo = (overrides: Record<string, unknown> = {}) => ({
   id: 'cmd_1',
   cmd: 'ls',
   args: [],
-  cwd: null,
+  cwd: '/workspace',
+  user: 'user',
   status: 'running',
   exitCode: null,
   signal: null,
+  timedOut: false,
   pid: 7,
   pty: false,
   startedAt: '2026-10-23T12:00:00.000Z',
@@ -171,6 +173,19 @@ describe('parseDuration', () => {
   });
 });
 
+describe('errorMessage', () => {
+  const apiError = (code: string) => ({ _tag: 'ApiRequestError', message: 'Refused.', code });
+
+  it('explains microVM error codes', () => {
+    expect(errorMessage('x', apiError('microvm_not_running'))).toContain('gigadrive microvms create');
+    expect(errorMessage('x', apiError('microvm_busy'))).toContain('try again');
+    expect(errorMessage('x', apiError('microvm_unreachable'))).toContain('gigadrive microvms get');
+    expect(errorMessage('x', apiError('image_not_ready'))).toContain('gigadrive microvms images ls');
+    expect(errorMessage('x', apiError('plan_limit_exceeded'))).toContain('https://console.gigadrive.de');
+    expect(errorMessage('list microVMs', apiError('other'))).toBe('Failed to list microVMs: Refused.');
+  });
+});
+
 describe('createInput', () => {
   it('maps every flag onto the API body', async () => {
     const { layer } = fakeApi();
@@ -226,6 +241,7 @@ describe('createInput', () => {
       createFlags({ ports: [0] }),
       createFlags({ ports: [70_000] }),
       createFlags({ timeout: Option.some('5') }),
+      createFlags({ timeout: Option.some('25h') }),
     ]) {
       const result = await run(createInput(flags), layer);
       expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
@@ -340,6 +356,15 @@ describe('extendMicroVm', () => {
     await run(extendMicroVm('vm-1', '30m'), api.layer);
 
     expect(api.calls[0]?.body).toEqual({ timeoutMs: 1_800_000 });
+  });
+
+  it('refuses more than 24 hours', async () => {
+    const api = fakeApi();
+
+    const result = await run(extendMicroVm('vm-1', '2d' as string), api.layer);
+
+    expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    expect(api.calls).toHaveLength(0);
   });
 
   it('refuses a bare number', async () => {
@@ -587,6 +612,7 @@ describe('copyFiles', () => {
       route('GET', '/microvms/vm-1/files/stat', () => json(entry('/app/dist', 'directory'))),
       route('GET', '/microvms/vm-1/files', () =>
         json({
+          truncated: false,
           entries: [
             entry('/app/dist/index.js', 'file'),
             entry('/app/dist/lib', 'directory'),

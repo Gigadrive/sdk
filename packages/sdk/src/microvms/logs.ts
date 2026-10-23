@@ -42,7 +42,7 @@ export type OpenLogStream = (query: {
 
 const RECONNECT_DELAYS_MS = [100, 250, 500, 1_000, 2_000];
 
-/** Transient failures worth a reconnect: network errors, timeouts, rate limits and 5xx. */
+/** Transient failures worth a reconnect: network errors, timeouts, `microvm_busy` (429/503) and 5xx. */
 const isRetryable = (error: unknown): boolean => {
   if (error instanceof ApiError) return error.status === 408 || error.status === 429 || error.status >= 500;
   if (error instanceof Error && error.name === 'AbortError') return false;
@@ -65,8 +65,11 @@ const parseJson = (data: string): Record<string, unknown> | null => {
  * trimmed, so every byte is delivered exactly once.
  *
  * The SSE `stdout`/`stderr` events carry `{ data: base64, offset }`, where
- * `offset` is the absolute position of the chunk's first byte; the final
- * `exit` event carries `{ exitCode, signal }`.
+ * `offset` is the absolute position of the chunk's first byte. `truncated`
+ * `{}` reports that output before the requested offsets is no longer
+ * retained. The stream ends with `exit` `{ exitCode, signal }`, or, with
+ * `follow: false` on a running command, with `end` `{ reason: 'snapshot' }`.
+ * An `error` event with `retryable: true` reconnects; other errors throw.
  *
  * @internal
  */
@@ -110,6 +113,14 @@ export async function* streamCommandLogs(
           }
           next[stream] = offset + data.length;
           if (data.length > 0) yield { type: 'output', stream, data, offset };
+        } else if (event.event === 'truncated') {
+          progressed = true;
+          yield { type: 'truncated' };
+        } else if (event.event === 'end') {
+          // `follow: false` on a running command: the snapshot is complete, the command keeps running.
+          const payload = parseJson(event.data);
+          yield { type: 'end', reason: typeof payload?.reason === 'string' ? payload.reason : 'snapshot' };
+          return;
         } else if (event.event === 'exit') {
           const payload = parseJson(event.data) ?? {};
           yield {
@@ -120,9 +131,16 @@ export async function* streamCommandLogs(
           return;
         } else if (event.event === 'error') {
           const payload = parseJson(event.data);
-          const message = typeof payload?.error === 'string' ? payload.error : event.data;
-          serverError = new ApiError(message, 502, typeof payload?.code === 'string' ? payload.code : undefined);
-          throw serverError;
+          const message =
+            typeof payload?.message === 'string'
+              ? payload.message
+              : typeof payload?.error === 'string'
+                ? payload.error
+                : event.data;
+          const failure = new ApiError(message, 502, typeof payload?.code === 'string' ? payload.code : undefined);
+          // `retryable: true` failures reconnect like a dropped connection; anything else ends the stream.
+          if (payload?.retryable !== true) serverError = failure;
+          throw failure;
         }
       }
       // The connection closed without an `exit` event.

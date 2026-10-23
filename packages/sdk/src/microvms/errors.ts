@@ -42,7 +42,38 @@ export class MicroVmFileNotFoundError extends MicroVmNotFoundError {
   }
 }
 
-/** A plan limit was reached, such as the number of concurrent microVMs or their total memory (`402`/`429` quota). */
+/**
+ * The microVM is too busy to take the operation right now (`429`/`503`
+ * `microvm_busy`). Reads and log streams are retried with backoff before this
+ * surfaces; retry later.
+ */
+export class MicroVmBusyError extends ApiError {
+  constructor(message: string, status: number, code = 'microvm_busy', reason?: string) {
+    super(message, status, code, reason);
+    this.name = 'MicroVmBusyError';
+  }
+}
+
+/** The platform could not reach the microVM (`502 microvm_unreachable`). Usually transient. */
+export class MicroVmUnreachableError extends ApiError {
+  constructor(message: string, code = 'microvm_unreachable', reason?: string) {
+    super(message, 502, code, reason);
+    this.name = 'MicroVmUnreachableError';
+  }
+}
+
+/** The image is still building or failed to build, so no microVM can boot from it yet (`409 image_not_ready`). */
+export class MicroVmImageNotReadyError extends ApiError {
+  constructor(message: string, code = 'image_not_ready', reason?: string) {
+    super(message, 409, code, reason);
+    this.name = 'MicroVmImageNotReadyError';
+  }
+}
+
+/**
+ * A plan limit or quota was reached, such as the number of concurrent
+ * microVMs, their size or lifetime (`429 quota_exceeded`, `403 plan_limit_exceeded`).
+ */
 export class MicroVmQuotaExceededError extends ApiError {
   constructor(message: string, status: number, code?: string, reason?: string) {
     super(message, status, code, reason);
@@ -167,24 +198,24 @@ const NOT_RUNNING = /microvm[_ ]not[_ ]running|not running/i;
  * @internal
  */
 export const toMicroVmError = (error: unknown, filePath?: string): unknown => {
-  if (
-    !(error instanceof ApiError) ||
-    error instanceof MicroVmNotRunningError ||
-    error instanceof MicroVmNotFoundError
-  ) {
-    return error;
+  // Only plain `ApiError`s are classified; already typed errors pass through.
+  if (!(error instanceof ApiError) || Object.getPrototypeOf(error) !== ApiError.prototype) return error;
+  const { message, status, code, reason } = error;
+  if (code === 'microvm_busy') return new MicroVmBusyError(message, status, code, reason);
+  if (code === 'microvm_unreachable') return new MicroVmUnreachableError(message, code, reason);
+  if (code === 'image_not_ready') return new MicroVmImageNotReadyError(message, code, reason);
+  if (code === 'quota_exceeded' || code === 'plan_limit_exceeded') {
+    return new MicroVmQuotaExceededError(message, status, code, reason);
   }
-  if (error.status === 409 && (error.code === 'microvm_not_running' || NOT_RUNNING.test(error.message))) {
-    return new MicroVmNotRunningError(error.message, error.code ?? 'microvm_not_running', error.reason);
+  if (status === 409 && (code === 'microvm_not_running' || (code === undefined && NOT_RUNNING.test(message)))) {
+    return new MicroVmNotRunningError(message, code ?? 'microvm_not_running', reason);
   }
-  if (error.status === 404) {
-    const vmMissing = error.code === 'microvm_not_found' || /microvm/i.test(error.code ?? '');
+  if (status === 404) {
+    // File routes answer `guest_not_found` for a missing path and `not_found` for a missing microVM.
+    const vmMissing = code === 'not_found' || code === 'microvm_not_found';
     return filePath !== undefined && !vmMissing
-      ? new MicroVmFileNotFoundError(filePath, error.message, error.code)
-      : new MicroVmNotFoundError(error.message, error.code, error.reason);
-  }
-  if (error.code === 'quota_exceeded' || error.code === 'microvm_quota_exceeded') {
-    return new MicroVmQuotaExceededError(error.message, error.status, error.code, error.reason);
+      ? new MicroVmFileNotFoundError(filePath, message, code)
+      : new MicroVmNotFoundError(message, code, reason);
   }
   return error;
 };

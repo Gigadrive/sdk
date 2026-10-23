@@ -1,17 +1,20 @@
 export { Command } from './command';
 export type { CommandLogChunk, CommandLogsOptions, CommandOutputCallback, CommandWaitOptions } from './command';
-export { durationToMs } from './duration';
+export { MICROVM_MAX_TIMEOUT_MS, durationToMs } from './duration';
 export type { MicroVmDuration } from './duration';
 export {
   CommandFailedError,
+  MicroVmBusyError,
   MicroVmFileNotFoundError,
   MicroVmImageBuildError,
+  MicroVmImageNotReadyError,
   MicroVmNotFoundError,
   MicroVmNotRunningError,
   MicroVmPortNotExposedError,
   MicroVmQuotaExceededError,
   MicroVmStartError,
   MicroVmTimeoutError,
+  MicroVmUnreachableError,
 } from './errors';
 export type { CommandOutput } from './errors';
 export type { CommandLogStreamOptions } from './logs';

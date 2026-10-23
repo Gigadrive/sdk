@@ -36,6 +36,9 @@ describe('public exports', () => {
       'MicroVmStartError',
       'MicroVmImageBuildError',
       'CommandFailedError',
+      'MicroVmBusyError',
+      'MicroVmUnreachableError',
+      'MicroVmImageNotReadyError',
       'durationToMs',
       'parseSSEEvents',
     ]) {
