@@ -34,8 +34,8 @@ export const phpRuntimeForConstraint = (constraint: string): Runtime | undefined
  * @returns The constraint, or `None` when the manifest is missing, cannot be
  *   read or parsed, or requires no PHP version.
  */
-const readPhpConstraint = (projectFolder: string) =>
-  Effect.gen(function* () {
+const readPhpConstraint = Effect.fn('readPhpConstraint')(
+  function* (projectFolder: string) {
     const fs = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
     const content = yield* fs.readFileString(pathService.join(projectFolder, 'composer.json'));
@@ -43,20 +43,23 @@ const readPhpConstraint = (projectFolder: string) =>
     const requires = manifest && typeof manifest === 'object' && 'require' in manifest ? manifest.require : undefined;
     const php = requires && typeof requires === 'object' && 'php' in requires ? requires.php : undefined;
     return typeof php === 'string' ? Option.some(php) : Option.none();
-  }).pipe(Effect.catchAll(() => Effect.succeed(Option.none<string>())));
+  },
+  Effect.catchAll(() => Effect.succeed(Option.none<string>()))
+);
 
 /**
  * Sets the runtime of PHP defaults from the project's `composer.json`
  * `require.php` constraint (see {@link phpRuntimeForConstraint}). Without a
  * usable constraint the defaults keep their runtime.
  */
-const refineComposerPhpRuntime = (defaults: FrameworkDefaultConfig, projectFolder: string) =>
-  readPhpConstraint(projectFolder).pipe(
-    Effect.map((constraint) => {
-      const runtime = Option.getOrUndefined(Option.flatMapNullable(constraint, phpRuntimeForConstraint));
-      return runtime ? { ...defaults, runtime } : defaults;
-    })
-  );
+const refineComposerPhpRuntime = Effect.fn('refineComposerPhpRuntime')(function* (
+  defaults: FrameworkDefaultConfig,
+  projectFolder: string
+) {
+  const constraint = yield* readPhpConstraint(projectFolder);
+  const runtime = Option.getOrUndefined(Option.flatMapNullable(constraint, phpRuntimeForConstraint));
+  return runtime ? { ...defaults, runtime } : defaults;
+});
 
 /**
  * Makes a PHP preset pick its runtime from `composer.json` `require.php`,
