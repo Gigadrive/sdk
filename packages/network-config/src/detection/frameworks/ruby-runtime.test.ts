@@ -98,6 +98,7 @@ describe('rubyRuntimeFromProjectFiles', () => {
     { name: 'Gemfile ~> 3.3.1', files: { Gemfile: "ruby '~> 3.3.1'" }, runtime: 'ruby-33' },
     { name: 'Gemfile >= 3.2', files: { Gemfile: 'ruby ">= 3.2"' }, runtime: 'ruby-40' },
     { name: 'Gemfile several requirements', files: { Gemfile: "ruby '>= 3.2', '< 3.4'" }, runtime: 'ruby-33' },
+    { name: 'Gemfile with a trailing comment', files: { Gemfile: "ruby '~> 3.3.0' # pinned" }, runtime: 'ruby-33' },
     {
       name: 'Gemfile file: directive',
       files: { Gemfile: 'ruby file: ".ruby-version"\ngem "rails"', '.ruby-version': 'ruby-3.4.1' },
@@ -210,6 +211,7 @@ describe('detectRubyRuntime', () => {
     { name: 'several requirements', directive: "ruby '>= 3.2', '< 3.4'", runtime: 'ruby-33' },
     { name: 'a comma-separated requirement', directive: "ruby '>= 3.2, < 3.4'", runtime: 'ruby-33' },
     { name: 'parentheses', directive: 'ruby("~> 3.4.0")', runtime: 'ruby-34' },
+    { name: 'a trailing comment', directive: 'ruby "3.3.6" # keep in sync with .ruby-version', runtime: 'ruby-33' },
     {
       name: 'an engine keyword',
       directive: 'ruby "3.3.6", engine: "ruby", engine_version: "3.3.6"',

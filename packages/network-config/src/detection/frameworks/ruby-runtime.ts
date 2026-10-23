@@ -96,8 +96,11 @@ const GEMFILE_RUBY_DIRECTIVE = /^\s*ruby[\s(]+(.+)$/m;
 /** A file the `ruby` directive reads its version from: `file: ".ruby-version"` or `File.read(".ruby-version")`. */
 const GEMFILE_RUBY_FILE = /^(?:file:|:file\s*=>|File\.read\s*\(?)\s*(['"])([^'"]+)\1/;
 
-/** The quoted strings leading a `ruby` directive, before any keyword argument such as `engine:`. */
-const LEADING_STRINGS = /^\s*(['"])([^'"]*)\1\s*(?:,|\)|$)/;
+/**
+ * The quoted strings leading a `ruby` directive, before any keyword argument
+ * such as `engine:` or a trailing `# comment`.
+ */
+const LEADING_STRINGS = /^\s*(['"])([^'"]*)\1\s*(?:,|\)|#|$)/;
 
 /** The fixed files a Ruby version can come from, in the order they are consulted. */
 const RUBY_VERSION_FILES = ['.ruby-version', '.tool-versions', 'Gemfile', 'Gemfile.lock'];
