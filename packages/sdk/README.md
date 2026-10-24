@@ -327,6 +327,58 @@ await jobs.consume(async (job) => processJob(job.id), { maxMessages: 10, stopWhe
 
 `client.queues` exposes the full REST surface (queues, messages, dead letters, schedules), and `createWorkflowQueue()` runs the [Workflow SDK](https://workflow-sdk.dev) on Gigadrive Network queues.
 
+## microVMs
+
+microVMs are isolated Linux machines you create on demand: run commands, move
+files in and out, and expose ports on public preview URLs. Use them for code
+execution, agent sandboxes, CI steps and previews.
+
+```ts
+import { MicroVM } from '@gigadrive/sdk';
+
+await using vm = await MicroVM.create({ image: 'node22', ports: [3000], timeout: '10m' });
+
+await vm.files.write('server.js', 'require("http").createServer((_, r) => r.end("hi")).listen(3000)');
+const { exitCode, stdout } = await vm.run('node --version');
+const server = await vm.spawn('node', ['server.js']);
+console.log(await vm.waitForPort(3000)); // https://3000-<slug>.vm.gigadrive.app
+// Leaving the block stops the microVM.
+```
+
+`MicroVM.create` resolves its client like `GigadriveClient` (pass `client` to use
+your own) and its application from `applicationId`, the client's
+`applicationId` or `GIGADRIVE_APPLICATION_ID`. Inside a Gigadrive deployment
+nothing needs configuring. Built-in images: `node22`, `node24`, `python3.13`,
+`python3.12`, `bun1`, `debian12`, `ubuntu24.04`.
+
+| Task                  | Call                                                                                                                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create, connect, list | `MicroVM.create({ image, vcpus, memoryMb, diskMb, timeout, ports, env, metadata, network })`, `MicroVM.get(id)`, `for await (const vm of MicroVM.list())`                                                   |
+| Run and wait          | `vm.run('ls -la')`, `vm.run('npm', ['test'], { cwd, env, user, sudo, timeout, onStdout, onStderr, stdin, throwOnError, signal })` → `{ exitCode, signal, timedOut, stdout, stderr, truncated, durationMs }` |
+| Run in the background | `vm.spawn(cmd, args, { stdin, pty, onStdout })` → `Command`: `logs()`, `output()`, `stdout()`, `stderr()`, `wait()`, `kill(signal)`, `write(data)`, `end()`, `resize(cols, rows)`                           |
+| Reattach              | `vm.commands.get(commandId)`, `vm.commands.list()`                                                                                                                                                          |
+| Files                 | `vm.files.write(path, string \| Uint8Array \| Blob \| ReadableStream)`, `writeMany`, `read`, `readText`, `readStream`, `list(path, { recursive })`, `stat`, `exists`, `mkdir`, `remove`, `move`             |
+| Ports                 | `vm.url(port)`, `vm.waitForPort(port)`                                                                                                                                                                      |
+| Lifetime              | `vm.extendTimeout('30m')`, `vm.stop()`, `vm.delete()`, `await using vm = ...`                                                                                                                               |
+| Images                | `client.microvms.images.create({ name, from: 'python:3.13' \| { dockerfile } })`, `.waitUntilReady(id)`, `.list()`, `.get(id)`, `.delete(id)`                                                               |
+
+Command output stays in the microVM, so `command.logs()` can be read from
+another process with `vm.commands.get(id)`, and a dropped connection resumes
+at the next unread byte. A non-zero exit code is a normal result; pass
+`throwOnError: true` to get a `CommandFailedError`. Other typed errors:
+`MicroVmNotRunningError`, `MicroVmNotFoundError`, `MicroVmFileNotFoundError`,
+`MicroVmQuotaExceededError`, `MicroVmBusyError`, `MicroVmUnreachableError`,
+`MicroVmImageNotReadyError`, `MicroVmPortNotExposedError`,
+`MicroVmTimeoutError`, `MicroVmStartError` and `MicroVmImageBuildError`.
+Reads and log streams are retried with backoff while a microVM answers
+`microvm_busy`. A microVM lives at most 24 hours (`MICROVM_MAX_TIMEOUT_MS`),
+or less on your plan.
+
+`client.microvms` is the low-level REST surface, one method per route
+(`create`, `list`, `listAll`, `get`, `extendTimeout`, `stop`, `delete`,
+`commands.*`, `files.*`, `images.*`). The SDK uses only `fetch`, so it runs in
+Node.js 18+, Bun, Deno, edge runtimes and Gigadrive Functions.
+
 ## Pagination
 
 List endpoints accept `page` / `perPage` / `cursor` and return `{ items, total }`
