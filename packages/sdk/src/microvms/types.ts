@@ -19,7 +19,7 @@ export type MicroVmStatus =
   'pending' | 'starting' | 'running' | 'pausing' | 'paused' | 'resuming' | 'stopping' | 'stopped' | 'failed';
 
 /** vCPU counts a microVM can be created with. */
-export type MicroVmVcpus = 1 | 2 | 4 | 8;
+export type MicroVmVcpus = 1 | 2 | 4;
 
 /** Outbound network policy. Private ranges are always blocked, whatever the policy. */
 export type MicroVmEgress = 'allow' | 'deny';
@@ -81,7 +81,7 @@ export interface CreateMicroVmInput {
   image?: string;
   /** Default 1. */
   vcpus?: MicroVmVcpus;
-  /** Memory in MiB, 512 to 16384. Default 2048. */
+  /** Memory in MiB, 512 to 8192. Default 2048. */
   memoryMb?: number;
   /** Writable disk in MiB, 1024 to 51200. Default 10240. */
   diskMb?: number;

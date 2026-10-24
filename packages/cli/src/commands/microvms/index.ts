@@ -193,7 +193,7 @@ const signalOnInterrupt =
 export interface CreateFlags {
   readonly app: Option.Option<string>;
   readonly image: Option.Option<string>;
-  readonly vcpus: Option.Option<'1' | '2' | '4' | '8'>;
+  readonly vcpus: Option.Option<'1' | '2' | '4'>;
   readonly memory: Option.Option<number>;
   readonly disk: Option.Option<number>;
   readonly timeout: Option.Option<string>;
@@ -224,7 +224,7 @@ export const createInput = (flags: CreateFlags) =>
       ...Option.match(flags.image, { onNone: () => ({}), onSome: (image) => ({ image }) }),
       ...Option.match(flags.vcpus, {
         onNone: () => ({}),
-        onSome: (vcpus) => ({ vcpus: Number(vcpus) as 1 | 2 | 4 | 8 }),
+        onSome: (vcpus) => ({ vcpus: Number(vcpus) as 1 | 2 | 4 }),
       }),
       ...Option.match(flags.memory, { onNone: () => ({}), onSome: (memoryMb) => ({ memoryMb }) }),
       ...Option.match(flags.disk, { onNone: () => ({}), onSome: (diskMb) => ({ diskMb }) }),
@@ -266,7 +266,7 @@ const createCommand = Command.make(
       ),
       Options.optional
     ),
-    vcpus: Options.choice('vcpus', ['1', '2', '4', '8'] as const).pipe(
+    vcpus: Options.choice('vcpus', ['1', '2', '4'] as const).pipe(
       Options.withDescription('Number of vCPUs (default: 1)'),
       Options.optional
     ),
