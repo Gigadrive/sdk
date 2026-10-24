@@ -803,6 +803,23 @@ describe('MicroVM.waitForPort', () => {
     expect(init?.redirect).toBe('manual');
   });
 
+  it('fails fast once the gateway says the microVM stopped', async () => {
+    const { vm, fetch } = await createVm();
+    fetch.mockResolvedValueOnce(
+      new Response('gone', { status: 410, headers: { 'x-gigadrive-error': 'EDGE_MICROVM_STOPPED' } })
+    );
+
+    await expect(vm.waitForPort(3000, { interval: 1 })).rejects.toBeInstanceOf(MicroVmNotRunningError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats the customer server's own 410 as an answer", async () => {
+    const { vm, fetch } = await createVm();
+    fetch.mockResolvedValueOnce(new Response('gone', { status: 410 }));
+
+    await expect(vm.waitForPort(3000, { interval: 1 })).resolves.toBe('https://3000-k3j9x2m1q8zt.vm.gigadrive.app');
+  });
+
   it('times out', async () => {
     const { vm, fetch } = await createVm();
     fetch.mockImplementation(() => Promise.resolve(new Response(null, { status: 503 })));

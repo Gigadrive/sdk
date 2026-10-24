@@ -692,6 +692,7 @@ export class MicroVM {
    *
    * @returns The preview URL.
    * @throws {@link MicroVmPortNotExposedError} when the port is not exposed.
+   * @throws {@link MicroVmNotRunningError} when the microVM has stopped.
    * @throws {@link MicroVmTimeoutError} when nothing answers within `timeout`.
    *
    * @example
@@ -715,6 +716,7 @@ export class MicroVM {
       );
       const forward = () => controller.abort();
       options.signal?.addEventListener('abort', forward, { once: true });
+      let stopped = false;
       try {
         const response = await this.resource.fetchPreview(target, {
           method: 'GET',
@@ -722,13 +724,18 @@ export class MicroVM {
           signal: controller.signal,
         });
         await response.body?.cancel().catch(() => undefined);
-        if (!NOT_LISTENING.has(response.status)) return base;
+        // The gateway's own 410: the microVM stopped, so nothing will ever answer.
+        stopped = response.status === 410 && response.headers.get('x-gigadrive-error') === 'EDGE_MICROVM_STOPPED';
+        if (!stopped && !NOT_LISTENING.has(response.status)) return base;
       } catch {
         // Connection errors mean nothing answers yet; keep polling.
         if (options.signal?.aborted) throw abortReason(options.signal);
       } finally {
         clearTimeout(timer);
         options.signal?.removeEventListener('abort', forward);
+      }
+      if (stopped) {
+        throw new MicroVmNotRunningError(`The microVM ${this.id} has stopped; nothing will answer on port ${port}.`);
       }
       if (Date.now() + interval > deadline) {
         throw new MicroVmTimeoutError(`Nothing answered on port ${port} of the microVM ${this.id}.`);
