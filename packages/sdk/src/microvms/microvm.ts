@@ -71,8 +71,9 @@ export interface CreateMicroVmOptions extends Omit<CreateMicroVmInput, 'network'
   /** `'deny'` blocks all outbound traffic. Default `'allow'`. */
   network?: MicroVmEgress | MicroVmNetworkPolicy;
   /**
-   * Wait until the microVM is running. Default `true`. With `false` the
-   * returned microVM may still be starting; call {@link MicroVM.waitUntilRunning}.
+   * Wait until the microVM is running (polling, up to 6 minutes, which covers
+   * a wait for capacity). Default `true`. With `false` the returned microVM may
+   * still be pending or starting; call {@link MicroVM.waitUntilRunning}.
    */
   wait?: boolean;
   signal?: AbortSignal;
@@ -146,6 +147,12 @@ export interface WaitForPortOptions {
   path?: string;
   signal?: AbortSignal;
 }
+
+/**
+ * How long {@link MicroVM.create} waits for a microVM to run: the API may wait
+ * up to 4 minutes for capacity, then the microVM boots.
+ */
+const CREATE_WAIT_TIMEOUT = '6m';
 
 /** Options of {@link MicroVM.waitUntilRunning}. */
 export interface WaitUntilRunningOptions {
@@ -406,9 +413,14 @@ export class MicroVM {
             : {}),
         ...(network !== undefined ? { network: typeof network === 'string' ? { egress: network } : network } : {}),
       },
-      { wait, signal }
+      // Never hold one request open for the whole boot: a create can wait
+      // minutes for capacity, longer than proxies in front of the API keep a
+      // response open. Start it, then poll.
+      { wait: false, signal }
     );
-    return new MicroVM(resource, info);
+    const vm = new MicroVM(resource, info);
+    if (wait === false) return vm;
+    return vm.waitUntilRunning({ timeout: CREATE_WAIT_TIMEOUT, signal });
   }
 
   /**

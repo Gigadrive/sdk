@@ -64,6 +64,26 @@ describe('MicroVM.create', () => {
     });
   });
 
+  it('starts without holding the request open and polls until the microVM runs', async () => {
+    const { fetch, client } = setup();
+    fetch
+      .mockResolvedValueOnce(json(vmInfo({ status: 'pending' }), 202))
+      .mockResolvedValueOnce(json(vmInfo({ status: 'starting' })))
+      .mockResolvedValueOnce(json(vmInfo({ status: 'running' })));
+    vi.useFakeTimers();
+    try {
+      const created = MicroVM.create({ client });
+      await vi.runAllTimersAsync();
+      const vm = await created;
+
+      expect(vm.status).toBe('running');
+      expect(request(fetch).query).toMatchObject({ wait: 'false' });
+      expect(fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('accepts timeoutMs and a network object, and timeout wins over timeoutMs', async () => {
     const { fetch, client } = setup();
     fetch.mockImplementation(() => Promise.resolve(json(vmInfo(), 201)));
