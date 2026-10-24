@@ -84,6 +84,44 @@ describe('MicroVM.create', () => {
     }
   });
 
+  it('deletes the microVM when it never runs in time, so it cannot boot unseen', async () => {
+    const { fetch, client } = setup();
+    fetch.mockImplementation((_input, init) =>
+      Promise.resolve(
+        init?.method === 'DELETE' ? new Response(null, { status: 204 }) : json(vmInfo({ status: 'pending' }), 202)
+      )
+    );
+    vi.useFakeTimers();
+    try {
+      const created = MicroVM.create({ client }).catch((e: unknown) => e);
+      await vi.runAllTimersAsync();
+
+      expect(await created).toBeInstanceOf(MicroVmTimeoutError);
+      const last = request(fetch, fetch.mock.calls.length - 1);
+      expect(last.method).toBe('DELETE');
+      expect(last.path).toMatch(/\/microvms\/vm-1$/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a microVM that failed to start for the caller to inspect', async () => {
+    const { fetch, client } = setup();
+    fetch
+      .mockResolvedValueOnce(json(vmInfo({ status: 'pending' }), 202))
+      .mockResolvedValueOnce(json(vmInfo({ status: 'failed', stopReason: 'no_capacity' })));
+    vi.useFakeTimers();
+    try {
+      const created = MicroVM.create({ client }).catch((e: unknown) => e);
+      await vi.runAllTimersAsync();
+
+      expect(await created).toMatchObject({ status: 'failed', stopReason: 'no_capacity' });
+      expect(fetch.mock.calls.every(([, init]) => init?.method !== 'DELETE')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('accepts timeoutMs and a network object, and timeout wins over timeoutMs', async () => {
     const { fetch, client } = setup();
     fetch.mockImplementation(() => Promise.resolve(json(vmInfo(), 201)));

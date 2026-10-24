@@ -150,9 +150,10 @@ export interface WaitForPortOptions {
 
 /**
  * How long {@link MicroVM.create} waits for a microVM to run: the API may wait
- * up to 4 minutes for capacity, then the microVM boots.
+ * up to 8 minutes for capacity (a region scaled to zero brings a host up),
+ * then the microVM boots.
  */
-const CREATE_WAIT_TIMEOUT = '6m';
+const CREATE_WAIT_TIMEOUT = '10m';
 
 /** Options of {@link MicroVM.waitUntilRunning}. */
 export interface WaitUntilRunningOptions {
@@ -420,7 +421,14 @@ export class MicroVM {
     );
     const vm = new MicroVM(resource, info);
     if (wait === false) return vm;
-    return vm.waitUntilRunning({ timeout: CREATE_WAIT_TIMEOUT, signal });
+    try {
+      return await vm.waitUntilRunning({ timeout: CREATE_WAIT_TIMEOUT, signal });
+    } catch (error) {
+      // The caller never gets this microVM: delete it so it can't boot later
+      // and bill unseen. A microVM that already failed or stopped is left as is.
+      if (!(error instanceof MicroVmStartError)) await vm.delete().catch(() => undefined);
+      throw error;
+    }
   }
 
   /**
