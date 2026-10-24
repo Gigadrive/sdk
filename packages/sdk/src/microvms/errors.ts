@@ -176,6 +176,26 @@ export class MicroVmStartError extends GigadriveError {
   }
 }
 
+/**
+ * {@link MicroVM.create} gave up on a microVM and could not delete it either.
+ * The microVM may still boot and bill: delete it by {@link microvmId}.
+ */
+export class MicroVmCleanupError extends GigadriveError {
+  readonly microvmId: string;
+  /** Why deleting the microVM failed. {@link Error.cause} is why creating it failed. */
+  readonly cleanupError: unknown;
+
+  constructor(microvmId: string, cause: unknown, cleanupError: unknown) {
+    super(
+      `Creating the microVM ${microvmId} failed and deleting it failed too. Delete it with MicroVM.get('${microvmId}') and delete().`
+    );
+    this.name = 'MicroVmCleanupError';
+    this.microvmId = microvmId;
+    this.cleanupError = cleanupError;
+    this.cause = cause;
+  }
+}
+
 /** A custom image build failed. */
 export class MicroVmImageBuildError extends GigadriveError {
   readonly imageId: string;

@@ -5,6 +5,7 @@ export type { MicroVmDuration } from './duration';
 export {
   CommandFailedError,
   MicroVmBusyError,
+  MicroVmCleanupError,
   MicroVmFileNotFoundError,
   MicroVmImageBuildError,
   MicroVmImageNotReadyError,

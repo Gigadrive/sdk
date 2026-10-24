@@ -3,6 +3,7 @@ import { Command, commandDurationMs, type CommandOutputCallback } from './comman
 import { abortReason, durationToMs, type MicroVmDuration, microvmTimeoutMs, sleep } from './duration';
 import {
   CommandFailedError,
+  MicroVmCleanupError,
   MicroVmFileNotFoundError,
   MicroVmNotFoundError,
   MicroVmNotRunningError,
@@ -71,7 +72,7 @@ export interface CreateMicroVmOptions extends Omit<CreateMicroVmInput, 'network'
   /** `'deny'` blocks all outbound traffic. Default `'allow'`. */
   network?: MicroVmEgress | MicroVmNetworkPolicy;
   /**
-   * Wait until the microVM is running (polling, up to 6 minutes, which covers
+   * Wait until the microVM is running (polling, up to 10 minutes, which covers
    * a wait for capacity). Default `true`. With `false` the returned microVM may
    * still be pending or starting; call {@link MicroVM.waitUntilRunning}.
    */
@@ -426,7 +427,12 @@ export class MicroVM {
     } catch (error) {
       // The caller never gets this microVM: delete it so it can't boot later
       // and bill unseen. A microVM that already failed or stopped is left as is.
-      if (!(error instanceof MicroVmStartError)) await vm.delete().catch(() => undefined);
+      if (error instanceof MicroVmStartError) throw error;
+      try {
+        await vm.delete();
+      } catch (cleanupError) {
+        throw new MicroVmCleanupError(vm.id, error, cleanupError);
+      }
       throw error;
     }
   }
@@ -517,8 +523,8 @@ export class MicroVM {
   }
 
   /** Fetch the latest state. */
-  async refresh(): Promise<MicroVmInfo> {
-    this.current = await this.resource.get(this.id);
+  async refresh(options: { signal?: AbortSignal } = {}): Promise<MicroVmInfo> {
+    this.current = await this.resource.get(this.id, { signal: options.signal });
     return this.current;
   }
 
@@ -680,7 +686,8 @@ export class MicroVM {
         throw new MicroVmTimeoutError(`The microVM ${this.id} is still ${this.current.status}; gave up waiting.`);
       }
       await sleep(interval, options.signal);
-      await this.refresh();
+      await this.refresh({ signal: options.signal });
+      if (options.signal?.aborted) throw abortReason(options.signal);
     }
     return this;
   }

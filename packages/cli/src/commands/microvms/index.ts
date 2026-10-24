@@ -607,10 +607,14 @@ const download = (client: GigadriveClient, source: Extract<CopyTarget, { kind: '
       }
       for (const child of listing.entries) {
         if (child.type !== 'file') continue;
-        files.push({
-          remote: child.path,
-          local: path.join(destination, ...relativeTo(entry.path, child.path).split('/')),
-        });
+        const segments = relativeTo(entry.path, child.path).split('/');
+        // The listing comes from the microVM, which may run untrusted code:
+        // never let an entry write outside the destination.
+        if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+          yield* Console.error(`Skipped ${child.path}: its path leaves ${entry.path}.`);
+          continue;
+        }
+        files.push({ remote: child.path, local: path.join(destination, ...segments) });
       }
       yield* fs
         .makeDirectory(destination, { recursive: true })
@@ -722,7 +726,7 @@ const extendCommand = Command.make(
   },
   ({ microvmId, duration }) =>
     extendMicroVm(microvmId, duration).pipe(Effect.asVoid, reportErrors('extend the microVM'))
-).pipe(Command.withDescription('Keep a microVM running longer'));
+).pipe(Command.withDescription('Set how long a microVM keeps running, counted from now'));
 
 // ---------------------------------------------------------------------------
 // images

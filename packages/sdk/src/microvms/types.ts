@@ -225,6 +225,10 @@ export type CommandLogEvent =
       type: 'exit';
       exitCode: number | null;
       signal: string | null;
+      /** The command ran past its timeout. Absent from APIs that predate it. */
+      timedOut?: boolean;
+      /** When the command exited. Absent from APIs that predate it. */
+      finishedAt?: string | null;
     };
 
 /** Type of a file system entry. */

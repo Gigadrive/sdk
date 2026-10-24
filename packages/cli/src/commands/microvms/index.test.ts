@@ -631,6 +631,26 @@ describe('copyFiles', () => {
     await expect(readFile(join(dir, 'out', 'index.js'), 'utf8')).resolves.toBe('// /app/dist/index.js');
   });
 
+  it('never writes a listed file outside the download destination', async () => {
+    const entry = (path: string, type: string) => ({ path, name: path, type, size: 1, mode: '0644', modifiedAt: 0 });
+    const api = fakeApi(
+      route('GET', '/microvms/vm-1/files/stat', () => json(entry('/app/dist', 'directory'))),
+      route('GET', '/microvms/vm-1/files', () =>
+        json({
+          truncated: false,
+          entries: [entry('/app/dist/../../escape.js', 'file'), entry('/app/dist/ok.js', 'file')],
+        })
+      ),
+      route('GET', '/microvms/vm-1/files/content', (url) => new Response(`// ${url.searchParams.get('path')}`))
+    );
+
+    const result = await run(copyFiles('vm:vm-1:/app/dist', join(dir, 'nested', 'out')), api.layer);
+
+    expect(Either.isRight(result) && result.right.files).toBe(1);
+    await expect(readFile(join(dir, 'nested', 'out', 'ok.js'), 'utf8')).resolves.toBe('// /app/dist/ok.js');
+    await expect(readFile(join(dir, 'escape.js'), 'utf8')).rejects.toThrow();
+  });
+
   it('refuses two local or two remote paths, and malformed remote paths', async () => {
     const api = fakeApi();
     for (const [source, target] of [

@@ -127,6 +127,10 @@ export async function* streamCommandLogs(
             type: 'exit',
             exitCode: typeof payload.exitCode === 'number' ? payload.exitCode : null,
             signal: typeof payload.signal === 'string' ? payload.signal : null,
+            ...(typeof payload.timedOut === 'boolean' && { timedOut: payload.timedOut }),
+            ...((typeof payload.finishedAt === 'string' || payload.finishedAt === null) && {
+              finishedAt: payload.finishedAt,
+            }),
           };
           return;
         } else if (event.event === 'error') {

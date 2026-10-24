@@ -157,7 +157,14 @@ export class Command {
     const decoders = { stdout: new TextDecoder(), stderr: new TextDecoder() };
     for await (const event of this.resource.logs(this.microvmId, this.id, options)) {
       if (event.type === 'exit') {
-        this.current = { ...this.current, status: 'exited', exitCode: event.exitCode, signal: event.signal };
+        this.current = {
+          ...this.current,
+          status: 'exited',
+          exitCode: event.exitCode,
+          signal: event.signal,
+          ...(event.timedOut !== undefined && { timedOut: event.timedOut }),
+          ...(event.finishedAt !== undefined && { finishedAt: event.finishedAt }),
+        };
         continue;
       }
       if (event.type === 'truncated') {

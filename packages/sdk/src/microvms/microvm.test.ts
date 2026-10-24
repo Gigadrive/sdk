@@ -3,6 +3,7 @@ import { GigadriveClient } from '../client';
 import { Command } from './command';
 import {
   CommandFailedError,
+  MicroVmCleanupError,
   MicroVmNotRunningError,
   MicroVmPortNotExposedError,
   MicroVmStartError,
@@ -100,6 +101,53 @@ describe('MicroVM.create', () => {
       const last = request(fetch, fetch.mock.calls.length - 1);
       expect(last.method).toBe('DELETE');
       expect(last.path).toMatch(/\/microvms\/vm-1$/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports the microVM id when it can neither wait for it nor delete it', async () => {
+    const { fetch, client } = setup();
+    fetch.mockImplementation((_input, init) =>
+      Promise.resolve(
+        init?.method === 'DELETE' ? apiError(409, 'Conflict', 'conflict') : json(vmInfo({ status: 'pending' }), 202)
+      )
+    );
+    vi.useFakeTimers();
+    try {
+      const created = MicroVM.create({ client }).catch((e: unknown) => e);
+      await vi.runAllTimersAsync();
+
+      const error = await created;
+      expect(error).toBeInstanceOf(MicroVmCleanupError);
+      expect(error).toMatchObject({ microvmId: 'vm-1' });
+      expect((error as MicroVmCleanupError).cause).toBeInstanceOf(MicroVmTimeoutError);
+      expect((error as MicroVmCleanupError).cleanupError).toBeInstanceOf(Error);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('passes the abort signal to the status polls of a create', async () => {
+    const { fetch, client } = setup();
+    const controller = new AbortController();
+    let pollSignal: AbortSignal | null | undefined;
+    fetch
+      .mockResolvedValueOnce(json(vmInfo({ status: 'pending' }), 202))
+      .mockImplementationOnce((_input, init) => {
+        pollSignal = init?.signal;
+        controller.abort();
+        return Promise.resolve(json(vmInfo({ status: 'running' })));
+      })
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.useFakeTimers();
+    try {
+      const created = MicroVM.create({ client, signal: controller.signal }).catch((e: unknown) => e);
+      await vi.runAllTimersAsync();
+
+      // The abort wins over the running status that arrived after it.
+      expect(await created).not.toBeInstanceOf(MicroVM);
+      expect(pollSignal?.aborted).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -419,6 +467,23 @@ describe('MicroVM.run', () => {
     );
 
     await expect(vm.run('sleep 10', { timeout: '1s' })).resolves.toMatchObject({ timedOut: true, signal: 'SIGKILL' });
+  });
+
+  it('reports timedOut and the end time from the streamed exit event', async () => {
+    const { vm, fetch } = await createVm();
+    fetch
+      .mockResolvedValueOnce(json(commandInfo({ startedAt: '2026-10-24T10:00:00.000Z' }), 201))
+      .mockResolvedValueOnce(
+        sseResponse([
+          out('stdout', 'x', 0),
+          `event: exit\ndata: ${JSON.stringify({ exitCode: null, signal: 'SIGKILL', timedOut: true, finishedAt: '2026-10-24T10:00:01.000Z' })}\n\n`,
+        ])
+      );
+
+    const result = await vm.run('sleep 10', { timeout: '1s', onStdout: () => undefined });
+
+    expect(result).toMatchObject({ timedOut: true, signal: 'SIGKILL', durationMs: 1000 });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('marks truncated output from a truncated event', async () => {
