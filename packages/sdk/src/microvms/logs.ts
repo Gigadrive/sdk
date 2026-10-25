@@ -19,7 +19,9 @@ export interface CommandLogStreamOptions {
   reconnect?: boolean;
   /**
    * How many reconnects in a row may fail to deliver anything before the
-   * stream gives up and throws. Default 5.
+   * stream gives up and throws. Default 5. A connection the host closed after
+   * a long quiet stretch, with the command confirmed running by
+   * {@link resolveExit}, does not count.
    */
   maxReconnectAttempts?: number;
   /** Cancels the stream. */
@@ -43,10 +45,11 @@ export type OpenLogStream = (query: {
 const RECONNECT_DELAYS_MS = [100, 250, 500, 1_000, 2_000];
 
 /**
- * An empty connection that stayed open at least this long before closing was
- * an idle close (the host ends a quiet command's pipe after 15 minutes), not a
+ * An empty connection that stayed open at least this long before it closed or
+ * failed retryably was an idle close (the host ends a quiet command's pipe
+ * after 15 minutes, which the API reports as a retryable `error` event), not a
  * failure: with the command confirmed running, it does not count toward
- * `maxReconnectAttempts`. Connections that keep closing straight away still do.
+ * `maxReconnectAttempts`. Connections that keep failing straight away still do.
  */
 const IDLE_CLOSE_MIN_MS = 30_000;
 
@@ -98,7 +101,7 @@ export async function* streamCommandLogs(
     let progressed = false;
     let idleClose = false;
     let serverError: ApiError | undefined;
-    const openedAt = Date.now();
+    let connectedAt: number | undefined;
     try {
       const response = await open({
         follow,
@@ -106,6 +109,8 @@ export async function* streamCommandLogs(
         stderrOffset: next.stderr,
         signal: options.signal,
       });
+      const connected = Date.now();
+      connectedAt = connected;
       for await (const event of parseSSEEvents(response)) {
         if (event.event === 'stdout' || event.event === 'stderr') {
           const payload = parseJson(event.data);
@@ -159,15 +164,26 @@ export async function* streamCommandLogs(
       }
       // The connection closed without an `exit` event.
       if (!follow || !reconnect) return;
+      const openForMs = Date.now() - connected;
       const exit = progressed ? null : await options.resolveExit?.();
       if (exit) {
         yield { type: 'exit', exitCode: exit.exitCode, signal: exit.signal };
         return;
       }
-      idleClose = exit === null && Date.now() - openedAt >= IDLE_CLOSE_MIN_MS;
+      idleClose = exit === null && openForMs >= IDLE_CLOSE_MIN_MS;
     } catch (error) {
       if (error === serverError || options.signal?.aborted || !reconnect || !isRetryable(error)) throw error;
-      if (!progressed && failures >= maxAttempts) throw error;
+      const openForMs = connectedAt === undefined ? 0 : Date.now() - connectedAt;
+      if (follow && !progressed && openForMs >= IDLE_CLOSE_MIN_MS && options.resolveExit) {
+        // A transient failure while checking counts like the failure it follows.
+        const exit = await options.resolveExit().catch(() => undefined);
+        if (exit) {
+          yield { type: 'exit', exitCode: exit.exitCode, signal: exit.signal };
+          return;
+        }
+        idleClose = exit === null;
+      }
+      if (!progressed && !idleClose && failures >= maxAttempts) throw error;
     }
     failures = progressed || idleClose ? 0 : failures + 1;
     if (failures > maxAttempts) {
