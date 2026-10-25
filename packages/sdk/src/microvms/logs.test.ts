@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../errors';
 import { type OpenLogStream, streamCommandLogs } from './logs';
 import { exit, out, sseResponse } from './test-utils';
@@ -132,6 +132,101 @@ describe('streamCommandLogs', () => {
       code: 'log_stream_closed',
     });
     expect(resolveExit).toHaveBeenCalled();
+  });
+
+  describe('idle closes of a quiet command', () => {
+    let now = 0;
+    beforeEach(() => {
+      now = Date.parse('2026-10-25T12:00:00.000Z');
+      vi.spyOn(Date, 'now').mockImplementation(() => now);
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // What the API sends when the host ends a quiet command's pipe after 15 minutes.
+    const idleError = 'event: error\ndata: {"retryable":true}\n\n';
+    const encoder = new TextEncoder();
+    /** A connection that stays open `minutes` of mocked time, then delivers `chunks` and closes. */
+    const quietFor = (minutes: number, chunks: string[] = []) => {
+      let delivered = false;
+      return new Response(
+        new ReadableStream<Uint8Array>(
+          {
+            pull(controller) {
+              if (delivered) {
+                controller.close();
+                return;
+              }
+              delivered = true;
+              now += minutes * 60_000;
+              for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+              if (chunks.length === 0) controller.close();
+            },
+          },
+          { highWaterMark: 0 }
+        ),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+      );
+    };
+
+    it('keeps following across empty closes that each stayed open a while', async () => {
+      const open = opener(
+        ...Array.from({ length: 8 }, () => quietFor(15)),
+        sseResponse([out('stdout', 'ready', 0), exit(0)])
+      );
+      const resolveExit = vi.fn().mockResolvedValue(null);
+
+      await expect(collect(streamCommandLogs(open, { maxReconnectAttempts: 2, resolveExit }))).resolves.toEqual([
+        'stdout@0:ready',
+        'exit:0:null',
+      ]);
+      expect(open).toHaveBeenCalledTimes(9);
+    });
+
+    it('keeps following when the host ends each idle pipe with a retryable error', async () => {
+      const open = opener(
+        ...Array.from({ length: 8 }, () => quietFor(15, [idleError])),
+        sseResponse([out('stdout', 'ready', 0), exit(0)])
+      );
+      const resolveExit = vi.fn().mockResolvedValue(null);
+
+      await expect(collect(streamCommandLogs(open, { maxReconnectAttempts: 2, resolveExit }))).resolves.toEqual([
+        'stdout@0:ready',
+        'exit:0:null',
+      ]);
+      expect(open).toHaveBeenCalledTimes(9);
+      expect(resolveExit).toHaveBeenCalledTimes(8);
+    });
+
+    it('ends with the exit status when an idle pipe fails after the command exited', async () => {
+      const open = opener(quietFor(15, [idleError]));
+
+      await expect(
+        collect(streamCommandLogs(open, { resolveExit: () => Promise.resolve({ exitCode: 3, signal: null }) }))
+      ).resolves.toEqual(['exit:3:null']);
+      expect(open).toHaveBeenCalledTimes(1);
+    });
+
+    it('still gives up on retryable errors that arrive straight away', async () => {
+      const open = vi.fn<OpenLogStream>().mockImplementation(() => Promise.resolve(quietFor(0, [idleError])));
+      const resolveExit = vi.fn().mockResolvedValue(null);
+
+      await expect(collect(streamCommandLogs(open, { maxReconnectAttempts: 1, resolveExit }))).rejects.toMatchObject({
+        status: 502,
+      });
+      expect(open).toHaveBeenCalledTimes(2);
+      expect(resolveExit).not.toHaveBeenCalled();
+    });
+
+    it('still counts an idle-length close as a failure when the command state is unknown', async () => {
+      const open = vi.fn<OpenLogStream>().mockImplementation(() => Promise.resolve(quietFor(15)));
+
+      await expect(collect(streamCommandLogs(open, { maxReconnectAttempts: 1 }))).rejects.toMatchObject({
+        code: 'log_stream_closed',
+      });
+      expect(open).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('ends with the exit status from resolveExit when the stream closes after the command exited', async () => {
