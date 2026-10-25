@@ -1,5 +1,16 @@
 # gigadrive
 
+## 2.8.0
+
+### Minor Changes
+
+- Add `gigadrive microvms` (alias `gigadrive vm`): `create`, `ls`, `get`, `exec <id> -- <command>` (streams output and exits with the command's exit code), `shell <id>` (interactive terminal), `cp` between local paths and `vm:<id>:<path>`, `stop`, `rm`, `extend` and `images ls|create|rm`. Login now requests the microVM scopes. ([#592](https://github.com/Gigadrive/sdk/pull/592))
+
+### Patch Changes
+
+- Updated dependencies [[`bb3f660`](https://github.com/Gigadrive/sdk/commit/bb3f6606c40a99cfb691cb2918fc7fa769ab4d08), [`181c33a`](https://github.com/Gigadrive/sdk/commit/181c33a6d31d449ac7208397fb771cf2cff4f16b)]:
+  - @gigadrive/sdk@0.10.0
+
 ## 2.7.5
 
 ### Patch Changes

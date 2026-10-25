@@ -1,5 +1,17 @@
 # @gigadrive/sdk
 
+## 0.10.0
+
+### Minor Changes
+
+- Add microVMs: `MicroVM.create/get/list`, `vm.run` and `vm.spawn` with streamed, resumable command output (`Command.logs/wait/kill/write/resize`), `vm.files` (read, write, writeMany, list, stat, exists, mkdir, remove, move), preview URLs with `vm.url` and `vm.waitForPort`, `vm.extendTimeout/stop/delete` and `await using` disposal, custom images through `client.microvms.images`, typed errors (with backoff on `microvm_busy` for reads and log streams), and the low-level `client.microvms` REST resource. `parseSSEEvents` exposes SSE event names and ids, and streamed request bodies now send `duplex: 'half'`. ([#592](https://github.com/Gigadrive/sdk/pull/592))
+
+### Patch Changes
+
+- `MicroVM.create` starts the microVM without holding the request open and polls until it runs (up to 10 minutes, covering a wait for capacity), so proxies in front of the API can't cut a long create short. When it gives up (time out or abort), it deletes the microVM so it never boots unseen. ([#592](https://github.com/Gigadrive/sdk/pull/592))
+
+  `MicroVM.waitForPort` throws `MicroVmNotRunningError` as soon as the gateway reports the microVM stopped, instead of polling until its timeout.
+
 ## 0.9.5
 
 ### Patch Changes
