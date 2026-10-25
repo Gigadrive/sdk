@@ -42,6 +42,14 @@ export type OpenLogStream = (query: {
 
 const RECONNECT_DELAYS_MS = [100, 250, 500, 1_000, 2_000];
 
+/**
+ * An empty connection that stayed open at least this long before closing was
+ * an idle close (the host ends a quiet command's pipe after 15 minutes), not a
+ * failure: with the command confirmed running, it does not count toward
+ * `maxReconnectAttempts`. Connections that keep closing straight away still do.
+ */
+const IDLE_CLOSE_MIN_MS = 30_000;
+
 /** Transient failures worth a reconnect: network errors, timeouts, `microvm_busy` (429/503) and 5xx. */
 const isRetryable = (error: unknown): boolean => {
   if (error instanceof ApiError) return error.status === 408 || error.status === 429 || error.status >= 500;
@@ -88,7 +96,9 @@ export async function* streamCommandLogs(
 
   for (;;) {
     let progressed = false;
+    let idleClose = false;
     let serverError: ApiError | undefined;
+    const openedAt = Date.now();
     try {
       const response = await open({
         follow,
@@ -154,11 +164,12 @@ export async function* streamCommandLogs(
         yield { type: 'exit', exitCode: exit.exitCode, signal: exit.signal };
         return;
       }
+      idleClose = exit === null && Date.now() - openedAt >= IDLE_CLOSE_MIN_MS;
     } catch (error) {
       if (error === serverError || options.signal?.aborted || !reconnect || !isRetryable(error)) throw error;
       if (!progressed && failures >= maxAttempts) throw error;
     }
-    failures = progressed ? 0 : failures + 1;
+    failures = progressed || idleClose ? 0 : failures + 1;
     if (failures > maxAttempts) {
       throw new ApiError('The command log stream kept closing without output', 502, 'log_stream_closed');
     }

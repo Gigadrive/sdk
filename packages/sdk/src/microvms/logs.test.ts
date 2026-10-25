@@ -134,6 +134,50 @@ describe('streamCommandLogs', () => {
     expect(resolveExit).toHaveBeenCalled();
   });
 
+  it('keeps following a quiet command across idle closes that each stayed open a while', async () => {
+    let now = Date.parse('2026-10-25T12:00:00.000Z');
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      // The host closes a quiet command's pipe after 15 minutes, many times in a row.
+      const idleCloses = 8;
+      let opened = 0;
+      const open = vi.fn<OpenLogStream>().mockImplementation(() => {
+        opened += 1;
+        now += 15 * 60_000;
+        return Promise.resolve(
+          opened <= idleCloses ? sseResponse([]) : sseResponse([out('stdout', 'ready', 0), exit(0)])
+        );
+      });
+      const resolveExit = vi.fn().mockResolvedValue(null);
+
+      await expect(collect(streamCommandLogs(open, { maxReconnectAttempts: 2, resolveExit }))).resolves.toEqual([
+        'stdout@0:ready',
+        'exit:0:null',
+      ]);
+      expect(open).toHaveBeenCalledTimes(idleCloses + 1);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('still counts an idle-length close as a failure when the command state is unknown', async () => {
+    let now = Date.parse('2026-10-25T12:00:00.000Z');
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const open = vi.fn<OpenLogStream>().mockImplementation(() => {
+        now += 15 * 60_000;
+        return Promise.resolve(sseResponse([]));
+      });
+
+      await expect(collect(streamCommandLogs(open, { maxReconnectAttempts: 1 }))).rejects.toMatchObject({
+        code: 'log_stream_closed',
+      });
+      expect(open).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('ends with the exit status from resolveExit when the stream closes after the command exited', async () => {
     const open = opener(dropped([out('stdout', 'done', 0)]), sseResponse([]));
 
