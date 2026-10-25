@@ -53,6 +53,13 @@ const CLI_SCOPES = [
   'network:deployments:trigger',
   'network:ai_gateway:chat',
   'network:ai_gateway:models',
+  'network:microvms:read',
+  'network:microvms:write',
+  'network:microvms:exec',
+  'network:microvms:delete',
+  'network:microvm_images:read',
+  'network:microvm_images:write',
+  'network:microvm_images:delete',
   // Provisioning local-dev API credentials
   'platform:api_keys:read',
   'platform:api_keys:write',

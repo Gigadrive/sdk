@@ -13,6 +13,7 @@ import { envCommand } from './commands/env';
 import { linkCommand, unlinkCommand } from './commands/link';
 import { loginCommand } from './commands/login';
 import { logoutCommand } from './commands/logout';
+import { microvmsCommand, vmCommand } from './commands/microvms';
 import { platformCommand } from './commands/platform';
 import { deployCommand } from './commands/platform/deploy';
 import { setupCommand } from './commands/setup';
@@ -46,6 +47,8 @@ const gigadrive = Command.make('gigadrive', {}, () => Effect.void).pipe(
     deploymentsCommand,
     domainsCommand,
     aiCommand,
+    microvmsCommand,
+    vmCommand,
     buildCommand,
     debugCommand,
     deployCommand,

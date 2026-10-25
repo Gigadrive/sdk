@@ -69,6 +69,17 @@ describe('OAuthConfigService.getConfig', () => {
     expect(result.scope).toContain('network:ai_gateway:chat');
     expect(result.scope).toContain('network:ai_gateway:models');
     expect(result.scope).toContain('platform:api_keys:write');
+    for (const scope of [
+      'network:microvms:read',
+      'network:microvms:write',
+      'network:microvms:exec',
+      'network:microvms:delete',
+      'network:microvm_images:read',
+      'network:microvm_images:write',
+      'network:microvm_images:delete',
+    ]) {
+      expect(result.scope.split(' ')).toContain(scope);
+    }
   });
 
   it('should not request application-bound AI Gateway governance scopes', async () => {

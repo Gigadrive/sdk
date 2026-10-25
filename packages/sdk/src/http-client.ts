@@ -154,6 +154,17 @@ export class HttpClient {
     return response;
   }
 
+  /**
+   * Fetch an arbitrary URL without authentication and without throwing on a
+   * non-2xx status, using the client's configured `fetch`. Used to probe
+   * public URLs such as microVM preview URLs.
+   *
+   * @internal
+   */
+  async fetchPublic(url: string, init?: RequestInit): Promise<Response> {
+    return this.fetchFn(url, init);
+  }
+
   private async request<T>(method: string, path: string, options?: RequestOptions): Promise<T> {
     const response = await this.fetchWithAuth(method, path, options);
     return this.handleResponse<T>(response);
@@ -183,11 +194,14 @@ export class HttpClient {
     }
 
     const signal = options?.signal;
-    const response = await this.fetchFn(url, { method, headers, body: requestBody, signal });
-
     // A streamed body is consumed by the first fetch and cannot be replayed, so
     // we cannot transparently retry it after a token refresh.
     const bodyIsOneShot = typeof ReadableStream !== 'undefined' && requestBody instanceof ReadableStream;
+    // Node's fetch (undici) refuses a streamed request body without `duplex: 'half'`.
+    const init: RequestInit & { duplex?: 'half' } = bodyIsOneShot
+      ? { method, headers, body: requestBody, signal, duplex: 'half' }
+      : { method, headers, body: requestBody, signal };
+    const response = await this.fetchFn(url, init);
 
     // Retry once on 401 after refreshing the token.
     if (response.status === 401 && !bodyIsOneShot) {

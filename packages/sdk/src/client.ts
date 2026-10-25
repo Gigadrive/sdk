@@ -1,6 +1,7 @@
 import { readEnv, resolveCredentialProvider } from './auth/credential-provider';
 import { TokenManager } from './auth/token-manager';
 import { HttpClient } from './http-client';
+import { MicroVmsResource } from './microvms/resource';
 import { AiGatewayResource } from './resources/ai-gateway';
 import { ApiKeysResource } from './resources/api-keys';
 import type { ApplicationStorageResource } from './resources/application-storage';
@@ -201,6 +202,12 @@ export class GigadriveClient {
    * handle bound to one queue.
    */
   readonly queues: QueuesResource;
+  /**
+   * microVMs: isolated Linux machines to run commands in, move files to and
+   * from, and expose ports from. This is the low-level REST surface; the
+   * {@link MicroVM} class (`MicroVM.create({ client })`) is the friendlier API.
+   */
+  readonly microvms: MicroVmsResource;
 
   constructor(config: GigadriveClientConfig = {}) {
     const baseUrl = config.baseUrl ?? readEnv('GIGADRIVE_API_BASE_URL') ?? DEFAULT_BASE_URL;
@@ -222,5 +229,6 @@ export class GigadriveClient {
     this.stickySessions = new StickySessionsResource(httpClient);
     this.imageOptimization = new ImageOptimizationResource(httpClient);
     this.queues = new QueuesResource(httpClient, applicationId);
+    this.microvms = new MicroVmsResource(httpClient, applicationId);
   }
 }
