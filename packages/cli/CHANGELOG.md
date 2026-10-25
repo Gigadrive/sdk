@@ -1,5 +1,12 @@
 # gigadrive
 
+## 2.8.1
+
+### Patch Changes
+
+- Updated dependencies [[`90cadf8`](https://github.com/Gigadrive/sdk/commit/90cadf892f6721f49dfa1dc3475dba4fb04d3cc7)]:
+  - @gigadrive/sdk@0.10.1
+
 ## 2.8.0
 
 ### Minor Changes
