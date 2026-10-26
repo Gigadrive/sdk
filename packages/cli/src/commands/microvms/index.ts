@@ -202,6 +202,7 @@ export interface CreateFlags {
   readonly metadata: ReadonlyArray<string>;
   readonly denyEgress: boolean;
   readonly privatePreviews: boolean;
+  readonly allowEgress: ReadonlyArray<string>;
   readonly region: Option.Option<string>;
   readonly json: boolean;
 }
@@ -215,6 +216,22 @@ export const createInput = (flags: CreateFlags) =>
       onNone: () => Effect.succeed(undefined),
       onSome: (text) => parseLifetime('--timeout', text),
     });
+    if (flags.denyEgress && flags.allowEgress.length > 0) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: '--allow-egress cannot be combined with --deny-egress.',
+      });
+    }
+    if (flags.allowEgress.length > 32) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--allow-egress takes at most 32 networks.' });
+    }
+    // The shape only: the API refuses private and reserved ranges, so that
+    // rule lives in one place.
+    const badNetwork = flags.allowEgress.find((network) => !/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(network.trim()));
+    if (badNetwork !== undefined) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: `--allow-egress must be an IPv4 network such as 140.82.112.0/20 (got ${badNetwork}).`,
+      });
+    }
     const badPort = flags.ports.find((port) => !Number.isInteger(port) || port < 1 || port > 65535);
     if (badPort !== undefined) {
       return yield* new InvalidMicroVmOptionsError({ message: `--port must be between 1 and 65535 (got ${badPort}).` });
@@ -233,11 +250,12 @@ export const createInput = (flags: CreateFlags) =>
       ...(flags.ports.length > 0 ? { ports: [...flags.ports] } : {}),
       ...(env ? { env } : {}),
       ...(metadata ? { metadata } : {}),
-      ...(flags.denyEgress || flags.privatePreviews
+      ...(flags.denyEgress || flags.privatePreviews || flags.allowEgress.length > 0
         ? {
             network: {
               egress: flags.denyEgress ? ('deny' as const) : ('allow' as const),
               ...(flags.privatePreviews ? { previews: 'private' as const } : {}),
+              ...(flags.allowEgress.length > 0 ? { allow: [...flags.allowEgress] } : {}),
             },
           }
         : {}),
@@ -305,6 +323,12 @@ const createCommand = Command.make(
     denyEgress: Options.boolean('deny-egress').pipe(Options.withDescription('Block all outbound network traffic')),
     privatePreviews: Options.boolean('private-previews').pipe(
       Options.withDescription('Answer preview URLs only to requests that carry the preview token printed at create')
+    ),
+    allowEgress: Options.text('allow-egress').pipe(
+      Options.withDescription(
+        'Only reach this public IPv4 network, such as 140.82.112.0/20, besides DNS (repeatable, up to 32)'
+      ),
+      Options.repeated
     ),
     region: Options.text('region').pipe(Options.withDescription('Region to place the microVM in'), Options.optional),
     json: jsonOption,

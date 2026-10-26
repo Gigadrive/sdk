@@ -131,6 +131,12 @@ describe('formatting', () => {
     expect(lines).toContain('  3000  https://3000-abc.vm.gigadrive.app');
   });
 
+  it('names the networks an egress allowlist reaches', () => {
+    const lines = describeMicroVm(vm({ network: { egress: 'allow', allow: ['140.82.112.0/20'] } }), NOW);
+
+    expect(lines).toContain('Network:     only 140.82.112.0/20 (and DNS)');
+  });
+
   it('says when preview URLs need the preview token', () => {
     const lines = describeMicroVm(vm({ network: { egress: 'allow', previews: 'private' } }), NOW);
 

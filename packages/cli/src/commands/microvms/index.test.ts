@@ -142,6 +142,7 @@ const createFlags = (overrides: Partial<CreateFlags> = {}): CreateFlags => ({
   metadata: [],
   denyEgress: false,
   privatePreviews: false,
+  allowEgress: [],
   region: Option.none(),
   json: true,
   ...overrides,
@@ -235,6 +236,27 @@ describe('createInput', () => {
     await expect(run(createInput(createFlags({ privatePreviews: true, denyEgress: true })), layer)).resolves.toEqual(
       Either.right({ applicationId: 'app-linked', network: { egress: 'deny', previews: 'private' } })
     );
+  });
+
+  it('limits egress to the listed networks, and refuses that together with --deny-egress', async () => {
+    const { layer } = fakeApi();
+
+    await expect(
+      run(createInput(createFlags({ allowEgress: ['140.82.112.0/20', '151.101.0.0/16'] })), layer)
+    ).resolves.toEqual(
+      Either.right({
+        applicationId: 'app-linked',
+        network: { egress: 'allow', allow: ['140.82.112.0/20', '151.101.0.0/16'] },
+      })
+    );
+    for (const flags of [
+      createFlags({ allowEgress: ['140.82.112.0/20'], denyEgress: true }),
+      createFlags({ allowEgress: ['github.com'] }),
+      createFlags({ allowEgress: ['140.82.112.0'] }),
+      createFlags({ allowEgress: Array.from({ length: 33 }, (_, i) => `203.0.113.${i}/32`) }),
+    ]) {
+      expect(Either.isLeft(await run(createInput(flags), layer))).toBe(true);
+    }
   });
 
   it('defaults to the linked application and sends nothing else', async () => {
