@@ -6,6 +6,7 @@ import {
   MicroVmCleanupError,
   MicroVmNotRunningError,
   MicroVmPortNotExposedError,
+  MicroVmPreviewTokenRequiredError,
   MicroVmStartError,
   MicroVmTimeoutError,
 } from './errors';
@@ -846,6 +847,97 @@ describe('MicroVM.files', () => {
     await expect(vm.files.exists('/here')).resolves.toBe(true);
     await expect(vm.files.exists('/gone')).resolves.toBe(false);
     await expect(vm.files.exists('/x')).rejects.toBeInstanceOf(MicroVmNotRunningError);
+  });
+});
+
+describe('MicroVM private previews', () => {
+  const PRIVATE = { network: { egress: 'allow' as const, previews: 'private' as const } };
+  const TOKEN = 'gdpv_test-token';
+
+  const createPrivate = async () => {
+    const { fetch, client } = setup();
+    fetch.mockResolvedValueOnce(json({ ...vmInfo(PRIVATE), previewToken: TOKEN }, 201));
+    const vm = await MicroVM.create({ client, ports: [3000], previews: 'private' });
+    const created = request(fetch);
+    fetch.mockReset();
+    return { vm, fetch, client, created };
+  };
+
+  it('asks for private previews and keeps the token the create answer shows once', async () => {
+    const { vm, created } = await createPrivate();
+
+    expect(created.json).toMatchObject({ network: { egress: 'allow', previews: 'private' } });
+    expect(vm.previewToken).toBe(TOKEN);
+    // The token is not part of the API object a caller may log or persist.
+    expect(JSON.stringify(vm.toJSON())).not.toContain(TOKEN);
+  });
+
+  it('merges previews into a network policy or shorthand', async () => {
+    const { fetch, client } = setup();
+    fetch.mockResolvedValueOnce(json({ ...vmInfo(PRIVATE), previewToken: TOKEN }, 201));
+
+    await MicroVM.create({ client, network: 'deny', previews: 'private' });
+
+    expect(request(fetch).json).toMatchObject({ network: { egress: 'deny', previews: 'private' } });
+  });
+
+  it('shares a link that carries the token once, and a plain URL for public previews', async () => {
+    const { vm } = await createPrivate();
+    const { vm: publicVm } = await createVm();
+
+    expect(vm.shareUrl(3000)).toBe(`https://3000-k3j9x2m1q8zt.vm.gigadrive.app/?gd_preview_token=${TOKEN}`);
+    expect(publicVm.shareUrl(3000)).toBe('https://3000-k3j9x2m1q8zt.vm.gigadrive.app');
+    expect(() => vm.shareUrl(8080)).toThrow(MicroVmPortNotExposedError);
+  });
+
+  it('waits for a private port with the token header', async () => {
+    const { vm, fetch } = await createPrivate();
+    fetch
+      .mockResolvedValueOnce(new Response(null, { status: 502 }))
+      .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+
+    await expect(vm.waitForPort(3000, { interval: 1 })).resolves.toBe('https://3000-k3j9x2m1q8zt.vm.gigadrive.app');
+
+    expect(request(fetch, 0).headers).toEqual({ 'x-gigadrive-preview-token': TOKEN });
+    expect(request(fetch, 1).headers).toEqual({ 'x-gigadrive-preview-token': TOKEN });
+  });
+
+  it("fails at once when the gateway refuses the token, but not on the server's own 401", async () => {
+    const { vm, fetch } = await createPrivate();
+    fetch.mockResolvedValueOnce(
+      new Response('private', { status: 401, headers: { 'x-gigadrive-error': 'EDGE_MICROVM_PREVIEW_UNAUTHORIZED' } })
+    );
+    await expect(vm.waitForPort(3000, { interval: 1 })).rejects.toBeInstanceOf(MicroVmPreviewTokenRequiredError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    fetch.mockReset();
+    fetch.mockResolvedValueOnce(new Response('sign in', { status: 401 }));
+    await expect(vm.waitForPort(3000, { interval: 1 })).resolves.toBe('https://3000-k3j9x2m1q8zt.vm.gigadrive.app');
+  });
+
+  it('needs the token to wait for or share a private microVM it reconnected to', async () => {
+    const { fetch, client } = setup();
+    fetch.mockImplementation(() => Promise.resolve(json(vmInfo(PRIVATE))));
+
+    const without = await MicroVM.get('vm-1', { client });
+    expect(without.previewToken).toBeUndefined();
+    await expect(without.waitForPort(3000)).rejects.toBeInstanceOf(MicroVmPreviewTokenRequiredError);
+    expect(() => without.shareUrl(3000)).toThrow(MicroVmPreviewTokenRequiredError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    const withToken = await MicroVM.get('vm-1', { client, previewToken: TOKEN });
+    expect(withToken.previewToken).toBe(TOKEN);
+    expect(withToken.shareUrl(3000)).toContain(`gd_preview_token=${TOKEN}`);
+  });
+
+  it('rotates the token and keeps the new one', async () => {
+    const { vm, fetch } = await createPrivate();
+    fetch.mockResolvedValueOnce(json({ previewToken: 'gdpv_rotated' }));
+
+    await expect(vm.rotatePreviewToken()).resolves.toBe('gdpv_rotated');
+
+    expect(request(fetch)).toMatchObject({ method: 'POST', path: '/microvms/vm-1/preview-token' });
+    expect(vm.previewToken).toBe('gdpv_rotated');
   });
 });
 

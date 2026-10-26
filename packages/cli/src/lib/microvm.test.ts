@@ -125,9 +125,16 @@ describe('formatting', () => {
     expect(lines).toContain('Status:      running');
     expect(lines).toContain('Size:        2 vCPU, 2 GiB memory, 10 GiB disk');
     expect(lines).toContain('Network:     outbound traffic blocked');
+    expect(lines).toContain('Previews:    public');
     expect(lines).toContain('Expires:     2026-10-23T12:05:00.000Z (in 5m)');
     expect(lines).toContain('Metadata:    team=ai');
     expect(lines).toContain('  3000  https://3000-abc.vm.gigadrive.app');
+  });
+
+  it('says when preview URLs need the preview token', () => {
+    const lines = describeMicroVm(vm({ network: { egress: 'allow', previews: 'private' } }), NOW);
+
+    expect(lines).toContain('Previews:    private (preview token required)');
   });
 
   it('shows the stop reason and no expiry for a stopped microVM', () => {

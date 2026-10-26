@@ -8,6 +8,7 @@ import {
   MicroVmNotFoundError,
   MicroVmNotRunningError,
   MicroVmPortNotExposedError,
+  MicroVmPreviewTokenRequiredError,
   MicroVmStartError,
   MicroVmTimeoutError,
 } from './errors';
@@ -27,6 +28,7 @@ import type {
   MicroVmEgress,
   MicroVmInfo,
   MicroVmNetworkPolicy,
+  MicroVmPreviewAccess,
   MicroVmStatus,
   PtySize,
   StartCommandInput,
@@ -71,6 +73,12 @@ export interface CreateMicroVmOptions extends Omit<CreateMicroVmInput, 'network'
   timeout?: MicroVmDuration;
   /** `'deny'` blocks all outbound traffic. Default `'allow'`. */
   network?: MicroVmEgress | MicroVmNetworkPolicy;
+  /**
+   * `'private'` makes the preview URLs answer only requests that carry the
+   * microVM's preview token ({@link MicroVM.previewToken}). Default `'public'`.
+   * Wins over `network.previews`.
+   */
+  previews?: MicroVmPreviewAccess;
   /**
    * Wait until the microVM is running (polling, up to 10 minutes, which covers
    * a wait for capacity). Default `true`. With `false` the returned microVM may
@@ -137,6 +145,20 @@ export interface CommandResult {
   truncated: boolean;
   durationMs: number;
 }
+
+/** Options of {@link MicroVM.get}. */
+export interface GetMicroVmOptions extends MicroVmClientOptions {
+  /**
+   * The preview token of a microVM with private previews, as returned at
+   * create or by {@link MicroVM.rotatePreviewToken}. The API never returns it
+   * again, so keep it to use {@link MicroVM.waitForPort} and
+   * {@link MicroVM.shareUrl} on a microVM you reconnect to.
+   */
+  previewToken?: string;
+}
+
+/** Header a request to a private preview URL carries the preview token in. */
+export const PREVIEW_TOKEN_HEADER = 'x-gigadrive-preview-token';
 
 /** Options of {@link MicroVM.waitForPort}. */
 export interface WaitForPortOptions {
@@ -368,13 +390,16 @@ export class MicroVM {
   readonly commands: MicroVmCommands;
 
   private current: MicroVmInfo;
+  private token: string | undefined;
 
   /** @internal Use {@link MicroVM.create} or {@link MicroVM.get}. */
   constructor(
     private readonly resource: MicroVmsResource,
-    info: MicroVmInfo
+    info: MicroVmInfo,
+    previewToken?: string
   ) {
     this.current = info;
+    this.token = previewToken;
     this.files = new MicroVmFiles(resource.files, info.id);
     this.commands = new MicroVmCommands(resource.commands, info.id);
   }
@@ -403,9 +428,11 @@ export class MicroVM {
    * ```
    */
   static async create(options: CreateMicroVmOptions = {}): Promise<MicroVM> {
-    const { client, timeout, timeoutMs, network, wait, signal, ...input } = options;
+    const { client, timeout, timeoutMs, network, previews, wait, signal, ...input } = options;
     const resource = resolveClient(client).microvms;
-    const info = await resource.create(
+    const policy: MicroVmNetworkPolicy | undefined =
+      network === undefined ? undefined : typeof network === 'string' ? { egress: network } : network;
+    const { previewToken, ...info } = await resource.create(
       {
         ...input,
         ...(timeout !== undefined
@@ -413,14 +440,16 @@ export class MicroVM {
           : timeoutMs !== undefined
             ? { timeoutMs }
             : {}),
-        ...(network !== undefined ? { network: typeof network === 'string' ? { egress: network } : network } : {}),
+        ...(policy !== undefined || previews !== undefined
+          ? { network: { egress: policy?.egress ?? 'allow', ...policy, ...(previews && { previews }) } }
+          : {}),
       },
       // Never hold one request open for the whole boot: a create can wait
       // minutes for capacity, longer than proxies in front of the API keep a
       // response open. Start it, then poll.
       { wait: false, signal }
     );
-    const vm = new MicroVM(resource, info);
+    const vm = new MicroVM(resource, info, previewToken);
     if (wait === false) return vm;
     try {
       return await vm.waitUntilRunning({ timeout: CREATE_WAIT_TIMEOUT, signal });
@@ -442,13 +471,13 @@ export class MicroVM {
    *
    * @throws {@link MicroVmNotFoundError} when it does not exist.
    */
-  static async get(microvmId: string, options: MicroVmClientOptions = {}): Promise<MicroVM> {
+  static async get(microvmId: string, options: GetMicroVmOptions = {}): Promise<MicroVM> {
     const resource = resolveClient(options.client).microvms;
-    return new MicroVM(resource, await resource.get(microvmId));
+    return new MicroVM(resource, await resource.get(microvmId), options.previewToken);
   }
 
   /** Alias of {@link MicroVM.get}. */
-  static connect(microvmId: string, options: MicroVmClientOptions = {}): Promise<MicroVM> {
+  static connect(microvmId: string, options: GetMicroVmOptions = {}): Promise<MicroVM> {
     return MicroVM.get(microvmId, options);
   }
 
@@ -520,6 +549,46 @@ export class MicroVM {
     const entry = this.current.ports.find((candidate) => candidate.port === port);
     if (!entry) throw new MicroVmPortNotExposedError(port, this.ports);
     return entry.url;
+  }
+
+  /**
+   * The preview token of a microVM with private previews, when this object
+   * knows it: from {@link MicroVM.create}, {@link MicroVM.rotatePreviewToken}
+   * or the `previewToken` option of {@link MicroVM.get}. `undefined` for
+   * public previews.
+   */
+  get previewToken(): string | undefined {
+    return this.token;
+  }
+
+  /**
+   * Issue a new preview token and revoke the old one, which stops working
+   * within a second. Only for a microVM created with `previews: 'private'`.
+   *
+   * @returns The new token, also kept as {@link MicroVM.previewToken}.
+   */
+  async rotatePreviewToken(options: { signal?: AbortSignal } = {}): Promise<string> {
+    const { previewToken } = await this.resource.rotatePreviewToken(this.id, { signal: options.signal });
+    this.token = previewToken;
+    return previewToken;
+  }
+
+  /**
+   * A link to an exposed port that opens in a browser. For private previews it
+   * carries the preview token once: the first visit trades it for a cookie on
+   * that preview URL and drops it from the address bar. Share it only with
+   * people who should see the port.
+   *
+   * @throws {@link MicroVmPortNotExposedError} when the port is not exposed.
+   * @throws {@link MicroVmPreviewTokenRequiredError} for private previews without a known token.
+   */
+  shareUrl(port: number): string {
+    const base = this.url(port);
+    if (this.current.network.previews !== 'private') return base;
+    if (this.token === undefined) throw new MicroVmPreviewTokenRequiredError(this.id);
+    const url = new URL(base);
+    url.searchParams.set('gd_preview_token', this.token);
+    return url.toString();
   }
 
   /** Fetch the latest state. */
@@ -710,6 +779,8 @@ export class MicroVM {
    */
   async waitForPort(port: number, options: WaitForPortOptions = {}): Promise<string> {
     const base = this.url(port);
+    const isPrivate = this.current.network.previews === 'private';
+    if (isPrivate && this.token === undefined) throw new MicroVmPreviewTokenRequiredError(this.id);
     const path = options.path ?? '/';
     const target = `${base.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
     const deadline = Date.now() + durationToMs(options.timeout ?? '60s');
@@ -729,12 +800,22 @@ export class MicroVM {
           method: 'GET',
           redirect: 'manual',
           signal: controller.signal,
+          ...(isPrivate && this.token !== undefined && { headers: { [PREVIEW_TOKEN_HEADER]: this.token } }),
         });
+        // The gateway refused the token (rotated elsewhere): no answer can tell us anything.
+        if (
+          response.status === 401 &&
+          response.headers.get('x-gigadrive-error') === 'EDGE_MICROVM_PREVIEW_UNAUTHORIZED'
+        ) {
+          await response.body?.cancel().catch(() => undefined);
+          throw new MicroVmPreviewTokenRequiredError(this.id);
+        }
         await response.body?.cancel().catch(() => undefined);
         // The gateway's own 410: the microVM stopped, so nothing will ever answer.
         stopped = response.status === 410 && response.headers.get('x-gigadrive-error') === 'EDGE_MICROVM_STOPPED';
         if (!stopped && !NOT_LISTENING.has(response.status)) return base;
-      } catch {
+      } catch (error) {
+        if (error instanceof MicroVmPreviewTokenRequiredError) throw error;
         // Connection errors mean nothing answers yet; keep polling.
         if (options.signal?.aborted) throw abortReason(options.signal);
       } finally {

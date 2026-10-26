@@ -24,17 +24,25 @@ export type MicroVmVcpus = 1 | 2 | 4;
 /** Outbound network policy. Private ranges are always blocked, whatever the policy. */
 export type MicroVmEgress = 'allow' | 'deny';
 
+/**
+ * Who may open a microVM's preview URLs: anyone (`public`, the default) or
+ * only requests that carry its preview token (`private`).
+ */
+export type MicroVmPreviewAccess = 'public' | 'private';
+
 /** Network policy of a microVM. */
 export interface MicroVmNetworkPolicy {
   /** `allow` (default) reaches the internet; `deny` blocks all outbound traffic. */
   egress: MicroVmEgress;
+  /** `private` preview URLs answer only requests that carry the preview token. Default `public`. */
+  previews?: MicroVmPreviewAccess;
 }
 
-/** A port exposed by a microVM and its public preview URL. */
+/** A port exposed by a microVM and its preview URL. */
 export interface MicroVmPort {
   /** Port inside the microVM. */
   port: number;
-  /** Public HTTPS URL that forwards to the port, e.g. `https://3000-k3j9x2m1q8zt.vm.gigadrive.app`. */
+  /** HTTPS URL that forwards to the port, e.g. `https://3000-k3j9x2m1q8zt.vm.gigadrive.app`. */
   url: string;
 }
 
@@ -69,6 +77,11 @@ export interface MicroVmInfo {
   stopReason: string | null;
 }
 
+/** The create answer: a microVM with private previews also carries its preview token, shown only here. */
+export interface CreatedMicroVmInfo extends MicroVmInfo {
+  previewToken?: string;
+}
+
 /** Body of `POST /microvms`. */
 export interface CreateMicroVmInput {
   /**
@@ -87,7 +100,7 @@ export interface CreateMicroVmInput {
   diskMb?: number;
   /** Lifetime in milliseconds before the microVM stops automatically. Default 300000 (5 minutes), at most 24 hours and the plan's maximum. */
   timeoutMs?: number;
-  /** Up to 8 ports to expose with public preview URLs (10000 and 10001 are reserved). */
+  /** Up to 8 ports to expose with preview URLs (10000 and 10001 are reserved). */
   ports?: number[];
   /** Environment variables for every command. Never stored by the platform. */
   env?: Record<string, string>;
