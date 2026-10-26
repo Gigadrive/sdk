@@ -221,6 +221,17 @@ export const createInput = (flags: CreateFlags) =>
         message: '--allow-egress cannot be combined with --deny-egress.',
       });
     }
+    if (flags.allowEgress.length > 32) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--allow-egress takes at most 32 networks.' });
+    }
+    // The shape only: the API refuses private and reserved ranges, so that
+    // rule lives in one place.
+    const badNetwork = flags.allowEgress.find((network) => !/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(network.trim()));
+    if (badNetwork !== undefined) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: `--allow-egress must be an IPv4 network such as 140.82.112.0/20 (got ${badNetwork}).`,
+      });
+    }
     const badPort = flags.ports.find((port) => !Number.isInteger(port) || port < 1 || port > 65535);
     if (badPort !== undefined) {
       return yield* new InvalidMicroVmOptionsError({ message: `--port must be between 1 and 65535 (got ${badPort}).` });

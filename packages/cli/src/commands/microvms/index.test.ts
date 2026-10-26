@@ -249,8 +249,14 @@ describe('createInput', () => {
         network: { egress: 'allow', allow: ['140.82.112.0/20', '151.101.0.0/16'] },
       })
     );
-    const refused = await run(createInput(createFlags({ allowEgress: ['140.82.112.0/20'], denyEgress: true })), layer);
-    expect(Either.isLeft(refused)).toBe(true);
+    for (const flags of [
+      createFlags({ allowEgress: ['140.82.112.0/20'], denyEgress: true }),
+      createFlags({ allowEgress: ['github.com'] }),
+      createFlags({ allowEgress: ['140.82.112.0'] }),
+      createFlags({ allowEgress: Array.from({ length: 33 }, (_, i) => `203.0.113.${i}/32`) }),
+    ]) {
+      expect(Either.isLeft(await run(createInput(flags), layer))).toBe(true);
+    }
   });
 
   it('defaults to the linked application and sends nothing else', async () => {
