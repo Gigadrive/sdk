@@ -36,6 +36,12 @@ export interface MicroVmNetworkPolicy {
   egress: MicroVmEgress;
   /** `private` preview URLs answer only requests that carry the preview token. Default `public`. */
   previews?: MicroVmPreviewAccess;
+  /**
+   * The only public IPv4 networks (`a.b.c.d/n`, up to 32) the microVM may reach
+   * besides DNS, for example `['140.82.112.0/20']`. Omit to reach the whole
+   * internet. Needs `egress: 'allow'`.
+   */
+  allow?: string[];
 }
 
 /** A port exposed by a microVM and its preview URL. */

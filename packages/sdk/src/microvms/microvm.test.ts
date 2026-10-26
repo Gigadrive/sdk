@@ -941,6 +941,19 @@ describe('MicroVM private previews', () => {
   });
 });
 
+describe('MicroVM egress allowlist', () => {
+  it('sends the allowlist and reads it back', async () => {
+    const { fetch, client } = setup();
+    const network = { egress: 'allow' as const, allow: ['140.82.112.0/20'] };
+    fetch.mockResolvedValueOnce(json(vmInfo({ network }), 201));
+
+    const vm = await MicroVM.create({ client, network });
+
+    expect(request(fetch).json).toMatchObject({ network: { egress: 'allow', allow: ['140.82.112.0/20'] } });
+    expect(vm.info.network.allow).toEqual(['140.82.112.0/20']);
+  });
+});
+
 describe('MicroVM.waitForPort', () => {
   it('polls the preview URL without credentials until the gateway stops answering 502', async () => {
     const { vm, fetch } = await createVm();
