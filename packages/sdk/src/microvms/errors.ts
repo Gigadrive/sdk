@@ -161,6 +161,23 @@ export class MicroVmPortNotExposedError extends GigadriveError {
   }
 }
 
+/**
+ * The microVM's previews are private and this object has no valid preview
+ * token: pass `previewToken` to `MicroVM.get`, or rotate it with
+ * `vm.rotatePreviewToken()`.
+ */
+export class MicroVmPreviewTokenRequiredError extends GigadriveError {
+  readonly microvmId: string;
+
+  constructor(microvmId: string) {
+    super(
+      `The microVM ${microvmId} has private previews and no valid preview token is known. Pass \`previewToken\` to MicroVM.get, or call vm.rotatePreviewToken().`
+    );
+    this.name = 'MicroVmPreviewTokenRequiredError';
+    this.microvmId = microvmId;
+  }
+}
+
 /** The microVM failed while starting, or stopped before it was ready. */
 export class MicroVmStartError extends GigadriveError {
   readonly microvmId: string;

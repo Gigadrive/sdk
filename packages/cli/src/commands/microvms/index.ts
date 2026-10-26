@@ -201,6 +201,7 @@ export interface CreateFlags {
   readonly env: ReadonlyArray<string>;
   readonly metadata: ReadonlyArray<string>;
   readonly denyEgress: boolean;
+  readonly privatePreviews: boolean;
   readonly region: Option.Option<string>;
   readonly json: boolean;
 }
@@ -232,7 +233,14 @@ export const createInput = (flags: CreateFlags) =>
       ...(flags.ports.length > 0 ? { ports: [...flags.ports] } : {}),
       ...(env ? { env } : {}),
       ...(metadata ? { metadata } : {}),
-      ...(flags.denyEgress ? { network: { egress: 'deny' as const } } : {}),
+      ...(flags.denyEgress || flags.privatePreviews
+        ? {
+            network: {
+              egress: flags.denyEgress ? ('deny' as const) : ('allow' as const),
+              ...(flags.privatePreviews ? { previews: 'private' as const } : {}),
+            },
+          }
+        : {}),
       ...Option.match(flags.region, { onNone: () => ({}), onSome: (region) => ({ region }) }),
     };
     return input;
@@ -250,6 +258,12 @@ export const createMicroVm = (flags: CreateFlags) =>
       return vm;
     }
     for (const line of describeMicroVm(vm)) yield* Console.log(line);
+    if (vm.previewToken) {
+      yield* Console.log(`\nPreview token: ${vm.previewToken}`);
+      yield* Console.log(
+        'Shown only now. Send it in the x-gigadrive-preview-token header, or open a preview URL once with ?gd_preview_token=<token>.'
+      );
+    }
     yield* Console.log(`\nRun a command: gigadrive microvms exec ${vm.id} -- <command>`);
     yield* Console.log(`Open a shell:  gigadrive microvms shell ${vm.id}`);
     return vm;
@@ -279,7 +293,7 @@ const createCommand = Command.make(
     ),
     ports: Options.integer('port').pipe(
       Options.withAlias('p'),
-      Options.withDescription('Port to expose on a public preview URL (repeatable, up to 8)'),
+      Options.withDescription('Port to expose on a preview URL (repeatable, up to 8)'),
       Options.repeated
     ),
     env: envOption,
@@ -289,6 +303,9 @@ const createCommand = Command.make(
       Options.repeated
     ),
     denyEgress: Options.boolean('deny-egress').pipe(Options.withDescription('Block all outbound network traffic')),
+    privatePreviews: Options.boolean('private-previews').pipe(
+      Options.withDescription('Answer preview URLs only to requests that carry the preview token printed at create')
+    ),
     region: Options.text('region').pipe(Options.withDescription('Region to place the microVM in'), Options.optional),
     json: jsonOption,
   },

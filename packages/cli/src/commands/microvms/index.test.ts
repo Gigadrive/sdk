@@ -141,6 +141,7 @@ const createFlags = (overrides: Partial<CreateFlags> = {}): CreateFlags => ({
   env: [],
   metadata: [],
   denyEgress: false,
+  privatePreviews: false,
   region: Option.none(),
   json: true,
   ...overrides,
@@ -222,6 +223,17 @@ describe('createInput', () => {
         network: { egress: 'deny' },
         region: 'fr-par',
       })
+    );
+  });
+
+  it('asks for private previews, alone or with blocked egress', async () => {
+    const { layer } = fakeApi();
+
+    await expect(run(createInput(createFlags({ privatePreviews: true })), layer)).resolves.toEqual(
+      Either.right({ applicationId: 'app-linked', network: { egress: 'allow', previews: 'private' } })
+    );
+    await expect(run(createInput(createFlags({ privatePreviews: true, denyEgress: true })), layer)).resolves.toEqual(
+      Either.right({ applicationId: 'app-linked', network: { egress: 'deny', previews: 'private' } })
     );
   });
 

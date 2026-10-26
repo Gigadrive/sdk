@@ -166,6 +166,7 @@ export const describeMicroVm = (vm: MicroVmInfo, now = Date.now()): string[] => 
     `Size:        ${vm.vcpus} vCPU, ${formatMemory(vm.memoryMb)} memory, ${formatMemory(vm.diskMb)} disk`,
     `Region:      ${vm.region}`,
     `Network:     ${vm.network.egress === 'deny' ? 'outbound traffic blocked' : 'internet access'}`,
+    `Previews:    ${vm.network.previews === 'private' ? 'private (preview token required)' : 'public'}`,
     `Application: ${vm.applicationId}`,
     `Created:     ${vm.createdAt}`,
   ];

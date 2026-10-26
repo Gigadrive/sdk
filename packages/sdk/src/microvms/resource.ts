@@ -8,6 +8,7 @@ import type {
   CommandLogEvent,
   CommandRunResult,
   CommandSignal,
+  CreatedMicroVmInfo,
   CreateMicroVmImageInput,
   CreateMicroVmInput,
   FileEntry,
@@ -545,10 +546,10 @@ export class MicroVmsResource extends BaseResource {
   create(
     input: CreateMicroVmInput = {},
     options: { wait?: boolean } & MicroVmRequestOptions = {}
-  ): Promise<MicroVmInfo> {
+  ): Promise<CreatedMicroVmInfo> {
     const applicationId = input.applicationId ?? this.defaultApplicationId;
     return typed(
-      this.httpClient.post<MicroVmInfo>('/microvms', applicationId ? { ...input, applicationId } : input, {
+      this.httpClient.post<CreatedMicroVmInfo>('/microvms', applicationId ? { ...input, applicationId } : input, {
         query: { wait: options.wait === false ? false : undefined },
         signal: options.signal,
       })
@@ -610,6 +611,17 @@ export class MicroVmsResource extends BaseResource {
    */
   extendTimeout(microvmId: string, timeoutMs: number, options: MicroVmRequestOptions = {}): Promise<MicroVmInfo> {
     return typed(this.httpClient.post<MicroVmInfo>(`${vmPath(microvmId)}/timeout`, { timeoutMs }, options));
+  }
+
+  /**
+   * Issue a new preview token for a microVM with private previews
+   * (`POST /microvms/:id/preview-token`). The old token stops working within a
+   * second; the new one is shown only in this answer.
+   */
+  rotatePreviewToken(microvmId: string, options: MicroVmRequestOptions = {}): Promise<{ previewToken: string }> {
+    return typed(
+      this.httpClient.post<{ previewToken: string }>(`${vmPath(microvmId)}/preview-token`, undefined, options)
+    );
   }
 
   /** Stop a microVM (`POST /microvms/:id/stop`). Its disk and memory are discarded. */

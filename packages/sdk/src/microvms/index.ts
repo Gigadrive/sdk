@@ -12,6 +12,7 @@ export {
   MicroVmNotFoundError,
   MicroVmNotRunningError,
   MicroVmPortNotExposedError,
+  MicroVmPreviewTokenRequiredError,
   MicroVmQuotaExceededError,
   MicroVmStartError,
   MicroVmTimeoutError,
@@ -19,12 +20,13 @@ export {
 } from './errors';
 export type { CommandOutput } from './errors';
 export type { CommandLogStreamOptions } from './logs';
-export { MicroVM, MicroVmCommands, MicroVmFiles } from './microvm';
+export { MicroVM, MicroVmCommands, MicroVmFiles, PREVIEW_TOKEN_HEADER } from './microvm';
 export type {
   CommandOptions,
   CommandResult,
   CreateMicroVmOptions,
   FileToWrite,
+  GetMicroVmOptions,
   ListMicroVmsOptions,
   MicroVmClientOptions,
   RunOptions,
