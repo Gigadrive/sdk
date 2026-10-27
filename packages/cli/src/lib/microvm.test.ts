@@ -134,7 +134,7 @@ describe('formatting', () => {
   it('names the networks an egress allowlist reaches', () => {
     const lines = describeMicroVm(vm({ network: { egress: 'allow', allow: ['140.82.112.0/20'] } }), NOW);
 
-    expect(lines).toContain('Network:     only 140.82.112.0/20 (and DNS)');
+    expect(lines).toContain('Network:     only 140.82.112.0/20');
   });
 
   it('says when preview URLs need the preview token', () => {
