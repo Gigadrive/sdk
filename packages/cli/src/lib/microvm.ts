@@ -169,7 +169,7 @@ export const describeMicroVm = (vm: MicroVmInfo, now = Date.now()): string[] => 
       vm.network.egress === 'deny'
         ? 'outbound traffic blocked'
         : vm.network.allow && vm.network.allow.length > 0
-          ? `only ${vm.network.allow.join(', ')} (and DNS)`
+          ? `only ${vm.network.allow.join(', ')}`
           : 'internet access'
     }`,
     `Previews:    ${vm.network.previews === 'private' ? 'private (preview token required)' : 'public'}`,

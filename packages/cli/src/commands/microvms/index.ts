@@ -222,14 +222,16 @@ export const createInput = (flags: CreateFlags) =>
       });
     }
     if (flags.allowEgress.length > 32) {
-      return yield* new InvalidMicroVmOptionsError({ message: '--allow-egress takes at most 32 networks.' });
+      return yield* new InvalidMicroVmOptionsError({ message: '--allow-egress takes at most 32 entries.' });
     }
-    // The shape only: the API refuses private and reserved ranges, so that
-    // rule lives in one place.
-    const badNetwork = flags.allowEgress.find((network) => !/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(network.trim()));
-    if (badNetwork !== undefined) {
+    // The shape only: the API refuses private and reserved ranges and
+    // malformed names, so those rules live in one place.
+    const network = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/;
+    const domain = /^(\*\.)?([a-z0-9-]+\.)+[a-z0-9-]*[a-z][a-z0-9-]*\.?$/i;
+    const badEntry = flags.allowEgress.find((entry) => !network.test(entry.trim()) && !domain.test(entry.trim()));
+    if (badEntry !== undefined) {
       return yield* new InvalidMicroVmOptionsError({
-        message: `--allow-egress must be an IPv4 network such as 140.82.112.0/20 (got ${badNetwork}).`,
+        message: `--allow-egress must be a domain name such as api.openai.com or *.github.com, or an IPv4 network such as 140.82.112.0/20 (got ${badEntry}).`,
       });
     }
     const badPort = flags.ports.find((port) => !Number.isInteger(port) || port < 1 || port > 65535);
@@ -326,7 +328,7 @@ const createCommand = Command.make(
     ),
     allowEgress: Options.text('allow-egress').pipe(
       Options.withDescription(
-        'Only reach this public IPv4 network, such as 140.82.112.0/20, besides DNS (repeatable, up to 32)'
+        'Only reach this domain name (api.openai.com, *.github.com for every subdomain) or public IPv4 network (140.82.112.0/20) (repeatable, up to 32)'
       ),
       Options.repeated
     ),

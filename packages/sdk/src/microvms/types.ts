@@ -37,9 +37,13 @@ export interface MicroVmNetworkPolicy {
   /** `private` preview URLs answer only requests that carry the preview token. Default `public`. */
   previews?: MicroVmPreviewAccess;
   /**
-   * The only public IPv4 networks (`a.b.c.d/n`, up to 32) the microVM may reach
-   * besides DNS, for example `['140.82.112.0/20']`. Omit to reach the whole
-   * internet. Needs `egress: 'allow'`.
+   * The only destinations the microVM may reach, up to 32: domain names such
+   * as `'api.openai.com'` (`'*.github.com'` covers every subdomain, not
+   * `github.com` itself) and public IPv4 networks such as `'140.82.112.0/20'`.
+   * A name is allowed by the addresses the microVM resolves it to; lookups of
+   * other names fail, and an address is blocked unless a listed network
+   * contains it or an allowed name resolved to it.
+   * Omit to reach the whole internet. Needs `egress: 'allow'`.
    */
   allow?: string[];
 }

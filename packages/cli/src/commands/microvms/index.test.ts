@@ -238,20 +238,24 @@ describe('createInput', () => {
     );
   });
 
-  it('limits egress to the listed networks, and refuses that together with --deny-egress', async () => {
+  it('limits egress to the listed destinations, and refuses that together with --deny-egress', async () => {
     const { layer } = fakeApi();
 
     await expect(
-      run(createInput(createFlags({ allowEgress: ['140.82.112.0/20', '151.101.0.0/16'] })), layer)
+      run(createInput(createFlags({ allowEgress: ['140.82.112.0/20', 'api.openai.com', '*.github.com'] })), layer)
     ).resolves.toEqual(
       Either.right({
         applicationId: 'app-linked',
-        network: { egress: 'allow', allow: ['140.82.112.0/20', '151.101.0.0/16'] },
+        network: { egress: 'allow', allow: ['140.82.112.0/20', 'api.openai.com', '*.github.com'] },
       })
     );
     for (const flags of [
       createFlags({ allowEgress: ['140.82.112.0/20'], denyEgress: true }),
-      createFlags({ allowEgress: ['github.com'] }),
+      createFlags({ allowEgress: ['api.openai.com'], denyEgress: true }),
+      createFlags({ allowEgress: ['https://api.openai.com'] }),
+      createFlags({ allowEgress: ['api.openai.com:443'] }),
+      createFlags({ allowEgress: ['*.com'] }),
+      createFlags({ allowEgress: ['localhost'] }),
       createFlags({ allowEgress: ['140.82.112.0'] }),
       createFlags({ allowEgress: Array.from({ length: 33 }, (_, i) => `203.0.113.${i}/32`) }),
     ]) {
