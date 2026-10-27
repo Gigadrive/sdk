@@ -4,11 +4,14 @@ import { Command } from './command';
 import {
   CommandFailedError,
   MicroVmCleanupError,
+  MicroVmFileNotFoundError,
   MicroVmNotRunningError,
   MicroVmPortNotExposedError,
   MicroVmPreviewTokenRequiredError,
   MicroVmStartError,
   MicroVmTimeoutError,
+  MicroVmWatchInterruptedError,
+  MicroVmWatchUnsupportedError,
 } from './errors';
 import { MicroVM } from './microvm';
 import { apiError, BASE_URL, commandInfo, exit, json, out, request, setup, sseResponse, vmInfo } from './test-utils';
@@ -22,6 +25,12 @@ beforeEach(() => {
 afterEach(() => {
   process.env = { ...originalEnv };
 });
+
+const collect = async <T>(iterator: AsyncIterable<T>): Promise<T[]> => {
+  const items: T[] = [];
+  for await (const item of iterator) items.push(item);
+  return items;
+};
 
 const createVm = async (overrides: Parameters<typeof vmInfo>[0] = {}) => {
   const { fetch, client } = setup();
@@ -847,6 +856,76 @@ describe('MicroVM.files', () => {
     await expect(vm.files.exists('/here')).resolves.toBe(true);
     await expect(vm.files.exists('/gone')).resolves.toBe(false);
     await expect(vm.files.exists('/x')).rejects.toBeInstanceOf(MicroVmNotRunningError);
+  });
+});
+
+describe('MicroVM.files.watch', () => {
+  const sse = (...events: [string, unknown][]) =>
+    sseResponse(events.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+
+  it('yields the changes of a directory until it goes away', async () => {
+    const { vm, fetch } = await createVm();
+    fetch.mockResolvedValueOnce(
+      sse(
+        ['ready', { path: '/app', recursive: true }],
+        ['change', { type: 'create', path: '/app/a.txt', isDirectory: false }],
+        ['change', { type: 'teleport', path: '/app/b' }],
+        ['change', { type: 'write', path: '/app/a.txt', isDirectory: false }],
+        ['end', { reason: 'directory_gone' }]
+      )
+    );
+
+    const changes = await collect(vm.files.watch('/app', { recursive: true }));
+
+    // Unknown change types are skipped rather than surfaced half-typed.
+    expect(changes).toEqual([
+      { type: 'create', path: '/app/a.txt', isDirectory: false },
+      { type: 'write', path: '/app/a.txt', isDirectory: false },
+    ]);
+    expect(request(fetch)).toMatchObject({
+      method: 'GET',
+      path: '/microvms/vm-1/files/watch',
+      query: { path: '/app', recursive: 'true' },
+    });
+  });
+
+  it('throws when the watch is interrupted or the connection drops without an end', async () => {
+    const { vm, fetch } = await createVm();
+    fetch.mockResolvedValueOnce(sse(['ready', { path: '/app', recursive: false }], ['error', { retryable: true }]));
+    await expect(collect(vm.files.watch('/app'))).rejects.toBeInstanceOf(MicroVmWatchInterruptedError);
+
+    fetch.mockResolvedValueOnce(sse(['ready', { path: '/app', recursive: false }]));
+    await expect(collect(vm.files.watch('/app'))).rejects.toBeInstanceOf(MicroVmWatchInterruptedError);
+  });
+
+  it('reports a dropped connection as an interruption, and an abort as the end', async () => {
+    const failing = (): Response =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('event: ready\ndata: {}\n\n'));
+            controller.error(new TypeError('socket hang up'));
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+      );
+    const { vm, fetch } = await createVm();
+    fetch.mockResolvedValueOnce(failing());
+    await expect(collect(vm.files.watch('/app'))).rejects.toBeInstanceOf(MicroVmWatchInterruptedError);
+
+    const controller = new AbortController();
+    controller.abort();
+    fetch.mockResolvedValueOnce(failing());
+    await expect(collect(vm.files.watch('/app', { signal: controller.signal }))).resolves.toEqual([]);
+  });
+
+  it('reports a microVM that cannot watch and a missing directory as typed errors', async () => {
+    const { vm, fetch } = await createVm();
+    fetch.mockResolvedValueOnce(apiError(409, 'started before watching', 'microvm_watch_unsupported'));
+    await expect(collect(vm.files.watch('/app'))).rejects.toBeInstanceOf(MicroVmWatchUnsupportedError);
+
+    fetch.mockResolvedValueOnce(apiError(404, 'No such directory', 'guest_not_found'));
+    await expect(collect(vm.files.watch('/missing'))).rejects.toBeInstanceOf(MicroVmFileNotFoundError);
   });
 });
 
