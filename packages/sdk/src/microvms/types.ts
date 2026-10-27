@@ -327,3 +327,18 @@ export interface CreateMicroVmImageInput {
   /** Raw API source. Use this or {@link from}. */
   source?: MicroVmImageSource;
 }
+
+/**
+ * What changed in a watched directory. `rename` is the old path of a move
+ * (its new path gets a `create` when watched); `overflow` means some changes
+ * were not reported, so list the directory to catch up.
+ */
+export type MicroVmFileChangeType = 'create' | 'write' | 'remove' | 'rename' | 'chmod' | 'overflow';
+
+/** One change in a watched directory. */
+export interface MicroVmFileChange {
+  type: MicroVmFileChangeType;
+  /** Absolute path inside the microVM. */
+  path: string;
+  isDirectory: boolean;
+}

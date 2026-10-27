@@ -18,6 +18,7 @@ import type {
   MicroVmFilesResource,
   MicroVmsResource,
   ReadFileOptions,
+  WatchDirectoryOptions,
   WriteFileOptions,
 } from './resource';
 import type {
@@ -26,6 +27,7 @@ import type {
   FileWriteResult,
   ListMicroVmsQuery,
   MicroVmEgress,
+  MicroVmFileChange,
   MicroVmInfo,
   MicroVmNetworkPolicy,
   MicroVmPreviewAccess,
@@ -239,6 +241,21 @@ export class MicroVmFiles {
   /** Read a file as bytes. @throws {@link MicroVmFileNotFoundError} */
   read(path: string, options?: ReadFileOptions): Promise<Uint8Array> {
     return this.resource.read(this.microvmId, path, options);
+  }
+
+  /**
+   * Watch a directory and iterate its changes. Break out of the loop or abort
+   * `signal` to stop watching.
+   *
+   * @example
+   * ```ts
+   * for await (const change of vm.files.watch('/app/dist', { recursive: true })) {
+   *   if (change.type === 'write') console.log('rebuilt', change.path);
+   * }
+   * ```
+   */
+  watch(path: string, options?: WatchDirectoryOptions): AsyncGenerator<MicroVmFileChange> {
+    return this.resource.watch(this.microvmId, path, options);
   }
 
   /** Read a file as UTF-8 text. */

@@ -17,6 +17,8 @@ export {
   MicroVmStartError,
   MicroVmTimeoutError,
   MicroVmUnreachableError,
+  MicroVmWatchInterruptedError,
+  MicroVmWatchUnsupportedError,
 } from './errors';
 export type { CommandOutput } from './errors';
 export type { CommandLogStreamOptions } from './logs';
@@ -40,6 +42,7 @@ export type {
   MicroVmRequestOptions,
   ReadFileOptions,
   WaitForImageOptions,
+  WatchDirectoryOptions,
   WriteFileOptions,
 } from './resource';
 export type * from './types';

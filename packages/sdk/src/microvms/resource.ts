@@ -1,7 +1,14 @@
 import type { HttpClient } from '../http-client';
 import { BaseResource } from '../resources/base-resource';
+import { parseSSEEvents } from '../streaming';
 import { abortReason, durationToMs, type MicroVmDuration, sleep } from './duration';
-import { MicroVmBusyError, MicroVmImageBuildError, MicroVmTimeoutError, toMicroVmError } from './errors';
+import {
+  MicroVmBusyError,
+  MicroVmImageBuildError,
+  MicroVmTimeoutError,
+  MicroVmWatchInterruptedError,
+  toMicroVmError,
+} from './errors';
 import { type CommandLogStreamOptions, streamCommandLogs } from './logs';
 import type {
   CommandInfo,
@@ -15,6 +22,8 @@ import type {
   FileListing,
   FileWriteResult,
   ListMicroVmsQuery,
+  MicroVmFileChange,
+  MicroVmFileChangeType,
   MicroVmImage,
   MicroVmImageSource,
   MicroVmInfo,
@@ -242,6 +251,29 @@ export class MicroVmCommandsResource extends BaseResource {
 // Files
 // ---------------------------------------------------------------------------
 
+/** Options of a directory watch. */
+export interface WatchDirectoryOptions extends MicroVmRequestOptions {
+  /** Also watch every subdirectory, including new ones, up to 8192 directories. Default `false`. */
+  recursive?: boolean;
+  /** Watch with this user's permissions instead of the image's user. */
+  user?: string;
+}
+
+const FILE_CHANGE_TYPES: ReadonlySet<string> = new Set(['create', 'write', 'remove', 'rename', 'chmod', 'overflow']);
+
+/** A `change` event's data, or `null` when it is not a change the SDK knows. */
+const parseFileChange = (data: string): MicroVmFileChange | null => {
+  try {
+    const value: unknown = JSON.parse(data);
+    if (value === null || typeof value !== 'object') return null;
+    const { type, path, isDirectory } = value as Record<string, unknown>;
+    if (typeof type !== 'string' || !FILE_CHANGE_TYPES.has(type) || typeof path !== 'string') return null;
+    return { type: type as MicroVmFileChangeType, path, isDirectory: isDirectory === true };
+  } catch {
+    return null;
+  }
+};
+
 /** Options of a file read. */
 export interface ReadFileOptions extends MicroVmRequestOptions {
   /** Byte offset to start reading at. */
@@ -267,6 +299,42 @@ const modeString = (mode: string | number | undefined) =>
  * Relative paths resolve against the user's home directory.
  */
 export class MicroVmFilesResource extends BaseResource {
+  /**
+   * Watch a directory (`GET /microvms/:id/files/watch`) and yield every change
+   * until the directory is deleted or moved, or `signal` aborts. It does not
+   * reconnect: changes made while no watch is connected are not replayed.
+   *
+   * @throws {@link MicroVmFileNotFoundError} when `path` does not exist.
+   * @throws {@link MicroVmWatchUnsupportedError} for a microVM started before watching was available.
+   * @throws {@link MicroVmWatchInterruptedError} when the watch fails partway, for example because the microVM stopped.
+   */
+  async *watch(
+    microvmId: string,
+    path: string,
+    options: WatchDirectoryOptions = {}
+  ): AsyncGenerator<MicroVmFileChange> {
+    const response = await typed(
+      this.httpClient.requestStream('GET', `${vmPath(microvmId)}/files/watch`, {
+        query: { path, recursive: options.recursive === true ? true : undefined, user: options.user },
+        headers: { Accept: 'text/event-stream' },
+        signal: options.signal,
+      }),
+      path
+    );
+    for await (const event of parseSSEEvents(response)) {
+      if (event.event === 'change') {
+        const change = parseFileChange(event.data);
+        if (change) yield change;
+      } else if (event.event === 'end') {
+        return;
+      } else if (event.event === 'error') {
+        throw new MicroVmWatchInterruptedError(microvmId);
+      }
+    }
+    // The connection ended without `end`: the watch did not run to completion.
+    if (!options.signal?.aborted) throw new MicroVmWatchInterruptedError(microvmId);
+  }
+
   /** Read a file as bytes (`GET /microvms/:id/files/content`). */
   async read(microvmId: string, path: string, options: ReadFileOptions = {}): Promise<Uint8Array> {
     const response = await this.open(microvmId, path, options);

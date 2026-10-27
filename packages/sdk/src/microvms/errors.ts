@@ -234,11 +234,33 @@ const NOT_RUNNING = /microvm[_ ]not[_ ]running|not running/i;
  * @param filePath - Set for file routes, so a `404` becomes {@link MicroVmFileNotFoundError}.
  * @internal
  */
+/** The microVM was started before directory watching was available. Create a new microVM to watch a directory. */
+export class MicroVmWatchUnsupportedError extends ApiError {
+  constructor(message: string, code?: string, reason?: string) {
+    super(message, 409, code ?? 'microvm_watch_unsupported', reason);
+    this.name = 'MicroVmWatchUnsupportedError';
+  }
+}
+
+/** A directory watch failed partway, for example because the microVM stopped. Changes since then were not reported. */
+export class MicroVmWatchInterruptedError extends GigadriveError {
+  readonly microvmId: string;
+
+  constructor(microvmId: string) {
+    super(
+      `The directory watch of the microVM ${microvmId} was interrupted. List the directory to catch up, then watch again.`
+    );
+    this.name = 'MicroVmWatchInterruptedError';
+    this.microvmId = microvmId;
+  }
+}
+
 export const toMicroVmError = (error: unknown, filePath?: string): unknown => {
   // Only plain `ApiError`s are classified; already typed errors pass through.
   if (!(error instanceof ApiError) || Object.getPrototypeOf(error) !== ApiError.prototype) return error;
   const { message, status, code, reason } = error;
   if (code === 'microvm_busy') return new MicroVmBusyError(message, status, code, reason);
+  if (code === 'microvm_watch_unsupported') return new MicroVmWatchUnsupportedError(message, code, reason);
   if (code === 'microvm_unreachable') return new MicroVmUnreachableError(message, code, reason);
   if (code === 'image_not_ready') return new MicroVmImageNotReadyError(message, code, reason);
   if (code === 'quota_exceeded' || code === 'plan_limit_exceeded') {
