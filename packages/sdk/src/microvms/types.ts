@@ -41,7 +41,8 @@ export interface MicroVmNetworkPolicy {
    * as `'api.openai.com'` (`'*.github.com'` covers every subdomain, not
    * `github.com` itself) and public IPv4 networks such as `'140.82.112.0/20'`.
    * A name is allowed by the addresses the microVM resolves it to; lookups of
-   * other names fail, and an address no allowed name resolved to is blocked.
+   * other names fail, and an address is blocked unless a listed network
+   * contains it or an allowed name resolved to it.
    * Omit to reach the whole internet. Needs `egress: 'allow'`.
    */
   allow?: string[];
