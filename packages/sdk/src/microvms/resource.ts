@@ -321,15 +321,21 @@ export class MicroVmFilesResource extends BaseResource {
       }),
       path
     );
-    for await (const event of parseSSEEvents(response)) {
-      if (event.event === 'change') {
-        const change = parseFileChange(event.data);
-        if (change) yield change;
-      } else if (event.event === 'end') {
-        return;
-      } else if (event.event === 'error') {
-        throw new MicroVmWatchInterruptedError(microvmId);
+    try {
+      for await (const event of parseSSEEvents(response)) {
+        if (event.event === 'change') {
+          const change = parseFileChange(event.data);
+          if (change) yield change;
+        } else if (event.event === 'end') {
+          return;
+        } else if (event.event === 'error') {
+          throw new MicroVmWatchInterruptedError(microvmId);
+        }
       }
+    } catch (error) {
+      // Stopping the watch is not a failure; a dropped connection is an interruption.
+      if (options.signal?.aborted) return;
+      throw error instanceof MicroVmWatchInterruptedError ? error : new MicroVmWatchInterruptedError(microvmId);
     }
     // The connection ended without `end`: the watch did not run to completion.
     if (!options.signal?.aborted) throw new MicroVmWatchInterruptedError(microvmId);

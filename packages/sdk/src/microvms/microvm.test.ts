@@ -898,6 +898,27 @@ describe('MicroVM.files.watch', () => {
     await expect(collect(vm.files.watch('/app'))).rejects.toBeInstanceOf(MicroVmWatchInterruptedError);
   });
 
+  it('reports a dropped connection as an interruption, and an abort as the end', async () => {
+    const failing = (): Response =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('event: ready\ndata: {}\n\n'));
+            controller.error(new TypeError('socket hang up'));
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+      );
+    const { vm, fetch } = await createVm();
+    fetch.mockResolvedValueOnce(failing());
+    await expect(collect(vm.files.watch('/app'))).rejects.toBeInstanceOf(MicroVmWatchInterruptedError);
+
+    const controller = new AbortController();
+    controller.abort();
+    fetch.mockResolvedValueOnce(failing());
+    await expect(collect(vm.files.watch('/app', { signal: controller.signal }))).resolves.toEqual([]);
+  });
+
   it('reports a microVM that cannot watch and a missing directory as typed errors', async () => {
     const { vm, fetch } = await createVm();
     fetch.mockResolvedValueOnce(apiError(409, 'started before watching', 'microvm_watch_unsupported'));
