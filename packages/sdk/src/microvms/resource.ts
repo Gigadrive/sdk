@@ -22,6 +22,7 @@ import type {
   FileListing,
   FileWriteResult,
   ListMicroVmsQuery,
+  MicroVmEgressPolicy,
   MicroVmFileChange,
   MicroVmFileChangeType,
   MicroVmImage,
@@ -685,6 +686,20 @@ export class MicroVmsResource extends BaseResource {
    */
   extendTimeout(microvmId: string, timeoutMs: number, options: MicroVmRequestOptions = {}): Promise<MicroVmInfo> {
     return typed(this.httpClient.post<MicroVmInfo>(`${vmPath(microvmId)}/timeout`, { timeoutMs }, options));
+  }
+
+  /**
+   * Replace what a running or paused microVM may reach
+   * (`PATCH /microvms/:id/network`). A running microVM keeps running: the new
+   * rules apply before this resolves, and connections they no longer allow are
+   * closed. A paused one gets them when it resumes.
+   */
+  updateNetwork(
+    microvmId: string,
+    policy: MicroVmEgressPolicy,
+    options: MicroVmRequestOptions = {}
+  ): Promise<MicroVmInfo> {
+    return typed(this.httpClient.patch<MicroVmInfo>(`${vmPath(microvmId)}/network`, policy, options));
   }
 
   /**

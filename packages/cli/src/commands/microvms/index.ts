@@ -207,6 +207,29 @@ export interface CreateFlags {
   readonly json: boolean;
 }
 
+/** Checks `--deny-egress` and `--allow-egress` before any request is sent. */
+const checkEgressFlags = (denyEgress: boolean, allowEgress: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    if (denyEgress && allowEgress.length > 0) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: '--allow-egress cannot be combined with --deny-egress.',
+      });
+    }
+    if (allowEgress.length > 32) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--allow-egress takes at most 32 entries.' });
+    }
+    // The shape only: the API refuses private and reserved ranges and
+    // malformed names, so those rules live in one place.
+    const network = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/;
+    const domain = /^(\*\.)?([a-z0-9-]+\.)+[a-z0-9-]*[a-z][a-z0-9-]*\.?$/i;
+    const badEntry = allowEgress.find((entry) => !network.test(entry.trim()) && !domain.test(entry.trim()));
+    if (badEntry !== undefined) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: `--allow-egress must be a domain name such as api.openai.com or *.github.com, or an IPv4 network such as 140.82.112.0/20 (got ${badEntry}).`,
+      });
+    }
+  });
+
 /** Turns `create` flags into the API body. */
 export const createInput = (flags: CreateFlags) =>
   Effect.gen(function* () {
@@ -216,24 +239,7 @@ export const createInput = (flags: CreateFlags) =>
       onNone: () => Effect.succeed(undefined),
       onSome: (text) => parseLifetime('--timeout', text),
     });
-    if (flags.denyEgress && flags.allowEgress.length > 0) {
-      return yield* new InvalidMicroVmOptionsError({
-        message: '--allow-egress cannot be combined with --deny-egress.',
-      });
-    }
-    if (flags.allowEgress.length > 32) {
-      return yield* new InvalidMicroVmOptionsError({ message: '--allow-egress takes at most 32 entries.' });
-    }
-    // The shape only: the API refuses private and reserved ranges and
-    // malformed names, so those rules live in one place.
-    const network = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/;
-    const domain = /^(\*\.)?([a-z0-9-]+\.)+[a-z0-9-]*[a-z][a-z0-9-]*\.?$/i;
-    const badEntry = flags.allowEgress.find((entry) => !network.test(entry.trim()) && !domain.test(entry.trim()));
-    if (badEntry !== undefined) {
-      return yield* new InvalidMicroVmOptionsError({
-        message: `--allow-egress must be a domain name such as api.openai.com or *.github.com, or an IPv4 network such as 140.82.112.0/20 (got ${badEntry}).`,
-      });
-    }
+    yield* checkEgressFlags(flags.denyEgress, flags.allowEgress);
     const badPort = flags.ports.find((port) => !Number.isInteger(port) || port < 1 || port > 65535);
     if (badPort !== undefined) {
       return yield* new InvalidMicroVmOptionsError({ message: `--port must be between 1 and 65535 (got ${badPort}).` });
@@ -771,6 +777,67 @@ const extendCommand = Command.make(
     extendMicroVm(microvmId, duration).pipe(Effect.asVoid, reportErrors('extend the microVM'))
 ).pipe(Command.withDescription('Set how long a microVM keeps running, counted from now'));
 
+/** Flags of `microvms network`. */
+export interface NetworkFlags {
+  readonly denyEgress: boolean;
+  readonly allowEgress: ReadonlyArray<string>;
+  readonly allowAllEgress: boolean;
+}
+
+/** Replaces what a running or paused microVM may reach. */
+export const updateMicroVmNetwork = (microvmId: string, flags: NetworkFlags) =>
+  Effect.gen(function* () {
+    const chosen = [flags.denyEgress, flags.allowEgress.length > 0, flags.allowAllEgress].filter(Boolean).length;
+    if (chosen !== 1) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: 'Pass exactly one of --deny-egress, --allow-egress or --allow-all-egress.',
+      });
+    }
+    yield* checkEgressFlags(flags.denyEgress, flags.allowEgress);
+    const apiClient = yield* ApiClientService;
+    const vm = yield* apiClient.request((client) =>
+      client.microvms.updateNetwork(
+        microvmId,
+        flags.denyEgress
+          ? { egress: 'deny' }
+          : flags.allowEgress.length > 0
+            ? { egress: 'allow', allow: flags.allowEgress.map((entry) => entry.trim()) }
+            : { egress: 'allow' }
+      )
+    );
+    const reach =
+      vm.network.egress === 'deny'
+        ? 'no outbound traffic'
+        : vm.network.allow
+          ? vm.network.allow.join(', ')
+          : 'the whole internet';
+    yield* Console.log(`${vm.id} now reaches ${reach}.`);
+    return vm;
+  });
+
+const networkCommand = Command.make(
+  'network',
+  {
+    microvmId: microvmIdArg,
+    denyEgress: Options.boolean('deny-egress').pipe(Options.withDescription('Block all outbound network traffic')),
+    allowEgress: Options.text('allow-egress').pipe(
+      Options.withDescription(
+        'Only reach this domain name (api.openai.com, *.github.com for every subdomain) or public IPv4 network (140.82.112.0/20) (repeatable, up to 32)'
+      ),
+      Options.repeated
+    ),
+    allowAllEgress: Options.boolean('allow-all-egress').pipe(
+      Options.withDescription('Reach the whole internet again (private networks stay blocked)')
+    ),
+  },
+  ({ microvmId, ...flags }) =>
+    updateMicroVmNetwork(microvmId, flags).pipe(Effect.asVoid, reportErrors('update the microVM network'))
+).pipe(
+  Command.withDescription(
+    'Change what a running or paused microVM may reach; connections the new rules no longer allow are closed'
+  )
+);
+
 // ---------------------------------------------------------------------------
 // images
 // ---------------------------------------------------------------------------
@@ -905,6 +972,7 @@ const SUBCOMMANDS = [
   stopCommand,
   removeCommand,
   extendCommand,
+  networkCommand,
   imagesCommand,
 ] as const;
 

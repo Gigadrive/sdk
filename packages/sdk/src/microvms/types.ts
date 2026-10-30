@@ -30,6 +30,12 @@ export type MicroVmEgress = 'allow' | 'deny';
  */
 export type MicroVmPreviewAccess = 'public' | 'private';
 
+/**
+ * What a microVM may reach, as changed by `MicroVM.updateNetwork`: the
+ * outbound part of {@link MicroVmNetworkPolicy}. Preview access stays as created.
+ */
+export type MicroVmEgressPolicy = Omit<MicroVmNetworkPolicy, 'previews'>;
+
 /** Network policy of a microVM. */
 export interface MicroVmNetworkPolicy {
   /** `allow` (default) reaches the internet; `deny` blocks all outbound traffic. */

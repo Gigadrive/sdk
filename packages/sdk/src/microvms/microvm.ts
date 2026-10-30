@@ -27,6 +27,7 @@ import type {
   FileWriteResult,
   ListMicroVmsQuery,
   MicroVmEgress,
+  MicroVmEgressPolicy,
   MicroVmFileChange,
   MicroVmInfo,
   MicroVmNetworkPolicy,
@@ -741,6 +742,29 @@ export class MicroVM {
    */
   async extendTimeout(duration: MicroVmDuration): Promise<MicroVmInfo> {
     this.current = await this.resource.extendTimeout(this.id, microvmTimeoutMs(duration));
+    return this.current;
+  }
+
+  /**
+   * Replace what the microVM may reach, without restarting it. Pass `'deny'` to
+   * block all outbound traffic, `'allow'` to reach the whole internet, or a
+   * policy with an `allow` list to reach only those destinations. Connections
+   * the new rules no longer allow are closed; the others continue. A paused
+   * microVM gets the new rules when it resumes. Preview access stays as created.
+   *
+   * @example
+   * ```ts
+   * await vm.run('npm install');
+   * await vm.updateNetwork('deny');
+   * await vm.run('node untrusted.js');
+   * ```
+   */
+  async updateNetwork(
+    network: MicroVmEgress | MicroVmEgressPolicy,
+    options: { signal?: AbortSignal } = {}
+  ): Promise<MicroVmInfo> {
+    const policy = typeof network === 'string' ? { egress: network } : network;
+    this.current = await this.resource.updateNetwork(this.id, policy, { signal: options.signal });
     return this.current;
   }
 
