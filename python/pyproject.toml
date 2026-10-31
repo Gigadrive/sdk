@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gigadrive"
+version = "0.1.0"
+description = "Gigadrive Network SDK: microVMs, isolated Linux machines for running code."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+authors = [{ name = "Gigadrive" }]
+dependencies = ["httpx>=0.27,<1"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://gigadrive.network"
+Documentation = "https://docs.gigadrive.de/network/microvms"
+Source = "https://github.com/Gigadrive/sdk"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gigadrive"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
