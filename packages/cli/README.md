@@ -36,6 +36,7 @@ gigadrive vm cp vm:<id>:/app/dist ./dist                        # and out
 gigadrive vm shell <id>                                         # interactive terminal
 gigadrive vm ls                                                 # running microVMs (--all includes stopped)
 gigadrive vm extend <id> 1h                                     # stop it one hour from now
+gigadrive vm network <id> --deny-egress                         # cut its internet while it runs
 gigadrive vm stop <id> && gigadrive vm rm <id>
 gigadrive vm images create py-ml --from python:3.13 --wait      # custom images (or --dockerfile ./Dockerfile)
 ```

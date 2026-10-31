@@ -327,6 +327,32 @@ describe('MicroVM accessors', () => {
     expect(request(fetch, 3).method).toBe('DELETE');
   });
 
+  it('asks to pause at the timeout', async () => {
+    const { fetch, client } = setup();
+    fetch.mockResolvedValueOnce(json(vmInfo({ onTimeout: 'pause' }), 201));
+
+    const vm = await MicroVM.create({ client, onTimeout: 'pause' });
+
+    expect(request(fetch).json).toMatchObject({ onTimeout: 'pause' });
+    expect(vm.info.onTimeout).toBe('pause');
+  });
+
+  it('updates the network policy, with the egress shorthand', async () => {
+    const { vm, fetch } = await createVm();
+    const limited = { egress: 'allow' as const, allow: ['registry.npmjs.org'] };
+    fetch
+      .mockResolvedValueOnce(json(vmInfo({ network: { egress: 'deny' } })))
+      .mockResolvedValueOnce(json(vmInfo({ network: limited })));
+
+    await expect(vm.updateNetwork('deny')).resolves.toMatchObject({ network: { egress: 'deny' } });
+    await vm.updateNetwork(limited);
+
+    expect(request(fetch, 0)).toMatchObject({ method: 'PATCH', path: '/microvms/vm-1/network' });
+    expect(request(fetch, 0).json).toEqual({ egress: 'deny' });
+    expect(request(fetch, 1).json).toEqual(limited);
+    expect(vm.info.network).toEqual(limited);
+  });
+
   it('stops on async dispose and tolerates an already stopped microVM', async () => {
     const { vm, fetch } = await createVm();
     fetch

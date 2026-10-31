@@ -19,6 +19,7 @@ import {
   listMicroVms,
   parseDuration,
   removeImage,
+  updateMicroVmNetwork,
   type CreateFlags,
   type ExecFlags,
 } from './index';
@@ -143,6 +144,8 @@ const createFlags = (overrides: Partial<CreateFlags> = {}): CreateFlags => ({
   denyEgress: false,
   privatePreviews: false,
   allowEgress: [],
+  pauseOnTimeout: false,
+  autoResume: false,
   region: Option.none(),
   json: true,
   ...overrides,
@@ -261,6 +264,17 @@ describe('createInput', () => {
     ]) {
       expect(Either.isLeft(await run(createInput(flags), layer))).toBe(true);
     }
+  });
+
+  it('asks to pause at the timeout with --pause-on-timeout', async () => {
+    const { layer } = fakeApi();
+
+    await expect(run(createInput(createFlags({ pauseOnTimeout: true })), layer)).resolves.toEqual(
+      Either.right({ applicationId: 'app-linked', onTimeout: 'pause' })
+    );
+    await expect(run(createInput(createFlags({ pauseOnTimeout: true, autoResume: true })), layer)).resolves.toEqual(
+      Either.right({ applicationId: 'app-linked', onTimeout: 'pause', autoResume: true })
+    );
   });
 
   it('defaults to the linked application and sends nothing else', async () => {
@@ -411,6 +425,44 @@ describe('extendMicroVm', () => {
     const result = await run(extendMicroVm('vm-1', '30'), api.layer);
 
     expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    expect(api.calls).toHaveLength(0);
+  });
+});
+
+describe('updateMicroVmNetwork', () => {
+  const flags = (overrides: Partial<{ denyEgress: boolean; allowEgress: string[]; allowAllEgress: boolean }> = {}) => ({
+    denyEgress: false,
+    allowEgress: [],
+    allowAllEgress: false,
+    ...overrides,
+  });
+
+  it('sends one of deny, an allowlist or the whole internet', async () => {
+    const api = fakeApi(route('PATCH', '/microvms/vm-1/network', () => json(vmInfo())));
+
+    await run(updateMicroVmNetwork('vm-1', flags({ denyEgress: true })), api.layer);
+    await run(updateMicroVmNetwork('vm-1', flags({ allowEgress: [' api.openai.com ', '140.82.112.0/20'] })), api.layer);
+    await run(updateMicroVmNetwork('vm-1', flags({ allowAllEgress: true })), api.layer);
+
+    expect(api.calls.map((call) => call.body)).toEqual([
+      { egress: 'deny' },
+      { egress: 'allow', allow: ['api.openai.com', '140.82.112.0/20'] },
+      { egress: 'allow' },
+    ]);
+  });
+
+  it('refuses no choice, two choices and a malformed entry before calling the API', async () => {
+    const api = fakeApi();
+
+    for (const choice of [
+      flags(),
+      flags({ denyEgress: true, allowAllEgress: true }),
+      flags({ denyEgress: true, allowEgress: ['api.openai.com'] }),
+      flags({ allowEgress: ['https://api.openai.com'] }),
+    ]) {
+      const result = await run(updateMicroVmNetwork('vm-1', choice), api.layer);
+      expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    }
     expect(api.calls).toHaveLength(0);
   });
 });
