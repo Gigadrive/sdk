@@ -203,6 +203,7 @@ export interface CreateFlags {
   readonly denyEgress: boolean;
   readonly privatePreviews: boolean;
   readonly allowEgress: ReadonlyArray<string>;
+  readonly pauseOnTimeout: boolean;
   readonly region: Option.Option<string>;
   readonly json: boolean;
 }
@@ -255,6 +256,7 @@ export const createInput = (flags: CreateFlags) =>
       ...Option.match(flags.memory, { onNone: () => ({}), onSome: (memoryMb) => ({ memoryMb }) }),
       ...Option.match(flags.disk, { onNone: () => ({}), onSome: (diskMb) => ({ diskMb }) }),
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      ...(flags.pauseOnTimeout ? { onTimeout: 'pause' as const } : {}),
       ...(flags.ports.length > 0 ? { ports: [...flags.ports] } : {}),
       ...(env ? { env } : {}),
       ...(metadata ? { metadata } : {}),
@@ -337,6 +339,9 @@ const createCommand = Command.make(
         'Only reach this domain name (api.openai.com, *.github.com for every subdomain) or public IPv4 network (140.82.112.0/20) (repeatable, up to 32)'
       ),
       Options.repeated
+    ),
+    pauseOnTimeout: Options.boolean('pause-on-timeout').pipe(
+      Options.withDescription('Pause the microVM when its timeout ends instead of stopping it')
     ),
     region: Options.text('region').pipe(Options.withDescription('Region to place the microVM in'), Options.optional),
     json: jsonOption,

@@ -36,6 +36,13 @@ export type MicroVmPreviewAccess = 'public' | 'private';
  */
 export type MicroVmEgressPolicy = Omit<MicroVmNetworkPolicy, 'previews'>;
 
+/**
+ * What happens when a microVM's timeout ends: `stop` discards it, `pause`
+ * pauses it with its memory, processes and files, and a resume runs it for
+ * its full timeout again.
+ */
+export type MicroVmOnTimeout = 'stop' | 'pause';
+
 /** Network policy of a microVM. */
 export interface MicroVmNetworkPolicy {
   /** `allow` (default) reaches the internet; `deny` blocks all outbound traffic. */
@@ -84,6 +91,8 @@ export interface MicroVmInfo {
   metadata: Record<string, string>;
   /** Lifetime in milliseconds, as set at create or by the last extension. */
   timeoutMs: number;
+  /** What happens when the timeout ends. */
+  onTimeout?: MicroVmOnTimeout;
   /** ISO 8601 time the microVM stops automatically, or `null` before it started. */
   expiresAt: string | null;
   createdAt: string;
@@ -116,6 +125,8 @@ export interface CreateMicroVmInput {
   diskMb?: number;
   /** Lifetime in milliseconds before the microVM stops automatically. Default 300000 (5 minutes), at most 24 hours and the plan's maximum. */
   timeoutMs?: number;
+  /** `pause` pauses the microVM when its timeout ends instead of stopping it. Default `stop`. */
+  onTimeout?: MicroVmOnTimeout;
   /** Up to 8 ports to expose with preview URLs (10000 and 10001 are reserved). */
   ports?: number[];
   /** Environment variables for every command. Never stored by the platform. */

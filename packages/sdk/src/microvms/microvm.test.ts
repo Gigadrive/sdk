@@ -327,6 +327,16 @@ describe('MicroVM accessors', () => {
     expect(request(fetch, 3).method).toBe('DELETE');
   });
 
+  it('asks to pause at the timeout', async () => {
+    const { fetch, client } = setup();
+    fetch.mockResolvedValueOnce(json(vmInfo({ onTimeout: 'pause' }), 201));
+
+    const vm = await MicroVM.create({ client, onTimeout: 'pause' });
+
+    expect(request(fetch).json).toMatchObject({ onTimeout: 'pause' });
+    expect(vm.info.onTimeout).toBe('pause');
+  });
+
   it('updates the network policy, with the egress shorthand', async () => {
     const { vm, fetch } = await createVm();
     const limited = { egress: 'allow' as const, allow: ['registry.npmjs.org'] };

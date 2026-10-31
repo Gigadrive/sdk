@@ -144,6 +144,7 @@ const createFlags = (overrides: Partial<CreateFlags> = {}): CreateFlags => ({
   denyEgress: false,
   privatePreviews: false,
   allowEgress: [],
+  pauseOnTimeout: false,
   region: Option.none(),
   json: true,
   ...overrides,
@@ -262,6 +263,14 @@ describe('createInput', () => {
     ]) {
       expect(Either.isLeft(await run(createInput(flags), layer))).toBe(true);
     }
+  });
+
+  it('asks to pause at the timeout with --pause-on-timeout', async () => {
+    const { layer } = fakeApi();
+
+    await expect(run(createInput(createFlags({ pauseOnTimeout: true })), layer)).resolves.toEqual(
+      Either.right({ applicationId: 'app-linked', onTimeout: 'pause' })
+    );
   });
 
   it('defaults to the linked application and sends nothing else', async () => {
