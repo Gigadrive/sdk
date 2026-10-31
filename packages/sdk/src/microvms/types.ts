@@ -95,7 +95,7 @@ export interface MicroVmInfo {
   onTimeout?: MicroVmOnTimeout;
   /** Whether a paused microVM resumes on its own when it is used. */
   autoResume?: boolean;
-  /** ISO 8601 time the microVM stops automatically, or `null` before it started. */
+  /** ISO 8601 time the current timeout ends (see `onTimeout`), or `null` before it started. */
   expiresAt: string | null;
   createdAt: string;
   startedAt: string | null;

@@ -267,7 +267,7 @@ export const createInput = (flags: CreateFlags) =>
             network: {
               egress: flags.denyEgress ? ('deny' as const) : ('allow' as const),
               ...(flags.privatePreviews ? { previews: 'private' as const } : {}),
-              ...(flags.allowEgress.length > 0 ? { allow: [...flags.allowEgress] } : {}),
+              ...(flags.allowEgress.length > 0 ? { allow: flags.allowEgress.map((entry) => entry.trim()) } : {}),
             },
           }
         : {}),
