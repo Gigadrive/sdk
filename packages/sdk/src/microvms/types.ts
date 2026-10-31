@@ -93,6 +93,8 @@ export interface MicroVmInfo {
   timeoutMs: number;
   /** What happens when the timeout ends. */
   onTimeout?: MicroVmOnTimeout;
+  /** Whether a paused microVM resumes on its own when it is used. */
+  autoResume?: boolean;
   /** ISO 8601 time the microVM stops automatically, or `null` before it started. */
   expiresAt: string | null;
   createdAt: string;
@@ -127,6 +129,12 @@ export interface CreateMicroVmInput {
   timeoutMs?: number;
   /** `pause` pauses the microVM when its timeout ends instead of stopping it. Default `stop`. */
   onTimeout?: MicroVmOnTimeout;
+  /**
+   * Resume the microVM on its own while it is paused: a command or file call
+   * resumes it and waits, and a request to a public preview URL resumes it and
+   * waits up to 20 seconds. Default `false`.
+   */
+  autoResume?: boolean;
   /** Up to 8 ports to expose with preview URLs (10000 and 10001 are reserved). */
   ports?: number[];
   /** Environment variables for every command. Never stored by the platform. */

@@ -145,6 +145,7 @@ const createFlags = (overrides: Partial<CreateFlags> = {}): CreateFlags => ({
   privatePreviews: false,
   allowEgress: [],
   pauseOnTimeout: false,
+  autoResume: false,
   region: Option.none(),
   json: true,
   ...overrides,
@@ -270,6 +271,9 @@ describe('createInput', () => {
 
     await expect(run(createInput(createFlags({ pauseOnTimeout: true })), layer)).resolves.toEqual(
       Either.right({ applicationId: 'app-linked', onTimeout: 'pause' })
+    );
+    await expect(run(createInput(createFlags({ pauseOnTimeout: true, autoResume: true })), layer)).resolves.toEqual(
+      Either.right({ applicationId: 'app-linked', onTimeout: 'pause', autoResume: true })
     );
   });
 

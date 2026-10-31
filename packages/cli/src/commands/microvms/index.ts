@@ -204,6 +204,7 @@ export interface CreateFlags {
   readonly privatePreviews: boolean;
   readonly allowEgress: ReadonlyArray<string>;
   readonly pauseOnTimeout: boolean;
+  readonly autoResume: boolean;
   readonly region: Option.Option<string>;
   readonly json: boolean;
 }
@@ -257,6 +258,7 @@ export const createInput = (flags: CreateFlags) =>
       ...Option.match(flags.disk, { onNone: () => ({}), onSome: (diskMb) => ({ diskMb }) }),
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       ...(flags.pauseOnTimeout ? { onTimeout: 'pause' as const } : {}),
+      ...(flags.autoResume ? { autoResume: true } : {}),
       ...(flags.ports.length > 0 ? { ports: [...flags.ports] } : {}),
       ...(env ? { env } : {}),
       ...(metadata ? { metadata } : {}),
@@ -342,6 +344,11 @@ const createCommand = Command.make(
     ),
     pauseOnTimeout: Options.boolean('pause-on-timeout').pipe(
       Options.withDescription('Pause the microVM when its timeout ends instead of stopping it')
+    ),
+    autoResume: Options.boolean('auto-resume').pipe(
+      Options.withDescription(
+        'Resume the paused microVM when a command, file call or public preview request reaches it'
+      )
     ),
     region: Options.text('region').pipe(Options.withDescription('Region to place the microVM in'), Options.optional),
     json: jsonOption,
