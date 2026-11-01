@@ -371,3 +371,37 @@ export interface MicroVmFileChange {
   path: string;
   isDirectory: boolean;
 }
+
+/** One CPU point of {@link MicroVmMetrics}. */
+export interface MicroVmCpuPoint {
+  /** ISO 8601 start of the point. */
+  time: string;
+  /** CPU the microVM used over the point, as a share of all its vCPUs (0 to 100). */
+  cpuPercent: number;
+}
+
+/** A microVM's memory and disk use as the microVM itself reports them. */
+export interface MicroVmCurrentUsage {
+  /** ISO 8601 time of the reading. */
+  sampledAt: string;
+  uptimeMs: number;
+  /** Memory in use (total minus available). */
+  memoryUsedBytes: number;
+  memoryTotalBytes: number;
+  diskUsedBytes: number;
+  diskTotalBytes: number;
+}
+
+/** A microVM's CPU use over a window and its memory and disk use now. */
+export interface MicroVmMetrics {
+  microvmId: string;
+  vcpus: number;
+  memoryMb: number;
+  windowMinutes: number;
+  /** Length of each CPU point, at least 5 seconds; it grows with the window. */
+  stepSeconds: number;
+  /** Oldest first. Points where the microVM did not run are omitted. */
+  cpu: MicroVmCpuPoint[];
+  /** `null` unless the microVM is running and answered within 3 seconds. */
+  current: MicroVmCurrentUsage | null;
+}

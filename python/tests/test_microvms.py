@@ -151,6 +151,22 @@ def test_update_network_and_typed_refusals() -> None:
     assert paused.value.status == 409 and paused.value.code == "microvm_paused"
 
 
+def test_get_metrics_reads_the_window() -> None:
+    calls: List[httpx.Request] = []
+    metrics = {"microvmId": VM["id"], "windowMinutes": 60, "cpu": [{"time": "t", "cpuPercent": 5}], "current": None}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=metrics)
+
+    vm = MicroVM(client(handler, calls), VM)
+
+    assert vm.get_metrics(window_minutes=60) == metrics
+    assert vm.get_metrics()["cpu"][0]["cpuPercent"] == 5
+    assert calls[0].method == "GET" and calls[0].url.path.endswith("/metrics")
+    assert calls[0].url.params.get("windowMinutes") == "60"
+    assert "windowMinutes" not in calls[1].url.params
+
+
 def test_context_manager_stops_the_microvm() -> None:
     calls: List[httpx.Request] = []
     http = client(lambda request: httpx.Response(200, json={**VM, "status": "stopped"}), calls)

@@ -361,6 +361,7 @@ nothing needs configuring. Built-in images: `node22`, `node24`, `python3.13`,
 | Ports                 | `vm.url(port)`, `vm.waitForPort(port)`                                                                                                                                                                      |
 | Lifetime              | `vm.extendTimeout('30m')`, `vm.stop()`, `vm.delete()`, `await using vm = ...`                                                                                                                               |
 | Network               | `vm.updateNetwork('deny')`, `vm.updateNetwork({ egress: 'allow', allow: ['registry.npmjs.org', '*.github.com'] })`: change what it may reach while it runs                                                  |
+| Metrics               | `vm.getMetrics({ windowMinutes: 60 })` → `{ cpu: [{ time, cpuPercent }], current: { memoryUsedBytes, memoryTotalBytes, diskUsedBytes, diskTotalBytes } \| null }`                                           |
 | Images                | `client.microvms.images.create({ name, from: 'python:3.13' \| { dockerfile } })`, `.waitUntilReady(id)`, `.list()`, `.get(id)`, `.delete(id)`                                                               |
 
 Command output stays in the microVM, so `command.logs()` can be read from
@@ -376,7 +377,7 @@ Reads and log streams are retried with backoff while a microVM answers
 or less on your plan.
 
 `client.microvms` is the low-level REST surface, one method per route
-(`create`, `list`, `listAll`, `get`, `extendTimeout`, `updateNetwork`, `stop`, `delete`,
+(`create`, `list`, `listAll`, `get`, `getMetrics`, `extendTimeout`, `updateNetwork`, `stop`, `delete`,
 `commands.*`, `files.*`, `images.*`). The SDK uses only `fetch`, so it runs in
 Node.js 18+, Bun, Deno, edge runtimes and Gigadrive Functions.
 

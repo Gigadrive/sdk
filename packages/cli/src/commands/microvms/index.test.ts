@@ -13,6 +13,7 @@ import {
   createImage,
   createInput,
   createMicroVm,
+  describeMicroVmMetrics,
   errorMessage,
   execInMicroVm,
   extendMicroVm,
@@ -166,6 +167,44 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
+
+describe('describeMicroVmMetrics', () => {
+  const metrics = {
+    microvmId: 'vm-1',
+    vcpus: 2,
+    memoryMb: 4096,
+    windowMinutes: 15,
+    stepSeconds: 5,
+    cpu: [
+      { time: '2026-11-01T12:00:00.000Z', cpuPercent: 80 },
+      { time: '2026-11-01T12:00:05.000Z', cpuPercent: 25 },
+    ],
+    current: {
+      sampledAt: '2026-11-01T12:00:06.000Z',
+      uptimeMs: 60_000,
+      memoryUsedBytes: 1_500_000_000,
+      memoryTotalBytes: 4_000_000_000,
+      diskUsedBytes: 2_000_000_000,
+      diskTotalBytes: 10_000_000_000,
+    },
+  };
+
+  it('prints the latest and peak CPU and the memory and disk in use', () => {
+    expect(describeMicroVmMetrics(metrics)).toEqual([
+      'CPU (last 15 min, 2 vCPU): 25% at 2026-11-01T12:00:05.000Z, peak 80%',
+      'Memory: 1.5 GB of 4.0 GB',
+      'Disk:   2.0 GB of 10.0 GB',
+    ]);
+  });
+
+  it('says when there are no samples and no current reading', () => {
+    expect(describeMicroVmMetrics({ ...metrics, cpu: [], current: null })).toEqual([
+      'CPU (last 15 min, 2 vCPU): no samples',
+      'Memory: unavailable (not running, or no answer)',
+      'Disk:   unavailable (not running, or no answer)',
+    ]);
+  });
+});
 
 describe('parseDuration', () => {
   it('accepts unit strings and refuses bare numbers and junk', () => {
