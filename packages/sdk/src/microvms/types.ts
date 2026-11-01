@@ -37,6 +37,31 @@ export type MicroVmPreviewAccess = 'public' | 'private';
 export type MicroVmEgressPolicy = Omit<MicroVmNetworkPolicy, 'previews'>;
 
 /**
+ * Headers the platform adds to the microVM's HTTPS requests to one domain, so
+ * a credential reaches the API without ever entering the microVM.
+ */
+export interface MicroVmInjectRule {
+  /**
+   * `'api.openai.com'`, or `'*.github.com'` for every subdomain (not
+   * `github.com` itself). The domain is reachable even when `allow` does not
+   * list it.
+   */
+  domain: string;
+  /**
+   * Up to 8 headers, such as `{ Authorization: 'Bearer sk-...' }`. Each one
+   * replaces a header of the same name the microVM sends.
+   */
+  headers: Record<string, string>;
+}
+
+/** An injection rule as the API returns it: the header names, never their values. */
+export interface MicroVmInjectRuleInfo {
+  domain: string;
+  /** Lowercase header names. */
+  headers: string[];
+}
+
+/**
  * What happens when a microVM's timeout ends: `stop` discards it, `pause`
  * pauses it with its memory, processes and files, and a resume runs it for
  * its full timeout again.
@@ -59,7 +84,18 @@ export interface MicroVmNetworkPolicy {
    * Omit to reach the whole internet. Needs `egress: 'allow'`.
    */
   allow?: string[];
+  /**
+   * Up to 8 rules that add headers to the microVM's HTTPS requests to a
+   * domain. The values are never stored in the microVM or returned by the API.
+   * Needs `egress: 'allow'`.
+   */
+  inject?: MicroVmInjectRule[];
 }
+
+/** Network policy of a microVM as the API returns it. */
+export type MicroVmNetworkPolicyInfo = Omit<MicroVmNetworkPolicy, 'inject'> & {
+  inject?: MicroVmInjectRuleInfo[];
+};
 
 /** A port exposed by a microVM and its preview URL. */
 export interface MicroVmPort {
@@ -86,7 +122,7 @@ export interface MicroVmInfo {
   region: string;
   /** Exposed ports with their preview URLs. */
   ports: MicroVmPort[];
-  network: MicroVmNetworkPolicy;
+  network: MicroVmNetworkPolicyInfo;
   /** Metadata given at create. */
   metadata: Record<string, string>;
   /** Lifetime in milliseconds, as set at create or by the last extension. */

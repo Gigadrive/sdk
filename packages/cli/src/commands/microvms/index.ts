@@ -9,6 +9,7 @@ import {
   MICROVM_MAX_TIMEOUT_MS,
   type MicroVmDuration,
   type MicroVmImage,
+  type MicroVmInjectRule,
   type MicroVmMetrics,
   type MicroVmStatus,
   type MicroVmVolumeAttachment,
@@ -212,6 +213,7 @@ export interface CreateFlags {
   readonly denyEgress: boolean;
   readonly privatePreviews: boolean;
   readonly allowEgress: ReadonlyArray<string>;
+  readonly inject: ReadonlyArray<string>;
   readonly pauseOnTimeout: boolean;
   readonly autoResume: boolean;
   readonly volumes: ReadonlyArray<string>;
@@ -241,6 +243,33 @@ export const parseVolumeFlags = (values: ReadonlyArray<string>) =>
       volumes.push({ volumeId, mountPath });
     }
     return volumes;
+  });
+
+/**
+ * Parses `--inject DOMAIN:HEADER=VALUE` into rules, one per domain. The API
+ * checks the header rules; this only catches the obvious typos.
+ */
+export const parseInjectFlags = (values: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const rules = new Map<string, Record<string, string>>();
+    for (const value of values) {
+      const colon = value.indexOf(':');
+      const equals = value.indexOf('=', colon + 1);
+      const domain = colon > 0 ? value.slice(0, colon).trim().toLowerCase() : '';
+      const name = colon > 0 && equals > colon ? value.slice(colon + 1, equals).trim() : '';
+      if (domain === '' || name === '' || equals === value.length - 1) {
+        return yield* new InvalidMicroVmOptionsError({
+          // The entry is not echoed: it may hold the credential.
+          message:
+            '--inject must be DOMAIN:HEADER=VALUE, such as "api.openai.com:Authorization=Bearer $OPENAI_API_KEY".',
+        });
+      }
+      rules.set(domain, { ...rules.get(domain), [name]: value.slice(equals + 1) });
+    }
+    if (rules.size > 8) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--inject takes at most 8 domains.' });
+    }
+    return [...rules].map(([domain, headers]): MicroVmInjectRule => ({ domain, headers }));
   });
 
 /** Checks `--deny-egress` and `--allow-egress` before any request is sent. */
@@ -280,6 +309,10 @@ export const createInput = (flags: CreateFlags) =>
     if (badPort !== undefined) {
       return yield* new InvalidMicroVmOptionsError({ message: `--port must be between 1 and 65535 (got ${badPort}).` });
     }
+    const inject = yield* parseInjectFlags(flags.inject);
+    if (inject.length > 0 && flags.denyEgress) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--inject cannot be combined with --deny-egress.' });
+    }
     const volumes = yield* parseVolumeFlags(flags.volumes);
     if (volumes.length > 0 && flags.pauseOnTimeout) {
       return yield* new InvalidMicroVmOptionsError({ message: '--volume cannot be combined with --pause-on-timeout.' });
@@ -301,12 +334,13 @@ export const createInput = (flags: CreateFlags) =>
       ...(env ? { env } : {}),
       ...(metadata ? { metadata } : {}),
       ...(volumes.length > 0 ? { volumes } : {}),
-      ...(flags.denyEgress || flags.privatePreviews || flags.allowEgress.length > 0
+      ...(flags.denyEgress || flags.privatePreviews || flags.allowEgress.length > 0 || inject.length > 0
         ? {
             network: {
               egress: flags.denyEgress ? ('deny' as const) : ('allow' as const),
               ...(flags.privatePreviews ? { previews: 'private' as const } : {}),
               ...(flags.allowEgress.length > 0 ? { allow: flags.allowEgress.map((entry) => entry.trim()) } : {}),
+              ...(inject.length > 0 ? { inject } : {}),
             },
           }
         : {}),
@@ -401,6 +435,12 @@ const createCommand = Command.make(
     allowEgress: Options.text('allow-egress').pipe(
       Options.withDescription(
         'Only reach this domain name (api.openai.com, *.github.com for every subdomain) or public IPv4 network (140.82.112.0/20) (repeatable, up to 32)'
+      ),
+      Options.repeated
+    ),
+    inject: Options.text('inject').pipe(
+      Options.withDescription(
+        'Add a header to HTTPS requests to a domain, as DOMAIN:HEADER=VALUE (repeatable, up to 8 domains); the value never enters the microVM'
       ),
       Options.repeated
     ),
@@ -904,27 +944,35 @@ export interface NetworkFlags {
   readonly denyEgress: boolean;
   readonly allowEgress: ReadonlyArray<string>;
   readonly allowAllEgress: boolean;
+  readonly inject: ReadonlyArray<string>;
 }
 
 /** Replaces what a running or paused microVM may reach. */
 export const updateMicroVmNetwork = (microvmId: string, flags: NetworkFlags) =>
   Effect.gen(function* () {
     const chosen = [flags.denyEgress, flags.allowEgress.length > 0, flags.allowAllEgress].filter(Boolean).length;
-    if (chosen !== 1) {
+    // `--inject` alone keeps the whole internet reachable, like --allow-all-egress.
+    if (chosen > 1 || (chosen === 0 && flags.inject.length === 0)) {
       return yield* new InvalidMicroVmOptionsError({
         message: 'Pass exactly one of --deny-egress, --allow-egress or --allow-all-egress.',
       });
     }
     yield* checkEgressFlags(flags.denyEgress, flags.allowEgress);
+    const inject = yield* parseInjectFlags(flags.inject);
+    if (inject.length > 0 && flags.denyEgress) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--inject cannot be combined with --deny-egress.' });
+    }
     const apiClient = yield* ApiClientService;
     const vm = yield* apiClient.request((client) =>
       client.microvms.updateNetwork(
         microvmId,
         flags.denyEgress
           ? { egress: 'deny' }
-          : flags.allowEgress.length > 0
-            ? { egress: 'allow', allow: flags.allowEgress.map((entry) => entry.trim()) }
-            : { egress: 'allow' }
+          : {
+              egress: 'allow',
+              ...(flags.allowEgress.length > 0 ? { allow: flags.allowEgress.map((entry) => entry.trim()) } : {}),
+              ...(inject.length > 0 ? { inject } : {}),
+            }
       )
     );
     const reach =
@@ -934,6 +982,9 @@ export const updateMicroVmNetwork = (microvmId: string, flags: NetworkFlags) =>
           ? vm.network.allow.join(', ')
           : 'the whole internet';
     yield* Console.log(`${vm.id} now reaches ${reach}.`);
+    for (const rule of vm.network.inject ?? []) {
+      yield* Console.log(`Adds ${rule.headers.join(', ')} to HTTPS requests to ${rule.domain}.`);
+    }
     return vm;
   });
 
@@ -950,6 +1001,12 @@ const networkCommand = Command.make(
     ),
     allowAllEgress: Options.boolean('allow-all-egress').pipe(
       Options.withDescription('Reach the whole internet again (private networks stay blocked)')
+    ),
+    inject: Options.text('inject').pipe(
+      Options.withDescription(
+        'Add a header to HTTPS requests to a domain, as DOMAIN:HEADER=VALUE (repeatable, up to 8 domains); the value never enters the microVM'
+      ),
+      Options.repeated
     ),
   },
   ({ microvmId, ...flags }) =>

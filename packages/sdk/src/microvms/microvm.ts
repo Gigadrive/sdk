@@ -765,6 +765,8 @@ export class MicroVM {
    * policy with an `allow` list to reach only those destinations. Connections
    * the new rules no longer allow are closed; the others continue. A paused
    * microVM gets the new rules when it resumes. Preview access stays as created.
+   * The policy replaces the old one whole: pass `inject` again to keep its
+   * rules, since their values are never returned.
    *
    * @example
    * ```ts

@@ -884,7 +884,11 @@ export class MicroVmsResource extends BaseResource {
   ): Promise<MicroVmInfo> {
     // Only the outbound policy: a `MicroVmNetworkPolicy` value passed here may
     // still carry `previews`, which this route does not change.
-    const body = { egress: policy.egress, ...(policy.allow !== undefined ? { allow: policy.allow } : {}) };
+    const body = {
+      egress: policy.egress,
+      ...(policy.allow !== undefined ? { allow: policy.allow } : {}),
+      ...(policy.inject !== undefined ? { inject: policy.inject } : {}),
+    };
     return typed(this.httpClient.patch<MicroVmInfo>(`${vmPath(microvmId)}/network`, body, options));
   }
 

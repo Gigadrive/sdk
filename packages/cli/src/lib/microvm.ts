@@ -179,6 +179,7 @@ export const describeMicroVm = (vm: MicroVmInfo, now = Date.now()): string[] => 
           ? `only ${vm.network.allow.join(', ')}`
           : 'internet access'
     }`,
+    ...(vm.network.inject ?? []).map((rule) => `Injects:     ${rule.headers.join(', ')} for ${rule.domain}`),
     `Previews:    ${vm.network.previews === 'private' ? 'private (preview token required)' : 'public'}`,
     `Application: ${vm.applicationId}`,
     `Created:     ${vm.createdAt}`,

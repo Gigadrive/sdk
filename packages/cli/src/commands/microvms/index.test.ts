@@ -21,6 +21,7 @@ import {
   extendMicroVm,
   listMicroVms,
   parseDuration,
+  parseInjectFlags,
   removeImage,
   updateMicroVmNetwork,
   type CreateFlags,
@@ -147,6 +148,7 @@ const createFlags = (overrides: Partial<CreateFlags> = {}): CreateFlags => ({
   denyEgress: false,
   privatePreviews: false,
   allowEgress: [],
+  inject: [],
   pauseOnTimeout: false,
   autoResume: false,
   volumes: [],
@@ -471,12 +473,86 @@ describe('extendMicroVm', () => {
   });
 });
 
+describe('parseInjectFlags', () => {
+  it('groups headers by domain and keeps everything after the first = in the value', async () => {
+    const { layer } = fakeApi();
+    const result = await run(
+      parseInjectFlags([
+        'API.openai.com:Authorization=Bearer sk-a=b',
+        'api.openai.com:OpenAI-Organization=org-1',
+        '*.github.com:Authorization=token ghp_1',
+      ]),
+      layer
+    );
+
+    expect(result).toEqual(
+      Either.right([
+        { domain: 'api.openai.com', headers: { Authorization: 'Bearer sk-a=b', 'OpenAI-Organization': 'org-1' } },
+        { domain: '*.github.com', headers: { Authorization: 'token ghp_1' } },
+      ])
+    );
+  });
+
+  it('refuses a missing domain, header or value and more than 8 domains without echoing the value', async () => {
+    const { layer } = fakeApi();
+    for (const values of [
+      ['Authorization=Bearer sk-secret'],
+      [':Authorization=Bearer sk-secret'],
+      ['api.openai.com:=sk-secret'],
+      ['api.openai.com:Authorization='],
+      Array.from({ length: 9 }, (_, i) => `api${i}.example.com:X-Key=v`),
+    ]) {
+      const result = await run(parseInjectFlags(values), layer);
+      expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+      expect(Either.isLeft(result) && result.left.message).not.toContain('sk-secret');
+    }
+  });
+
+  it('puts the rules on the create body and refuses them with --deny-egress', async () => {
+    const { layer } = fakeApi();
+    const created = await run(createInput(createFlags({ inject: ['api.openai.com:Authorization=Bearer k'] })), layer);
+    expect(created).toEqual(
+      Either.right({
+        network: { egress: 'allow', inject: [{ domain: 'api.openai.com', headers: { Authorization: 'Bearer k' } }] },
+      })
+    );
+
+    const denied = await run(
+      createInput(createFlags({ denyEgress: true, inject: ['api.openai.com:Authorization=Bearer k'] })),
+      layer
+    );
+    expect(Either.isLeft(denied) && denied.left._tag).toBe('InvalidMicroVmOptionsError');
+  });
+});
+
 describe('updateMicroVmNetwork', () => {
-  const flags = (overrides: Partial<{ denyEgress: boolean; allowEgress: string[]; allowAllEgress: boolean }> = {}) => ({
+  const flags = (
+    overrides: Partial<{ denyEgress: boolean; allowEgress: string[]; allowAllEgress: boolean; inject: string[] }> = {}
+  ) => ({
     denyEgress: false,
     allowEgress: [],
     allowAllEgress: false,
+    inject: [],
     ...overrides,
+  });
+
+  it('sends injection rules with an allowlist or on their own', async () => {
+    const api = fakeApi(route('PATCH', '/microvms/vm-1/network', () => json(vmInfo())));
+    const rule = { domain: 'api.openai.com', headers: { Authorization: 'Bearer k' } };
+
+    await run(
+      updateMicroVmNetwork(
+        'vm-1',
+        flags({ allowEgress: ['registry.npmjs.org'], inject: ['api.openai.com:Authorization=Bearer k'] })
+      ),
+      api.layer
+    );
+    await run(updateMicroVmNetwork('vm-1', flags({ inject: ['api.openai.com:Authorization=Bearer k'] })), api.layer);
+
+    expect(api.calls.map((call) => call.body)).toEqual([
+      { egress: 'allow', allow: ['registry.npmjs.org'], inject: [rule] },
+      { egress: 'allow', inject: [rule] },
+    ]);
   });
 
   it('sends one of deny, an allowlist or the whole internet', async () => {
@@ -501,6 +577,7 @@ describe('updateMicroVmNetwork', () => {
       flags({ denyEgress: true, allowAllEgress: true }),
       flags({ denyEgress: true, allowEgress: ['api.openai.com'] }),
       flags({ allowEgress: ['https://api.openai.com'] }),
+      flags({ denyEgress: true, inject: ['api.openai.com:Authorization=Bearer k'] }),
     ]) {
       const result = await run(updateMicroVmNetwork('vm-1', choice), api.layer);
       expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
