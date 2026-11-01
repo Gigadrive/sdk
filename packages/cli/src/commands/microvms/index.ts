@@ -11,6 +11,7 @@ import {
   type MicroVmImage,
   type MicroVmMetrics,
   type MicroVmStatus,
+  type MicroVmVolumeAttachment,
   type MicroVmWebhookEventType,
 } from '@gigadrive/sdk';
 import { Config, Console, Effect, Exit, Option } from 'effect';
@@ -29,6 +30,7 @@ import {
   formatDeliveryTable,
   formatImageTable,
   formatMicroVmTable,
+  formatVolumeTable,
   formatWebhookTable,
   parseCopyTarget,
   parseKeyValues,
@@ -193,6 +195,9 @@ const signalOnInterrupt =
 // create
 // ---------------------------------------------------------------------------
 
+/** A volume ID, as opposed to a volume name in `--volume`. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Flags of `microvms create`. */
 export interface CreateFlags {
   readonly app: Option.Option<string>;
@@ -209,9 +214,34 @@ export interface CreateFlags {
   readonly allowEgress: ReadonlyArray<string>;
   readonly pauseOnTimeout: boolean;
   readonly autoResume: boolean;
+  readonly volumes: ReadonlyArray<string>;
   readonly region: Option.Option<string>;
   readonly json: boolean;
 }
+
+/**
+ * Parses `--volume VOLUME:PATH` (a volume ID or name, then an absolute mount
+ * path). The API checks the path rules; this only catches the obvious typos.
+ */
+export const parseVolumeFlags = (values: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    if (values.length > 4) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--volume takes at most 4 volumes.' });
+    }
+    const volumes: MicroVmVolumeAttachment[] = [];
+    for (const value of values) {
+      const separator = value.indexOf(':');
+      const volumeId = separator > 0 ? value.slice(0, separator) : '';
+      const mountPath = separator > 0 ? value.slice(separator + 1) : '';
+      if (volumeId === '' || !mountPath.startsWith('/')) {
+        return yield* new InvalidMicroVmOptionsError({
+          message: `--volume must be VOLUME:PATH with an absolute path, such as cache:/cache (got ${value}).`,
+        });
+      }
+      volumes.push({ volumeId, mountPath });
+    }
+    return volumes;
+  });
 
 /** Checks `--deny-egress` and `--allow-egress` before any request is sent. */
 const checkEgressFlags = (denyEgress: boolean, allowEgress: ReadonlyArray<string>) =>
@@ -250,6 +280,10 @@ export const createInput = (flags: CreateFlags) =>
     if (badPort !== undefined) {
       return yield* new InvalidMicroVmOptionsError({ message: `--port must be between 1 and 65535 (got ${badPort}).` });
     }
+    const volumes = yield* parseVolumeFlags(flags.volumes);
+    if (volumes.length > 0 && flags.pauseOnTimeout) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--volume cannot be combined with --pause-on-timeout.' });
+    }
     const applicationId = yield* resolveApplicationId(flags.app);
     const input: CreateMicroVmInput = {
       ...(applicationId ? { applicationId } : {}),
@@ -266,6 +300,7 @@ export const createInput = (flags: CreateFlags) =>
       ...(flags.ports.length > 0 ? { ports: [...flags.ports] } : {}),
       ...(env ? { env } : {}),
       ...(metadata ? { metadata } : {}),
+      ...(volumes.length > 0 ? { volumes } : {}),
       ...(flags.denyEgress || flags.privatePreviews || flags.allowEgress.length > 0
         ? {
             network: {
@@ -284,7 +319,30 @@ export const createInput = (flags: CreateFlags) =>
 export const createMicroVm = (flags: CreateFlags) =>
   Effect.gen(function* () {
     const apiClient = yield* ApiClientService;
-    const input = yield* createInput(flags);
+    const parsed = yield* createInput(flags);
+    // `--volume` takes a name too: resolve names against the application's volumes.
+    const named = (parsed.volumes ?? []).filter((volume) => !UUID.test(volume.volumeId));
+    const known =
+      named.length > 0
+        ? yield* apiClient.request((client) =>
+            client.microvms.volumes.list({ ...(parsed.applicationId ? { applicationId: parsed.applicationId } : {}) })
+          )
+        : [];
+    const volumes: MicroVmVolumeAttachment[] = [];
+    for (const volume of parsed.volumes ?? []) {
+      if (UUID.test(volume.volumeId)) {
+        volumes.push(volume);
+        continue;
+      }
+      const match = known.find((entry) => entry.name === volume.volumeId);
+      if (match === undefined) {
+        return yield* new InvalidMicroVmOptionsError({
+          message: `No volume is named ${volume.volumeId}. Create it with "gigadrive microvms volumes create ${volume.volumeId}".`,
+        });
+      }
+      volumes.push({ volumeId: match.id, mountPath: volume.mountPath });
+    }
+    const input: CreateMicroVmInput = volumes.length > 0 ? { ...parsed, volumes } : parsed;
     if (!flags.json) yield* Console.error(`Creating a microVM from ${input.image ?? 'node22'}...`);
     const vm = yield* apiClient.request((client) => client.microvms.create(input));
     if (flags.json) {
@@ -353,6 +411,13 @@ const createCommand = Command.make(
       Options.withDescription(
         'Resume the paused microVM when a command, file call or public preview request reaches it'
       )
+    ),
+    volumes: Options.text('volume').pipe(
+      Options.withAlias('v'),
+      Options.withDescription(
+        'Attach a volume as VOLUME:PATH, by ID or name, such as cache:/cache (repeatable, up to 4; saved when the microVM stops)'
+      ),
+      Options.repeated
     ),
     region: Options.text('region').pipe(Options.withDescription('Region to place the microVM in'), Options.optional),
     json: jsonOption,
@@ -1016,6 +1081,110 @@ const imagesCommand = Command.make('images', {}, () => Effect.void).pipe(
 );
 
 // ---------------------------------------------------------------------------
+// volumes
+// ---------------------------------------------------------------------------
+
+const volumeIdArg = Args.text({ name: 'volume-id' }).pipe(Args.withDescription('The volume ID'));
+
+const volumesListCommand = Command.make('ls', { app: appOption, json: jsonOption }, ({ app, json }) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    const applicationId = yield* resolveApplicationId(app);
+    const volumes = yield* apiClient.request((client) => client.microvms.volumes.list({ applicationId }));
+    if (json) return yield* Console.log(JSON.stringify(volumes, null, 2));
+    if (volumes.length === 0)
+      return yield* Console.log('No volumes yet. Create one with "gigadrive microvms volumes create <name>".');
+    for (const line of formatVolumeTable(volumes)) yield* Console.log(line);
+  }).pipe(reportErrors('list volumes'))
+).pipe(Command.withDescription("List the application's volumes"));
+
+/** Flags of `microvms volumes create`. */
+export interface CreateVolumeFlags {
+  readonly name: string;
+  readonly size: Option.Option<number>;
+  readonly app: Option.Option<string>;
+  readonly json: boolean;
+}
+
+/** Creates an empty volume and prints it. */
+export const createVolume = (flags: CreateVolumeFlags) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    const applicationId = yield* resolveApplicationId(flags.app);
+    const volume = yield* apiClient.request((client) =>
+      client.microvms.volumes.create({
+        name: flags.name,
+        ...Option.match(flags.size, { onNone: () => ({}), onSome: (sizeMb) => ({ sizeMb }) }),
+        ...(applicationId ? { applicationId } : {}),
+      })
+    );
+    if (flags.json) {
+      yield* Console.log(JSON.stringify(volume, null, 2));
+    } else {
+      yield* Console.log(`Created volume ${volume.name} (${String(volume.sizeMb)} MiB, ${volume.id}).`);
+      yield* Console.log(`Attach it: gigadrive microvms create --volume ${volume.name}:/data`);
+    }
+    return volume;
+  });
+
+const volumesCreateCommand = Command.make(
+  'create',
+  {
+    name: Args.text({ name: 'name' }).pipe(
+      Args.withDescription('Lowercase letters, digits and -, unique per application')
+    ),
+    size: Options.integer('size').pipe(
+      Options.withDescription('Size in MiB, 1024 to 51200 (default: 10240)'),
+      Options.optional
+    ),
+    app: appOption,
+    json: jsonOption,
+  },
+  (flags) => createVolume(flags).pipe(Effect.asVoid, reportErrors('create the volume'))
+).pipe(Command.withDescription('Create an empty volume'));
+
+const volumesRenameCommand = Command.make(
+  'rename',
+  { volumeId: volumeIdArg, name: Args.text({ name: 'name' }).pipe(Args.withDescription('The new name')) },
+  ({ volumeId, name }) =>
+    Effect.gen(function* () {
+      const apiClient = yield* ApiClientService;
+      const volume = yield* apiClient.request((client) => client.microvms.volumes.rename(volumeId, name));
+      yield* Console.log(`Renamed the volume to ${volume.name}.`);
+    }).pipe(reportErrors('rename the volume'))
+).pipe(Command.withDescription('Rename a volume'));
+
+const volumesSaveCommand = Command.make(
+  'save',
+  { microvmId: Args.text({ name: 'microvm-id' }).pipe(Args.withDescription('A running microVM with volumes')) },
+  ({ microvmId }) =>
+    Effect.gen(function* () {
+      const apiClient = yield* ApiClientService;
+      yield* apiClient.request((client) => client.microvms.saveVolumes(microvmId));
+      yield* Console.log(`Saved the volumes of ${microvmId}.`);
+    }).pipe(reportErrors('save the volumes'))
+).pipe(Command.withDescription("Save a running microVM's volumes without stopping it"));
+
+const volumesRemoveCommand = Command.make('rm', { volumeId: volumeIdArg }, ({ volumeId }) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    yield* apiClient.request((client) => client.microvms.volumes.delete(volumeId));
+    yield* Console.log(`Deleted volume ${volumeId}.`);
+  }).pipe(reportErrors('delete the volume'))
+).pipe(Command.withDescription('Delete a volume and its contents (it must not be attached)'));
+
+const volumesCommand = Command.make('volumes', {}, () => Effect.void).pipe(
+  Command.withDescription('Persistent filesystems that outlive the microVMs they are attached to'),
+  Command.withSubcommands([
+    volumesListCommand,
+    volumesCreateCommand,
+    volumesRenameCommand,
+    volumesSaveCommand,
+    volumesRemoveCommand,
+  ])
+);
+
+// ---------------------------------------------------------------------------
 // webhooks
 // ---------------------------------------------------------------------------
 
@@ -1167,6 +1336,7 @@ const SUBCOMMANDS = [
   extendCommand,
   networkCommand,
   imagesCommand,
+  volumesCommand,
   webhooksCommand,
 ] as const;
 

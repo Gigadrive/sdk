@@ -40,6 +40,7 @@ export {
   MicroVmCommandsResource,
   MicroVmFilesResource,
   MicroVmImagesResource,
+  MicroVmVolumesResource,
   MicroVmWebhooksResource,
   MicroVmsResource,
 } from './resource';

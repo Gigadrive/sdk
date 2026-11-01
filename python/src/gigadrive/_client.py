@@ -36,8 +36,12 @@ class _Credentials:
         client_id: Optional[str],
         client_secret: Optional[str],
     ) -> None:
-        bearer_token = bearer_token or (None if client_id else os.environ.get("GIGADRIVE_BEARER_TOKEN"))
-        client_id = client_id or (None if bearer_token else os.environ.get("GIGADRIVE_CLIENT_ID"))
+        bearer_token = bearer_token or (
+            None if client_id else os.environ.get("GIGADRIVE_BEARER_TOKEN")
+        )
+        client_id = client_id or (
+            None if bearer_token else os.environ.get("GIGADRIVE_CLIENT_ID")
+        )
         client_secret = client_secret or os.environ.get("GIGADRIVE_CLIENT_SECRET")
         if not bearer_token and not (client_id and client_secret):
             raise AuthenticationError(
@@ -56,23 +60,36 @@ class _Credentials:
         if self._static:
             return self._static
         with self._lock:
-            if not force and self._token and time.time() < self._expires_at - _TOKEN_REFRESH_MARGIN_S:
+            if (
+                not force
+                and self._token
+                and time.time() < self._expires_at - _TOKEN_REFRESH_MARGIN_S
+            ):
                 return self._token
-            basic = base64.b64encode(f"{self._client_id}:{self._client_secret}".encode()).decode()
+            basic = base64.b64encode(
+                f"{self._client_id}:{self._client_secret}".encode()
+            ).decode()
             response = http.post(
                 self._token_url,
-                headers={"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded"},
+                headers={
+                    "Authorization": f"Basic {basic}",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
                 content="grant_type=client_credentials",
             )
             if response.status_code >= 400:
-                raise AuthenticationError(f"OAuth2 token request failed ({response.status_code}): {response.text}")
+                raise AuthenticationError(
+                    f"OAuth2 token request failed ({response.status_code}): {response.text}"
+                )
             data = response.json()
             token = data.get("access_token")
             if not isinstance(token, str):
                 raise AuthenticationError("OAuth2 token response has no access_token")
             self._token = token
             expires_in = data.get("expires_in")
-            self._expires_at = time.time() + (expires_in if isinstance(expires_in, (int, float)) else 300)
+            self._expires_at = time.time() + (
+                expires_in if isinstance(expires_in, (int, float)) else 300
+            )
             return token
 
 
@@ -93,9 +110,13 @@ class HttpClient:
         timeout: float = 120.0,
         transport: Optional[httpx.BaseTransport] = None,
     ) -> None:
-        self.base_url = (base_url or os.environ.get("GIGADRIVE_API_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
+        self.base_url = (
+            base_url or os.environ.get("GIGADRIVE_API_BASE_URL") or DEFAULT_BASE_URL
+        ).rstrip("/")
         self._http = httpx.Client(timeout=timeout, transport=transport)
-        self._credentials = _Credentials(self.base_url, bearer_token, client_id, client_secret)
+        self._credentials = _Credentials(
+            self.base_url, bearer_token, client_id, client_secret
+        )
 
     def close(self) -> None:
         self._http.close()
@@ -111,13 +132,19 @@ class HttpClient:
         headers: Optional[Dict[str, str]] = None,
         timeout: Optional[float] = None,
     ) -> httpx.Response:
-        query = {key: _query_value(value) for key, value in (params or {}).items() if value is not None}
+        query = {
+            key: _query_value(value)
+            for key, value in (params or {}).items()
+            if value is not None
+        }
         attempts = _READ_RETRIES + 1 if method == "GET" else 1
         refreshed = False
         attempt = 0
         while True:
             attempt += 1
-            all_headers = {"Authorization": f"Bearer {self._credentials.token(self._http, force=refreshed)}"}
+            all_headers = {
+                "Authorization": f"Bearer {self._credentials.token(self._http, force=refreshed)}"
+            }
             all_headers.update(headers or {})
             try:
                 response = self._http.request(
@@ -127,7 +154,9 @@ class HttpClient:
                     content=content,
                     params=query,
                     headers=all_headers,
-                    timeout=timeout if timeout is not None else httpx.USE_CLIENT_DEFAULT,
+                    timeout=timeout
+                    if timeout is not None
+                    else httpx.USE_CLIENT_DEFAULT,
                 )
             except httpx.TransportError:
                 if attempt >= attempts:
@@ -135,7 +164,11 @@ class HttpClient:
                 time.sleep(0.25 * 2 ** (attempt - 1))
                 continue
             # A client-credentials token can be revoked or rotated early: renew once.
-            if response.status_code == 401 and not refreshed and not self._credentials._static:
+            if (
+                response.status_code == 401
+                and not refreshed
+                and not self._credentials._static
+            ):
                 refreshed = True
                 continue
             if response.status_code in _TRANSIENT_STATUSES and attempt < attempts:

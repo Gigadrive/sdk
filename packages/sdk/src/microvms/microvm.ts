@@ -782,9 +782,37 @@ export class MicroVM {
     return this.current;
   }
 
-  /** Stop the microVM. Its disk, memory and running commands are discarded. */
-  async stop(): Promise<MicroVmInfo> {
-    this.current = await this.resource.stop(this.id);
+  /**
+   * Stop the microVM. Its disk, memory and running commands are discarded;
+   * attached volumes are saved first, and this resolves once they are.
+   *
+   * @throws {@link MicroVmTimeoutError} when the volumes are still saving after `timeout` (default 10 minutes).
+   */
+  async stop(options: { timeout?: MicroVmDuration; signal?: AbortSignal } = {}): Promise<MicroVmInfo> {
+    this.current = await this.resource.stop(this.id, { signal: options.signal });
+    const deadline = Date.now() + durationToMs(options.timeout ?? '10m');
+    while (this.current.status === 'stopping') {
+      if (Date.now() + 1000 > deadline) {
+        throw new MicroVmTimeoutError(`The microVM ${this.id} is still saving its volumes; gave up waiting.`);
+      }
+      await sleep(1000, options.signal);
+      await this.refresh({ signal: options.signal });
+    }
+    return this.current;
+  }
+
+  /**
+   * Save the attached volumes now, without stopping. The microVM is frozen
+   * only while its volumes are copied on the host.
+   *
+   * @example
+   * ```ts
+   * await vm.run('pg_ctl stop -D /data/pg');
+   * await vm.saveVolumes();
+   * ```
+   */
+  async saveVolumes(options: { signal?: AbortSignal } = {}): Promise<MicroVmInfo> {
+    this.current = await this.resource.saveVolumes(this.id, { signal: options.signal });
     return this.current;
   }
 

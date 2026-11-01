@@ -11,7 +11,12 @@ from typing import List
 import httpx
 import pytest
 
-from gigadrive import HttpClient, MicroVmWebhooks, MicroVmWebhookVerificationError, verify_microvm_webhook
+from gigadrive import (
+    HttpClient,
+    MicroVmWebhooks,
+    MicroVmWebhookVerificationError,
+    verify_microvm_webhook,
+)
 
 # The reference vector of the Standard Webhooks specification.
 SECRET = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
@@ -30,8 +35,14 @@ def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_accepts_the_reference_request() -> None:
     assert verify_microvm_webhook(BODY, HEADERS, SECRET) == {"test": 2432232314}
-    assert verify_microvm_webhook(BODY.encode(), {k.title(): v for k, v in HEADERS.items()}, SECRET)
-    assert verify_microvm_webhook(BODY, {**HEADERS, "webhook-signature": "v1,bm9wZQ== " + HEADERS["webhook-signature"]}, SECRET)
+    assert verify_microvm_webhook(
+        BODY.encode(), {k.title(): v for k, v in HEADERS.items()}, SECRET
+    )
+    assert verify_microvm_webhook(
+        BODY,
+        {**HEADERS, "webhook-signature": "v1,bm9wZQ== " + HEADERS["webhook-signature"]},
+        SECRET,
+    )
 
 
 @pytest.mark.parametrize(
@@ -42,18 +53,29 @@ def test_accepts_the_reference_request() -> None:
         (BODY, {**HEADERS, "webhook-id": "msg_other"}, SECRET),
         (BODY, {**HEADERS, "webhook-signature": "v1,%%%"}, SECRET),
         (BODY, {**HEADERS, "webhook-signature": "v2,g0hM9SsE+OTPJTGt"}, SECRET),
-        (BODY, {"webhook-id": HEADERS["webhook-id"], "webhook-timestamp": HEADERS["webhook-timestamp"]}, SECRET),
+        (
+            BODY,
+            {
+                "webhook-id": HEADERS["webhook-id"],
+                "webhook-timestamp": HEADERS["webhook-timestamp"],
+            },
+            SECRET,
+        ),
         (BODY, {**HEADERS, "webhook-timestamp": "1614265330.5"}, SECRET),
         (BODY, {**HEADERS, "webhook-timestamp": "\u00b2"}, SECRET),
         (BODY, {**HEADERS, "webhook-timestamp": "9" * 5000}, SECRET),
     ],
 )
-def test_rejects_tampered_or_incomplete_requests(body: str, headers: dict, secret: str) -> None:
+def test_rejects_tampered_or_incomplete_requests(
+    body: str, headers: dict, secret: str
+) -> None:
     with pytest.raises(MicroVmWebhookVerificationError):
         verify_microvm_webhook(body, headers, secret)
 
 
-def test_rejects_old_timestamps_unless_the_tolerance_allows_them(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rejects_old_timestamps_unless_the_tolerance_allows_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr("gigadrive.webhooks.time.time", lambda: 1614265330 + 301)
     with pytest.raises(MicroVmWebhookVerificationError, match="timestamp"):
         verify_microvm_webhook(BODY, HEADERS, SECRET)
@@ -61,14 +83,25 @@ def test_rejects_old_timestamps_unless_the_tolerance_allows_them(monkeypatch: py
 
 
 def test_rejects_a_signed_body_that_is_not_json() -> None:
-    key = base64.b64decode(SECRET[len("whsec_"):])
-    signature = base64.b64encode(hmac.new(key, b"msg_1.1614265330.not json", hashlib.sha256).digest()).decode()
-    headers = {"webhook-id": "msg_1", "webhook-timestamp": "1614265330", "webhook-signature": f"v1,{signature}"}
+    key = base64.b64decode(SECRET[len("whsec_") :])
+    signature = base64.b64encode(
+        hmac.new(key, b"msg_1.1614265330.not json", hashlib.sha256).digest()
+    ).decode()
+    headers = {
+        "webhook-id": "msg_1",
+        "webhook-timestamp": "1614265330",
+        "webhook-signature": f"v1,{signature}",
+    }
     with pytest.raises(MicroVmWebhookVerificationError, match="not JSON"):
         verify_microvm_webhook("not json", headers, SECRET)
 
 
-WEBHOOK = {"id": "wh-1", "url": "https://example.com/hooks", "events": ["microvm.stopped"], "enabled": True}
+WEBHOOK = {
+    "id": "wh-1",
+    "url": "https://example.com/hooks",
+    "events": ["microvm.stopped"],
+    "enabled": True,
+}
 
 
 def test_manages_webhooks() -> None:
@@ -88,10 +121,16 @@ def test_manages_webhooks() -> None:
         calls.append(request)
         return next(answers)
 
-    http = HttpClient(bearer_token="token", base_url="https://api.test", transport=httpx.MockTransport(record))
+    http = HttpClient(
+        bearer_token="token",
+        base_url="https://api.test",
+        transport=httpx.MockTransport(record),
+    )
     webhooks = MicroVmWebhooks(client=http)
 
-    created = webhooks.create("https://example.com/hooks", ["microvm.stopped"], application_id="app-1")
+    created = webhooks.create(
+        "https://example.com/hooks", ["microvm.stopped"], application_id="app-1"
+    )
     assert created["secret"] == "whsec_c2VjcmV0"
     assert webhooks.list("app-1") == [WEBHOOK]
     assert webhooks.update("wh-1", enabled=False)["enabled"] is False

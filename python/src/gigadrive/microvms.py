@@ -12,7 +12,18 @@ import base64
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterator, List, Literal, Mapping, Optional, Sequence, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+)
 from urllib.parse import quote
 
 from ._client import HttpClient
@@ -94,7 +105,9 @@ class FileEntry:
 class Command:
     """A command started with :meth:`MicroVM.spawn`. Its output stays in the microVM."""
 
-    def __init__(self, http: HttpClient, microvm_id: str, info: Mapping[str, Any]) -> None:
+    def __init__(
+        self, http: HttpClient, microvm_id: str, info: Mapping[str, Any]
+    ) -> None:
         self._http = http
         self._microvm_id = microvm_id
         self.info: Dict[str, Any] = dict(info)
@@ -124,10 +137,16 @@ class Command:
         while self.status != "exited":
             remaining_ms = _COMMAND_WAIT_SLICE_MS
             if deadline is not None:
-                remaining_ms = min(remaining_ms, int((deadline - time.monotonic()) * 1000))
+                remaining_ms = min(
+                    remaining_ms, int((deadline - time.monotonic()) * 1000)
+                )
                 if remaining_ms <= 0:
-                    raise MicroVmTimeoutError(f"The command {self.id} is still running after {timeout} s")
-            self.info = self._http.json("POST", f"{self._path()}/wait", json={"timeoutMs": remaining_ms})
+                    raise MicroVmTimeoutError(
+                        f"The command {self.id} is still running after {timeout} s"
+                    )
+            self.info = self._http.json(
+                "POST", f"{self._path()}/wait", json={"timeoutMs": remaining_ms}
+            )
         return self
 
     def kill(self, signal: str = "SIGTERM") -> None:
@@ -156,7 +175,11 @@ class Command:
         for event, data in _sse_events(response.iter_lines()):
             if event in ("stdout", "stderr"):
                 payload = json.loads(data)
-                yield OutputChunk(stream=event, data=base64.b64decode(payload["data"]), offset=payload.get("offset", 0))
+                yield OutputChunk(
+                    stream=event,
+                    data=base64.b64decode(payload["data"]),
+                    offset=payload.get("offset", 0),
+                )
             elif event == "exit":
                 payload = json.loads(data)
                 self.info.update(
@@ -193,12 +216,16 @@ class Files:
         self._base = f"{_vm_path(microvm_id)}/files"
 
     def read(self, path: str) -> bytes:
-        return self._http.request("GET", f"{self._base}/content", params={"path": path}).content
+        return self._http.request(
+            "GET", f"{self._base}/content", params={"path": path}
+        ).content
 
     def read_text(self, path: str, encoding: str = "utf-8") -> str:
         return self.read(path).decode(encoding)
 
-    def write(self, path: str, content: Union[str, bytes], *, mode: Optional[int] = None) -> FileEntry:
+    def write(
+        self, path: str, content: Union[str, bytes], *, mode: Optional[int] = None
+    ) -> FileEntry:
         """Write a file, creating its parent directories."""
         payload = content.encode() if isinstance(content, str) else content
         raw = self._http.json(
@@ -208,15 +235,27 @@ class Files:
             params={"path": path, "mode": None if mode is None else format(mode, "o")},
             headers={"Content-Type": "application/octet-stream"},
         )
-        return FileEntry._from(raw) if isinstance(raw, dict) and "path" in raw else FileEntry(path, path, "file", len(payload), "", None)
+        return (
+            FileEntry._from(raw)
+            if isinstance(raw, dict) and "path" in raw
+            else FileEntry(path, path, "file", len(payload), "", None)
+        )
 
-    def list(self, path: str = ".", *, recursive: bool = False, depth: Optional[int] = None) -> List[FileEntry]:
-        body = self._http.json("GET", self._base, params={"path": path, "recursive": recursive or None, "depth": depth})
+    def list(
+        self, path: str = ".", *, recursive: bool = False, depth: Optional[int] = None
+    ) -> List[FileEntry]:
+        body = self._http.json(
+            "GET",
+            self._base,
+            params={"path": path, "recursive": recursive or None, "depth": depth},
+        )
         entries = body.get("entries", []) if isinstance(body, dict) else body
         return [FileEntry._from(entry) for entry in entries]
 
     def stat(self, path: str) -> FileEntry:
-        return FileEntry._from(self._http.json("GET", f"{self._base}/stat", params={"path": path}))
+        return FileEntry._from(
+            self._http.json("GET", f"{self._base}/stat", params={"path": path})
+        )
 
     def exists(self, path: str) -> bool:
         try:
@@ -226,13 +265,23 @@ class Files:
             return False
 
     def mkdir(self, path: str, *, parents: bool = True) -> FileEntry:
-        return FileEntry._from(self._http.json("POST", f"{self._base}/mkdir", json={"path": path, "parents": parents}))
+        return FileEntry._from(
+            self._http.json(
+                "POST", f"{self._base}/mkdir", json={"path": path, "parents": parents}
+            )
+        )
 
     def remove(self, path: str, *, recursive: bool = False) -> None:
-        self._http.request("DELETE", self._base, params={"path": path, "recursive": recursive or None})
+        self._http.request(
+            "DELETE", self._base, params={"path": path, "recursive": recursive or None}
+        )
 
     def move(self, source: str, destination: str) -> FileEntry:
-        return FileEntry._from(self._http.json("POST", f"{self._base}/move", json={"from": source, "to": destination}))
+        return FileEntry._from(
+            self._http.json(
+                "POST", f"{self._base}/move", json={"from": source, "to": destination}
+            )
+        )
 
 
 class MicroVM:
@@ -241,7 +290,9 @@ class MicroVM:
     Used as a context manager, it is stopped when the block ends.
     """
 
-    def __init__(self, http: HttpClient, info: Mapping[str, Any], *, owns_client: bool = False) -> None:
+    def __init__(
+        self, http: HttpClient, info: Mapping[str, Any], *, owns_client: bool = False
+    ) -> None:
         self._http = http
         self._owns_client = owns_client
         self.info: Dict[str, Any] = dict(info)
@@ -269,6 +320,7 @@ class MicroVM:
         allow: Optional[Sequence[str]] = None,
         private_previews: bool = False,
         region: Optional[str] = None,
+        volumes: Optional[Mapping[str, str]] = None,
         application_id: Optional[str] = None,
         client: Optional[HttpClient] = None,
         wait: bool = True,
@@ -280,6 +332,8 @@ class MicroVM:
         outbound traffic to these domain names and public IPv4 networks.
         ``on_timeout="pause"`` pauses it when the timeout ends instead of
         stopping it, and ``auto_resume=True`` resumes it when it is used.
+        ``volumes`` maps up to 4 volume IDs to mount paths, such as
+        ``{volume["id"]: "/data"}``; they are saved when the microVM stops.
         """
         http, owns = _resolve_client(client, client_options)
         network: Dict[str, Any] = {}
@@ -306,17 +360,31 @@ class MicroVM:
                 "metadata": dict(metadata) if metadata else None,
                 "region": region,
                 "network": network or None,
+                "volumes": [
+                    {"volumeId": volume_id, "mountPath": path}
+                    for volume_id, path in volumes.items()
+                ]
+                if volumes
+                else None,
             }.items()
             if value is not None
         }
-        info = http.json("POST", "/microvms", json=body, params={"wait": False if not wait else None})
+        info = http.json(
+            "POST", "/microvms", json=body, params={"wait": False if not wait else None}
+        )
         vm = cls(http, info, owns_client=owns)
         if wait and vm.status != "running":
             vm.wait_until_running()
         return vm
 
     @classmethod
-    def get(cls, microvm_id: str, *, client: Optional[HttpClient] = None, **client_options: Any) -> "MicroVM":
+    def get(
+        cls,
+        microvm_id: str,
+        *,
+        client: Optional[HttpClient] = None,
+        **client_options: Any,
+    ) -> "MicroVM":
         http, owns = _resolve_client(client, client_options)
         return cls(http, http.json("GET", _vm_path(microvm_id)), owns_client=owns)
 
@@ -334,7 +402,13 @@ class MicroVM:
         cursor: Optional[str] = None
         while True:
             body = http.json(
-                "GET", "/microvms", params={"applicationId": application_id, "status": status, "cursor": cursor}
+                "GET",
+                "/microvms",
+                params={
+                    "applicationId": application_id,
+                    "status": status,
+                    "cursor": cursor,
+                },
             )
             for info in body.get("data", body.get("items", [])):
                 yield cls(http, info)
@@ -361,9 +435,13 @@ class MicroVM:
         deadline = time.monotonic() + timeout
         while self.status != "running":
             if self.status in ("stopped", "failed"):
-                raise MicroVmTimeoutError(f"The microVM {self.id} is {self.status}: {self.info.get('stopReason')}")
+                raise MicroVmTimeoutError(
+                    f"The microVM {self.id} is {self.status}: {self.info.get('stopReason')}"
+                )
             if time.monotonic() >= deadline:
-                raise MicroVmTimeoutError(f"The microVM {self.id} is still {self.status} after {timeout} s")
+                raise MicroVmTimeoutError(
+                    f"The microVM {self.id} is still {self.status} after {timeout} s"
+                )
             time.sleep(_POLL_INTERVAL_S)
             self.refresh()
         return self
@@ -373,7 +451,9 @@ class MicroVM:
         for entry in self.info.get("ports", []):
             if entry.get("port") == port:
                 return entry["url"]
-        raise ValueError(f"Port {port} is not exposed; create the microVM with ports=[{port}]")
+        raise ValueError(
+            f"Port {port} is not exposed; create the microVM with ports=[{port}]"
+        )
 
     # -- commands -----------------------------------------------------------
 
@@ -398,7 +478,10 @@ class MicroVM:
         start = _command_body(cmd, args, cwd, env, user, timeout)
         if on_stdout is None and on_stderr is None:
             raw = self._http.json(
-                "POST", f"{_vm_path(self.id)}/commands", json={**start, "wait": True}, timeout=None
+                "POST",
+                f"{_vm_path(self.id)}/commands",
+                json={**start, "wait": True},
+                timeout=None,
             )
             result = CommandResult(
                 command_id=raw["id"],
@@ -412,7 +495,9 @@ class MicroVM:
             )
         else:
             started = time.monotonic()
-            command = self.spawn(cmd, args, cwd=cwd, env=env, user=user, timeout=timeout)
+            command = self.spawn(
+                cmd, args, cwd=cwd, env=env, user=user, timeout=timeout
+            )
             output = {"stdout": [], "stderr": []}
             for chunk in command.logs():
                 output[chunk.stream].append(chunk.text)
@@ -450,13 +535,19 @@ class MicroVM:
         body = {**_command_body(cmd, args, cwd, env, user, timeout), "wait": False}
         if stdin:
             body["stdin"] = True
-        return Command(self._http, self.id, self._http.json("POST", f"{_vm_path(self.id)}/commands", json=body))
+        return Command(
+            self._http,
+            self.id,
+            self._http.json("POST", f"{_vm_path(self.id)}/commands", json=body),
+        )
 
     # -- lifecycle ----------------------------------------------------------
 
     def extend_timeout(self, seconds: float) -> "MicroVM":
         """Stop the microVM ``seconds`` from now (within the plan's maximum lifetime)."""
-        self.info = self._http.json("POST", f"{_vm_path(self.id)}/timeout", json={"timeoutMs": _ms(seconds)})
+        self.info = self._http.json(
+            "POST", f"{_vm_path(self.id)}/timeout", json={"timeoutMs": _ms(seconds)}
+        )
         return self
 
     def get_metrics(self, window_minutes: Optional[int] = None) -> Dict[str, Any]:
@@ -466,10 +557,14 @@ class MicroVM:
         unless the microVM is running. Reading metrics never resumes a paused microVM.
         """
         return self._http.json(
-            "GET", f"{_vm_path(self.id)}/metrics", params={"windowMinutes": window_minutes}
+            "GET",
+            f"{_vm_path(self.id)}/metrics",
+            params={"windowMinutes": window_minutes},
         )
 
-    def update_network(self, egress: Egress = "allow", allow: Optional[Sequence[str]] = None) -> "MicroVM":
+    def update_network(
+        self, egress: Egress = "allow", allow: Optional[Sequence[str]] = None
+    ) -> "MicroVM":
         """Replace what the microVM may reach, without restarting it."""
         body: Dict[str, Any] = {"egress": egress}
         if allow:
@@ -486,17 +581,41 @@ class MicroVM:
         self.info = self._http.json("POST", f"{_vm_path(self.id)}/resume", timeout=None)
         return self
 
-    def snapshot(self, name: Optional[str] = None, *, expires_in: Optional[float] = None) -> Dict[str, Any]:
+    def snapshot(
+        self, name: Optional[str] = None, *, expires_in: Optional[float] = None
+    ) -> Dict[str, Any]:
         """Capture memory, processes and disk; create new microVMs from it with ``snapshot_id``."""
-        body = {key: value for key, value in {"name": name, "expiresInMs": _ms(expires_in)}.items() if value is not None}
-        return self._http.json("POST", f"{_vm_path(self.id)}/snapshots", json=body, timeout=None)
+        body = {
+            key: value
+            for key, value in {"name": name, "expiresInMs": _ms(expires_in)}.items()
+            if value is not None
+        }
+        return self._http.json(
+            "POST", f"{_vm_path(self.id)}/snapshots", json=body, timeout=None
+        )
 
     def rotate_preview_token(self) -> str:
-        self.preview_token = self._http.json("POST", f"{_vm_path(self.id)}/preview-token")["previewToken"]
+        self.preview_token = self._http.json(
+            "POST", f"{_vm_path(self.id)}/preview-token"
+        )["previewToken"]
         return self.preview_token
 
-    def stop(self) -> "MicroVM":
+    def stop(self, timeout: float = 600.0) -> "MicroVM":
+        """Stop the microVM. Attached volumes are saved first; this returns once they are."""
         self.info = self._http.json("POST", f"{_vm_path(self.id)}/stop")
+        deadline = time.monotonic() + timeout
+        while self.status == "stopping":
+            if time.monotonic() >= deadline:
+                raise MicroVmTimeoutError(
+                    f"The microVM {self.id} is still saving its volumes after {timeout} s"
+                )
+            time.sleep(1.0)
+            self.refresh()
+        return self
+
+    def save_volumes(self) -> "MicroVM":
+        """Save the attached volumes now, without stopping the microVM."""
+        self.info = self._http.json("POST", f"{_vm_path(self.id)}/volumes/save")
         return self
 
     def delete(self) -> None:
@@ -539,7 +658,9 @@ def _command_body(
     return body
 
 
-def _resolve_client(client: Optional[HttpClient], options: Dict[str, Any]) -> "tuple[HttpClient, bool]":
+def _resolve_client(
+    client: Optional[HttpClient], options: Dict[str, Any]
+) -> "tuple[HttpClient, bool]":
     if client is not None:
         return client, False
     return HttpClient(**options), True

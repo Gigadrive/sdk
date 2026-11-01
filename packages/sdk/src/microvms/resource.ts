@@ -18,6 +18,7 @@ import type {
   CreatedMicroVmInfo,
   CreateMicroVmImageInput,
   CreateMicroVmInput,
+  CreateMicroVmVolumeInput,
   CreateMicroVmWebhookInput,
   FileEntry,
   FileListing,
@@ -31,6 +32,7 @@ import type {
   MicroVmInfo,
   MicroVmMetrics,
   MicroVmPage,
+  MicroVmVolume,
   MicroVmWebhook,
   MicroVmWebhookDelivery,
   MicroVmWebhookWithSecret,
@@ -660,6 +662,72 @@ export class MicroVmWebhooksResource extends BaseResource {
   }
 }
 
+const volumePath = (volumeId: string) => `/microvm-volumes/${encodeURIComponent(volumeId)}`;
+
+/**
+ * Persistent volumes: `client.microvms.volumes`. A volume is an ext4
+ * filesystem that outlives the microVMs it is attached to: attach it at
+ * create with `volumes: [{ volumeId, mountPath }]`, and what the microVM
+ * wrote there is saved when it stops.
+ *
+ * @example
+ * ```ts
+ * const volume = await client.microvms.volumes.create({ name: 'cache', sizeMb: 20480 });
+ * const vm = await MicroVM.create({ volumes: [{ volumeId: volume.id, mountPath: '/cache' }] });
+ * ```
+ */
+export class MicroVmVolumesResource extends BaseResource {
+  private readonly defaultApplicationId: string | undefined;
+
+  constructor(httpClient: HttpClient, defaultApplicationId?: string) {
+    super(httpClient);
+    this.defaultApplicationId = defaultApplicationId || undefined;
+  }
+
+  /** List the application's volumes, oldest first (`GET /microvm-volumes`), following every page. */
+  async list(query: { applicationId?: string } = {}, options: MicroVmRequestOptions = {}): Promise<MicroVmVolume[]> {
+    const volumes: MicroVmVolume[] = [];
+    let cursor: string | undefined;
+    do {
+      const body = await this.httpClient.get<{
+        data?: MicroVmVolume[];
+        pagination?: { nextCursor?: string | null; hasMore?: boolean } | null;
+      }>('/microvm-volumes', {
+        query: { applicationId: query.applicationId ?? this.defaultApplicationId, cursor },
+        signal: options.signal,
+      });
+      volumes.push(...unwrapList<MicroVmVolume>(body));
+      cursor = body.pagination?.hasMore ? (body.pagination.nextCursor ?? undefined) : undefined;
+    } while (cursor);
+    return volumes;
+  }
+
+  /** Create an empty volume (`POST /microvm-volumes`). It is formatted when a microVM first attaches it. */
+  create(input: CreateMicroVmVolumeInput, options: MicroVmRequestOptions = {}): Promise<MicroVmVolume> {
+    const applicationId = input.applicationId ?? this.defaultApplicationId;
+    return this.httpClient.post<MicroVmVolume>(
+      '/microvm-volumes',
+      applicationId ? { ...input, applicationId } : input,
+      options
+    );
+  }
+
+  /** Get one volume (`GET /microvm-volumes/:id`). */
+  get(volumeId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmVolume> {
+    return this.httpClient.get<MicroVmVolume>(volumePath(volumeId), options);
+  }
+
+  /** Rename a volume (`PATCH /microvm-volumes/:id`). */
+  rename(volumeId: string, name: string, options: MicroVmRequestOptions = {}): Promise<MicroVmVolume> {
+    return this.httpClient.patch<MicroVmVolume>(volumePath(volumeId), { name }, options);
+  }
+
+  /** Delete a volume and its contents (`DELETE /microvm-volumes/:id`). An attached volume cannot be deleted. */
+  async delete(volumeId: string, options: MicroVmRequestOptions = {}): Promise<void> {
+    await this.httpClient.delete<void>(volumePath(volumeId), options);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // microVMs
 // ---------------------------------------------------------------------------
@@ -694,6 +762,8 @@ export class MicroVmsResource extends BaseResource {
   readonly images: MicroVmImagesResource;
   /** Lifecycle webhooks of an application. */
   readonly webhooks: MicroVmWebhooksResource;
+  /** Persistent volumes of an application. */
+  readonly volumes: MicroVmVolumesResource;
 
   private readonly defaultApplicationId: string | undefined;
 
@@ -704,6 +774,7 @@ export class MicroVmsResource extends BaseResource {
     this.files = new MicroVmFilesResource(httpClient);
     this.images = new MicroVmImagesResource(httpClient, defaultApplicationId);
     this.webhooks = new MicroVmWebhooksResource(httpClient, defaultApplicationId);
+    this.volumes = new MicroVmVolumesResource(httpClient, defaultApplicationId);
   }
 
   /**
@@ -828,7 +899,24 @@ export class MicroVmsResource extends BaseResource {
     );
   }
 
-  /** Stop a microVM (`POST /microvms/:id/stop`). Its disk and memory are discarded. */
+  /**
+   * Save the attached volumes of a running microVM, which keeps running
+   * (`POST /microvms/:id/volumes/save`). Resolves once the save committed;
+   * with `wait: false` it resolves at once.
+   */
+  saveVolumes(microvmId: string, options: { wait?: boolean } & MicroVmRequestOptions = {}): Promise<MicroVmInfo> {
+    return typed(
+      this.httpClient.post<MicroVmInfo>(`${vmPath(microvmId)}/volumes/save`, undefined, {
+        query: { wait: options.wait === false ? false : undefined },
+        signal: options.signal,
+      })
+    );
+  }
+
+  /**
+   * Stop a microVM (`POST /microvms/:id/stop`). Its disk and memory are
+   * discarded. A microVM with volumes answers `stopping` while they are saved.
+   */
   stop(microvmId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmInfo> {
     return typed(this.httpClient.post<MicroVmInfo>(`${vmPath(microvmId)}/stop`, undefined, options));
   }
