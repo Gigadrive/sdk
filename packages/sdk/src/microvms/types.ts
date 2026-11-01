@@ -405,3 +405,78 @@ export interface MicroVmMetrics {
   /** `null` unless the microVM is running and answered within 3 seconds. */
   current: MicroVmCurrentUsage | null;
 }
+
+/** A microVM lifecycle event a webhook can subscribe to. */
+export type MicroVmWebhookEventType =
+  'microvm.created' | 'microvm.running' | 'microvm.paused' | 'microvm.stopped' | 'microvm.failed';
+
+/** An HTTPS endpoint that receives an application's microVM lifecycle events. */
+export interface MicroVmWebhook {
+  id: string;
+  applicationId: string;
+  url: string;
+  description: string | null;
+  events: MicroVmWebhookEventType[];
+  /** A disabled webhook receives no new events. */
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A webhook with its signing secret, returned only on create and on secret rotation. */
+export interface MicroVmWebhookWithSecret extends MicroVmWebhook {
+  /** `whsec_...`: pass it to `verifyMicroVmWebhook`. It is never shown again. */
+  secret: string;
+}
+
+/** Input of `client.microvms.webhooks.create`. */
+export interface CreateMicroVmWebhookInput {
+  /** Defaults to the client's `applicationId`; inferred for application and deployment credentials. */
+  applicationId?: string;
+  /** An `https` URL on a public host. */
+  url: string;
+  events: MicroVmWebhookEventType[];
+  description?: string;
+}
+
+/** Input of `client.microvms.webhooks.update`; omitted fields stay as they are. */
+export interface UpdateMicroVmWebhookInput {
+  url?: string;
+  events?: MicroVmWebhookEventType[];
+  /** `null` or an empty string removes it. */
+  description?: string | null;
+  enabled?: boolean;
+}
+
+/** One event sent (or still to be sent) to a webhook. */
+export interface MicroVmWebhookDelivery {
+  id: string;
+  /** The `webhook-id` header of the request, the same on every retry. */
+  messageId: string;
+  eventType: MicroVmWebhookEventType;
+  microvmId: string;
+  status: 'pending' | 'delivered' | 'failed';
+  attempts: number;
+  /** HTTP status of the last attempt, `null` when it got no answer. */
+  lastStatusCode: number | null;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+}
+
+/** The JSON body of a webhook request, as `verifyMicroVmWebhook` returns it. */
+export interface MicroVmWebhookEvent {
+  type: MicroVmWebhookEventType;
+  /** ISO 8601 time the microVM changed state. */
+  timestamp: string;
+  data: {
+    microvmId: string;
+    applicationId: string;
+    organizationId: string;
+    /** The state the microVM reached. */
+    status: MicroVmStatus;
+    /** The state it left; `null` for `microvm.created`. */
+    previousStatus: MicroVmStatus | null;
+  };
+}

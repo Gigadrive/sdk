@@ -18,6 +18,7 @@ import type {
   CreatedMicroVmInfo,
   CreateMicroVmImageInput,
   CreateMicroVmInput,
+  CreateMicroVmWebhookInput,
   FileEntry,
   FileListing,
   FileWriteResult,
@@ -30,8 +31,12 @@ import type {
   MicroVmInfo,
   MicroVmMetrics,
   MicroVmPage,
+  MicroVmWebhook,
+  MicroVmWebhookDelivery,
+  MicroVmWebhookWithSecret,
   PtySize,
   StartCommandInput,
+  UpdateMicroVmWebhookInput,
 } from './types';
 
 /** Content accepted by file writes: text (UTF-8), bytes, a `Blob`/`File`, or a web `ReadableStream`. */
@@ -575,6 +580,87 @@ export class MicroVmImagesResource extends BaseResource {
 }
 
 // ---------------------------------------------------------------------------
+// Webhooks
+// ---------------------------------------------------------------------------
+
+const webhookPath = (webhookId: string) => `/microvm-webhooks/${encodeURIComponent(webhookId)}`;
+
+/**
+ * microVM lifecycle webhooks: `client.microvms.webhooks`. A webhook receives a
+ * signed `POST` whenever a microVM of its application is created, starts,
+ * pauses, stops or fails. Verify each request with `verifyMicroVmWebhook`.
+ *
+ * @example
+ * ```ts
+ * const webhook = await client.microvms.webhooks.create({
+ *   url: 'https://example.com/hooks/microvms',
+ *   events: ['microvm.stopped', 'microvm.failed'],
+ * });
+ * // Store webhook.secret now: it is never shown again.
+ * ```
+ */
+export class MicroVmWebhooksResource extends BaseResource {
+  private readonly defaultApplicationId: string | undefined;
+
+  constructor(httpClient: HttpClient, defaultApplicationId?: string) {
+    super(httpClient);
+    this.defaultApplicationId = defaultApplicationId || undefined;
+  }
+
+  /** List the application's webhooks, oldest first, without secrets (`GET /microvm-webhooks`). */
+  async list(query: { applicationId?: string } = {}, options: MicroVmRequestOptions = {}): Promise<MicroVmWebhook[]> {
+    const body = await this.httpClient.get<unknown>('/microvm-webhooks', {
+      query: { applicationId: query.applicationId ?? this.defaultApplicationId },
+      signal: options.signal,
+    });
+    return unwrapList<MicroVmWebhook>(body);
+  }
+
+  /**
+   * Add a webhook (`POST /microvm-webhooks`). The result carries the signing
+   * secret, shown only this once. An application has at most 10 webhooks.
+   */
+  create(input: CreateMicroVmWebhookInput, options: MicroVmRequestOptions = {}): Promise<MicroVmWebhookWithSecret> {
+    const applicationId = input.applicationId ?? this.defaultApplicationId;
+    return this.httpClient.post<MicroVmWebhookWithSecret>(
+      '/microvm-webhooks',
+      applicationId ? { ...input, applicationId } : input,
+      options
+    );
+  }
+
+  /** Get one webhook, without its secret (`GET /microvm-webhooks/:id`). */
+  get(webhookId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmWebhook> {
+    return this.httpClient.get<MicroVmWebhook>(webhookPath(webhookId), options);
+  }
+
+  /** Change a webhook's URL, events, description or enabled state (`PATCH /microvm-webhooks/:id`). */
+  update(
+    webhookId: string,
+    input: UpdateMicroVmWebhookInput,
+    options: MicroVmRequestOptions = {}
+  ): Promise<MicroVmWebhook> {
+    return this.httpClient.patch<MicroVmWebhook>(webhookPath(webhookId), input, options);
+  }
+
+  /** Delete a webhook and the deliveries it still had to send (`DELETE /microvm-webhooks/:id`). */
+  async delete(webhookId: string, options: MicroVmRequestOptions = {}): Promise<void> {
+    await this.httpClient.delete<void>(webhookPath(webhookId), options);
+  }
+
+  /** Replace the signing secret; the old one stops signing at once (`POST /microvm-webhooks/:id/secret`). */
+  rotateSecret(webhookId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmWebhookWithSecret> {
+    return this.httpClient.post<MicroVmWebhookWithSecret>(`${webhookPath(webhookId)}/secret`, undefined, options);
+  }
+
+  /** The webhook's 50 most recent deliveries, newest first (`GET /microvm-webhooks/:id/deliveries`). */
+  async listDeliveries(webhookId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmWebhookDelivery[]> {
+    const body = await this.httpClient.get<unknown>(`${webhookPath(webhookId)}/deliveries`, options);
+    return unwrapList<MicroVmWebhookDelivery>(body);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // microVMs
 // ---------------------------------------------------------------------------
 
@@ -606,6 +692,8 @@ export class MicroVmsResource extends BaseResource {
   readonly files: MicroVmFilesResource;
   /** Built-in and custom images. */
   readonly images: MicroVmImagesResource;
+  /** Lifecycle webhooks of an application. */
+  readonly webhooks: MicroVmWebhooksResource;
 
   private readonly defaultApplicationId: string | undefined;
 
@@ -615,6 +703,7 @@ export class MicroVmsResource extends BaseResource {
     this.commands = new MicroVmCommandsResource(httpClient);
     this.files = new MicroVmFilesResource(httpClient);
     this.images = new MicroVmImagesResource(httpClient, defaultApplicationId);
+    this.webhooks = new MicroVmWebhooksResource(httpClient, defaultApplicationId);
   }
 
   /**
