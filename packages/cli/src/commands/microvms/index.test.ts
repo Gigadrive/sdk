@@ -14,6 +14,7 @@ import {
   createImage,
   createInput,
   createMicroVm,
+  createVolume,
   describeMicroVmMetrics,
   errorMessage,
   execInMicroVm,
@@ -148,6 +149,7 @@ const createFlags = (overrides: Partial<CreateFlags> = {}): CreateFlags => ({
   allowEgress: [],
   pauseOnTimeout: false,
   autoResume: false,
+  volumes: [],
   region: Option.none(),
   json: true,
   ...overrides,
@@ -983,5 +985,90 @@ describe('webhooks', () => {
 
     expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
     expect(api.calls).toHaveLength(0);
+  });
+});
+
+describe('volumes', () => {
+  const volume = {
+    id: '0193f2a1-0000-7000-8000-000000000001',
+    name: 'cache',
+    applicationId: 'app-linked',
+    organizationId: 'org-1',
+    sizeMb: 10240,
+    storedBytes: null,
+    status: 'available',
+    attachedMicrovmId: null,
+    lastSavedAt: null,
+    lastSaveError: null,
+    createdAt: '2026-11-01T12:00:00.000Z',
+    updatedAt: '2026-11-01T12:00:00.000Z',
+  };
+  const vm = {
+    id: 'vm-1',
+    slug: 'abc',
+    applicationId: 'app-linked',
+    organizationId: 'org-1',
+    status: 'running',
+    image: { id: 'img', name: 'node22' },
+    vcpus: 1,
+    memoryMb: 2048,
+    diskMb: 10240,
+    region: 'fr-par',
+    ports: [],
+    network: { egress: 'allow' },
+    metadata: {},
+    timeoutMs: 300000,
+    expiresAt: null,
+    createdAt: '2026-11-01T12:00:00.000Z',
+    startedAt: null,
+    stoppedAt: null,
+    stopReason: null,
+  };
+
+  it('attaches volumes by name or ID', async () => {
+    const api = fakeApi(
+      route('GET', '/microvm-volumes', () =>
+        json({ data: [volume], pagination: { nextCursor: null, hasMore: false } })
+      ),
+      route('POST', '/microvms', () => json(vm, 201))
+    );
+
+    await run(
+      createMicroVm(createFlags({ volumes: ['cache:/cache', '0193f2a1-0000-7000-8000-000000000002:/data'] })),
+      api.layer
+    );
+
+    const create = api.calls.find((call) => call.method === 'POST');
+    expect(create?.body).toMatchObject({
+      volumes: [
+        { volumeId: volume.id, mountPath: '/cache' },
+        { volumeId: '0193f2a1-0000-7000-8000-000000000002', mountPath: '/data' },
+      ],
+    });
+  });
+
+  it('refuses an unknown volume name, a missing path and more than four volumes', async () => {
+    const api = fakeApi(
+      route('GET', '/microvm-volumes', () => json({ data: [], pagination: { nextCursor: null, hasMore: false } }))
+    );
+
+    const unknown = await run(createMicroVm(createFlags({ volumes: ['nope:/data'] })), api.layer);
+    expect(Either.isLeft(unknown) && unknown.left._tag).toBe('InvalidMicroVmOptionsError');
+    expect(api.calls.some((call) => call.method === 'POST')).toBe(false);
+
+    for (const volumes of [['cache'], ['cache:data'], [':/data'], ['a:/a', 'b:/b', 'c:/c', 'd:/d', 'e:/e']]) {
+      const result = await run(createInput(createFlags({ volumes })), api.layer);
+      expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    }
+    const paused = await run(createInput(createFlags({ volumes: ['a:/a'], pauseOnTimeout: true })), api.layer);
+    expect(Either.isLeft(paused) && paused.left._tag).toBe('InvalidMicroVmOptionsError');
+  });
+
+  it('creates a volume for the linked application', async () => {
+    const api = fakeApi(route('POST', '/microvm-volumes', () => json(volume, 201)));
+
+    await run(createVolume({ name: 'cache', size: Option.some(20480), app: Option.none(), json: true }), api.layer);
+
+    expect(api.calls[0]?.body).toEqual({ applicationId: 'app-linked', name: 'cache', sizeMb: 20480 });
   });
 });

@@ -269,6 +269,7 @@ class MicroVM:
         allow: Optional[Sequence[str]] = None,
         private_previews: bool = False,
         region: Optional[str] = None,
+        volumes: Optional[Mapping[str, str]] = None,
         application_id: Optional[str] = None,
         client: Optional[HttpClient] = None,
         wait: bool = True,
@@ -280,6 +281,8 @@ class MicroVM:
         outbound traffic to these domain names and public IPv4 networks.
         ``on_timeout="pause"`` pauses it when the timeout ends instead of
         stopping it, and ``auto_resume=True`` resumes it when it is used.
+        ``volumes`` maps up to 4 volume IDs to mount paths, such as
+        ``{volume["id"]: "/data"}``; they are saved when the microVM stops.
         """
         http, owns = _resolve_client(client, client_options)
         network: Dict[str, Any] = {}
@@ -306,6 +309,7 @@ class MicroVM:
                 "metadata": dict(metadata) if metadata else None,
                 "region": region,
                 "network": network or None,
+                "volumes": [{"volumeId": key, "mountPath": path} for key, path in volumes.items()] if volumes else None,
             }.items()
             if value is not None
         }
@@ -495,8 +499,20 @@ class MicroVM:
         self.preview_token = self._http.json("POST", f"{_vm_path(self.id)}/preview-token")["previewToken"]
         return self.preview_token
 
-    def stop(self) -> "MicroVM":
+    def stop(self, timeout: float = 600.0) -> "MicroVM":
+        """Stop the microVM. Attached volumes are saved first; this returns once they are."""
         self.info = self._http.json("POST", f"{_vm_path(self.id)}/stop")
+        deadline = time.monotonic() + timeout
+        while self.status == "stopping":
+            if time.monotonic() >= deadline:
+                raise MicroVmTimeoutError(f"The microVM {self.id} is still saving its volumes after {timeout} s")
+            time.sleep(1.0)
+            self.refresh()
+        return self
+
+    def save_volumes(self) -> "MicroVM":
+        """Save the attached volumes now, without stopping the microVM."""
+        self.info = self._http.json("POST", f"{_vm_path(self.id)}/volumes/save")
         return self
 
     def delete(self) -> None:

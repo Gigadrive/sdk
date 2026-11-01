@@ -1,4 +1,11 @@
-import type { CommandInfo, MicroVmImage, MicroVmInfo, MicroVmWebhook, MicroVmWebhookDelivery } from '@gigadrive/sdk';
+import type {
+  CommandInfo,
+  MicroVmImage,
+  MicroVmInfo,
+  MicroVmVolume,
+  MicroVmWebhook,
+  MicroVmWebhookDelivery,
+} from '@gigadrive/sdk';
 
 /**
  * Pure helpers for the `gigadrive microvms` commands: argument parsing,
@@ -212,6 +219,20 @@ export const formatWebhookTable = (webhooks: ReadonlyArray<MicroVmWebhook>): str
       webhook.events.join(','),
       webhook.enabled ? 'enabled' : 'disabled',
       webhook.id,
+    ]),
+  ]);
+
+/** Rows of `gigadrive microvms volumes ls`. */
+export const formatVolumeTable = (volumes: ReadonlyArray<MicroVmVolume>): string[] =>
+  formatTable([
+    ['NAME', 'SIZE', 'STORED', 'STATUS', 'LAST SAVED', 'ID'],
+    ...volumes.map((volume) => [
+      volume.name,
+      `${String(volume.sizeMb)} MiB`,
+      volume.storedBytes === null ? '-' : formatBytes(volume.storedBytes),
+      volume.attachedMicrovmId ? `${volume.status} (${volume.attachedMicrovmId})` : volume.status,
+      volume.lastSaveError ? `failed: ${volume.lastSaveError}` : (volume.lastSavedAt ?? 'never'),
+      volume.id,
     ]),
   ]);
 

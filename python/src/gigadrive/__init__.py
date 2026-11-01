@@ -23,6 +23,7 @@ from .errors import (
     MicroVmUnreachableError,
 )
 from .microvms import Command, CommandResult, FileEntry, Files, MicroVM, OutputChunk
+from .volumes import MicroVmVolumes
 from .webhooks import MicroVmWebhooks, MicroVmWebhookVerificationError, verify_microvm_webhook
 
 __version__ = "0.1.0"
@@ -48,6 +49,7 @@ __all__ = [
     "MicroVmTimeoutError",
     "MicroVmUnreachableError",
     "MicroVmWebhookVerificationError",
+    "MicroVmVolumes",
     "MicroVmWebhooks",
     "OutputChunk",
     "verify_microvm_webhook",

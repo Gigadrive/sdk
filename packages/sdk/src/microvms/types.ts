@@ -102,6 +102,8 @@ export interface MicroVmInfo {
   stoppedAt: string | null;
   /** Why the microVM stopped, such as `timeout`, `user`, `host_lost` or `maintenance`. */
   stopReason: string | null;
+  /** Volumes attached at create, with their mount paths. */
+  volumes?: MicroVmVolumeAttachment[];
 }
 
 /** The create answer: a microVM with private previews also carries its preview token, shown only here. */
@@ -144,6 +146,57 @@ export interface CreateMicroVmInput {
   /** Region to place the microVM in. Defaults to the platform's choice. */
   region?: string;
   network?: MicroVmNetworkPolicy;
+  /**
+   * Up to 4 volumes to attach, each at its own mount path. A volume is attached
+   * to one live microVM at a time and is saved when the microVM stops. Not
+   * combinable with `onTimeout: 'pause'`.
+   */
+  volumes?: MicroVmVolumeAttachment[];
+}
+
+/** A volume attached to a microVM. */
+export interface MicroVmVolumeAttachment {
+  volumeId: string;
+  /** Absolute path the volume is mounted at, such as `/data`. */
+  mountPath: string;
+}
+
+/**
+ * `available`: no microVM holds it. `in_use`: attached to a live microVM.
+ * `saving`: its microVM is stopping and the volume is being saved.
+ */
+export type MicroVmVolumeStatus = 'available' | 'in_use' | 'saving';
+
+/** A persistent filesystem that outlives the microVMs it is attached to. */
+export interface MicroVmVolume {
+  id: string;
+  /** Unique per application. */
+  name: string;
+  applicationId: string;
+  organizationId: string;
+  /** Size of the filesystem in MiB. */
+  sizeMb: number;
+  /** Stored bytes of the last save, or `null` before the first save. */
+  storedBytes: number | null;
+  status: MicroVmVolumeStatus;
+  /** The microVM it is attached to, or `null`. */
+  attachedMicrovmId: string | null;
+  /** ISO 8601 time of the last successful save. */
+  lastSavedAt: string | null;
+  /** Why the last save failed; the volume kept its previous contents. */
+  lastSaveError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Body of `POST /microvm-volumes`. */
+export interface CreateMicroVmVolumeInput {
+  /** Defaults like `CreateMicroVmInput.applicationId`. */
+  applicationId?: string;
+  /** 1 to 64 characters of lowercase letters, digits and `-`, starting with a letter or digit. */
+  name: string;
+  /** 1024 to 51200. Default 10240. */
+  sizeMb?: number;
 }
 
 /** Query of `GET /microvms`. */

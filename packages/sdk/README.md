@@ -363,6 +363,7 @@ nothing needs configuring. Built-in images: `node22`, `node24`, `python3.13`,
 | Network               | `vm.updateNetwork('deny')`, `vm.updateNetwork({ egress: 'allow', allow: ['registry.npmjs.org', '*.github.com'] })`: change what it may reach while it runs                                                                                             |
 | Metrics               | `vm.getMetrics({ windowMinutes: 60 })` → `{ cpu: [{ time, cpuPercent }], current: { memoryUsedBytes, memoryTotalBytes, diskUsedBytes, diskTotalBytes } \| null }`                                                                                      |
 | Webhooks              | `client.microvms.webhooks.create({ url, events: ['microvm.stopped'] })` → `{ id, secret }`, `.list()`, `.update(id, { enabled })`, `.rotateSecret(id)`, `.listDeliveries(id)`; verify a request with `verifyMicroVmWebhook({ body, headers, secret })` |
+| Volumes               | `client.microvms.volumes.create({ name: 'cache' })`, attach with `MicroVM.create({ volumes: [{ volumeId, mountPath: '/cache' }] })`; saved on `vm.stop()` and on `vm.saveVolumes()`                                                                    |
 | Images                | `client.microvms.images.create({ name, from: 'python:3.13' \| { dockerfile } })`, `.waitUntilReady(id)`, `.list()`, `.get(id)`, `.delete(id)`                                                                                                          |
 
 Command output stays in the microVM, so `command.logs()` can be read from
@@ -379,7 +380,7 @@ or less on your plan.
 
 `client.microvms` is the low-level REST surface, one method per route
 (`create`, `list`, `listAll`, `get`, `getMetrics`, `extendTimeout`, `updateNetwork`, `stop`, `delete`,
-`commands.*`, `files.*`, `images.*`, `webhooks.*`). The SDK uses only `fetch`, so it runs in
+`commands.*`, `files.*`, `images.*`, `volumes.*`, `webhooks.*`). The SDK uses only `fetch`, so it runs in
 Node.js 18+, Bun, Deno, edge runtimes and Gigadrive Functions.
 
 ## Pagination
