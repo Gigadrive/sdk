@@ -36,7 +36,13 @@ export type {
   WaitForPortOptions,
   WaitUntilRunningOptions,
 } from './microvm';
-export { MicroVmCommandsResource, MicroVmFilesResource, MicroVmImagesResource, MicroVmsResource } from './resource';
+export {
+  MicroVmCommandsResource,
+  MicroVmFilesResource,
+  MicroVmImagesResource,
+  MicroVmWebhooksResource,
+  MicroVmsResource,
+} from './resource';
 export type {
   GetMicroVmMetricsOptions,
   MicroVmFileContent,
@@ -47,3 +53,5 @@ export type {
   WriteFileOptions,
 } from './resource';
 export type * from './types';
+export { MicroVmWebhookVerificationError, verifyMicroVmWebhook } from './webhooks';
+export type { VerifyMicroVmWebhookInput } from './webhooks';

@@ -9,6 +9,7 @@ import type { SessionIo } from '../../lib/microvm-session';
 import { ApiClientService, toApiRequestError } from '../../services/api-client';
 import { ProjectLinkService } from '../../services/project-link';
 import {
+  addWebhook,
   copyFiles,
   createImage,
   createInput,
@@ -902,5 +903,85 @@ describe('images', () => {
       'GET /microvm-images',
       'DELETE /microvm-images/img-9',
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// webhooks
+// ---------------------------------------------------------------------------
+
+describe('webhooks', () => {
+  const webhook = {
+    id: 'wh-1',
+    applicationId: 'app-linked',
+    url: 'https://example.com/hooks',
+    description: null,
+    events: ['microvm.stopped', 'microvm.failed'],
+    enabled: true,
+    createdAt: '2026-11-01T12:00:00.000Z',
+    updatedAt: '2026-11-01T12:00:00.000Z',
+    secret: 'whsec_c2VjcmV0',
+  };
+
+  it('adds a webhook for the chosen events, once each', async () => {
+    const api = fakeApi(route('POST', '/microvm-webhooks', () => json(webhook, 201)));
+
+    const result = await run(
+      addWebhook({
+        url: 'https://example.com/hooks',
+        events: ['microvm.stopped', 'microvm.failed', 'microvm.stopped'],
+        description: Option.some('alerts'),
+        app: Option.none(),
+        json: true,
+      }),
+      api.layer
+    );
+
+    expect(Either.isRight(result) && result.right.secret).toBe('whsec_c2VjcmV0');
+    expect(api.calls[0]?.body).toEqual({
+      applicationId: 'app-linked',
+      url: 'https://example.com/hooks',
+      events: ['microvm.stopped', 'microvm.failed'],
+      description: 'alerts',
+    });
+  });
+
+  it('subscribes to every event when none is given', async () => {
+    const api = fakeApi(route('POST', '/microvm-webhooks', () => json(webhook, 201)));
+
+    await run(
+      addWebhook({
+        url: 'https://example.com/hooks',
+        events: [],
+        description: Option.none(),
+        app: Option.some('app-1'),
+        json: true,
+      }),
+      api.layer
+    );
+
+    expect(api.calls[0]?.body).toEqual({
+      applicationId: 'app-1',
+      url: 'https://example.com/hooks',
+      events: ['microvm.created', 'microvm.running', 'microvm.paused', 'microvm.stopped', 'microvm.failed'],
+    });
+  });
+
+  it('refuses an unknown event before calling the API', async () => {
+    const api = fakeApi();
+
+    const result = await run(
+      addWebhook({
+        url: 'https://example.com/hooks',
+        events: ['microvm.deleted'],
+        description: Option.none(),
+        app: Option.none(),
+        json: true,
+      }),
+      api.layer
+    );
+
+    expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    expect(api.calls).toHaveLength(0);
   });
 });

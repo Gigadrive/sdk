@@ -1,4 +1,4 @@
-import type { CommandInfo, MicroVmImage, MicroVmInfo } from '@gigadrive/sdk';
+import type { CommandInfo, MicroVmImage, MicroVmInfo, MicroVmWebhook, MicroVmWebhookDelivery } from '@gigadrive/sdk';
 
 /**
  * Pure helpers for the `gigadrive microvms` commands: argument parsing,
@@ -201,6 +201,32 @@ export const formatImageTable = (images: ReadonlyArray<MicroVmImage>): string[] 
   formatTable([
     ['NAME', 'STATUS', 'SOURCE', 'ID'],
     ...images.map((image) => [image.name, image.status, imageSource(image), image.id]),
+  ]);
+
+/** Rows of `gigadrive microvms webhooks ls`. */
+export const formatWebhookTable = (webhooks: ReadonlyArray<MicroVmWebhook>): string[] =>
+  formatTable([
+    ['URL', 'EVENTS', 'STATUS', 'ID'],
+    ...webhooks.map((webhook) => [
+      webhook.url,
+      webhook.events.join(','),
+      webhook.enabled ? 'enabled' : 'disabled',
+      webhook.id,
+    ]),
+  ]);
+
+/** Rows of `gigadrive microvms webhooks deliveries`. */
+export const formatDeliveryTable = (deliveries: ReadonlyArray<MicroVmWebhookDelivery>): string[] =>
+  formatTable([
+    ['CREATED', 'EVENT', 'STATUS', 'ATTEMPTS', 'RESPONSE', 'MICROVM'],
+    ...deliveries.map((delivery) => [
+      delivery.createdAt,
+      delivery.eventType,
+      delivery.status,
+      String(delivery.attempts),
+      delivery.lastStatusCode === null ? (delivery.lastError ?? '-') : String(delivery.lastStatusCode),
+      delivery.microvmId,
+    ]),
   ]);
 
 /** Bytes as `12 B`, `3.4 KiB`, `5.0 MiB`. */

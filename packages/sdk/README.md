@@ -351,18 +351,19 @@ your own) and its application from `applicationId`, the client's
 nothing needs configuring. Built-in images: `node22`, `node24`, `python3.13`,
 `python3.12`, `bun1`, `debian12`, `ubuntu24.04`.
 
-| Task                  | Call                                                                                                                                                                                                        |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create, connect, list | `MicroVM.create({ image, vcpus, memoryMb, diskMb, timeout, ports, env, metadata, network })`, `MicroVM.get(id)`, `for await (const vm of MicroVM.list())`                                                   |
-| Run and wait          | `vm.run('ls -la')`, `vm.run('npm', ['test'], { cwd, env, user, sudo, timeout, onStdout, onStderr, stdin, throwOnError, signal })` → `{ exitCode, signal, timedOut, stdout, stderr, truncated, durationMs }` |
-| Run in the background | `vm.spawn(cmd, args, { stdin, pty, onStdout })` → `Command`: `logs()`, `output()`, `stdout()`, `stderr()`, `wait()`, `kill(signal)`, `write(data)`, `end()`, `resize(cols, rows)`                           |
-| Reattach              | `vm.commands.get(commandId)`, `vm.commands.list()`                                                                                                                                                          |
-| Files                 | `vm.files.write(path, string \| Uint8Array \| Blob \| ReadableStream)`, `writeMany`, `read`, `readText`, `readStream`, `list(path, { recursive })`, `stat`, `exists`, `mkdir`, `remove`, `move`             |
-| Ports                 | `vm.url(port)`, `vm.waitForPort(port)`                                                                                                                                                                      |
-| Lifetime              | `vm.extendTimeout('30m')`, `vm.stop()`, `vm.delete()`, `await using vm = ...`                                                                                                                               |
-| Network               | `vm.updateNetwork('deny')`, `vm.updateNetwork({ egress: 'allow', allow: ['registry.npmjs.org', '*.github.com'] })`: change what it may reach while it runs                                                  |
-| Metrics               | `vm.getMetrics({ windowMinutes: 60 })` → `{ cpu: [{ time, cpuPercent }], current: { memoryUsedBytes, memoryTotalBytes, diskUsedBytes, diskTotalBytes } \| null }`                                           |
-| Images                | `client.microvms.images.create({ name, from: 'python:3.13' \| { dockerfile } })`, `.waitUntilReady(id)`, `.list()`, `.get(id)`, `.delete(id)`                                                               |
+| Task                  | Call                                                                                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Create, connect, list | `MicroVM.create({ image, vcpus, memoryMb, diskMb, timeout, ports, env, metadata, network })`, `MicroVM.get(id)`, `for await (const vm of MicroVM.list())`                                                                                              |
+| Run and wait          | `vm.run('ls -la')`, `vm.run('npm', ['test'], { cwd, env, user, sudo, timeout, onStdout, onStderr, stdin, throwOnError, signal })` → `{ exitCode, signal, timedOut, stdout, stderr, truncated, durationMs }`                                            |
+| Run in the background | `vm.spawn(cmd, args, { stdin, pty, onStdout })` → `Command`: `logs()`, `output()`, `stdout()`, `stderr()`, `wait()`, `kill(signal)`, `write(data)`, `end()`, `resize(cols, rows)`                                                                      |
+| Reattach              | `vm.commands.get(commandId)`, `vm.commands.list()`                                                                                                                                                                                                     |
+| Files                 | `vm.files.write(path, string \| Uint8Array \| Blob \| ReadableStream)`, `writeMany`, `read`, `readText`, `readStream`, `list(path, { recursive })`, `stat`, `exists`, `mkdir`, `remove`, `move`                                                        |
+| Ports                 | `vm.url(port)`, `vm.waitForPort(port)`                                                                                                                                                                                                                 |
+| Lifetime              | `vm.extendTimeout('30m')`, `vm.stop()`, `vm.delete()`, `await using vm = ...`                                                                                                                                                                          |
+| Network               | `vm.updateNetwork('deny')`, `vm.updateNetwork({ egress: 'allow', allow: ['registry.npmjs.org', '*.github.com'] })`: change what it may reach while it runs                                                                                             |
+| Metrics               | `vm.getMetrics({ windowMinutes: 60 })` → `{ cpu: [{ time, cpuPercent }], current: { memoryUsedBytes, memoryTotalBytes, diskUsedBytes, diskTotalBytes } \| null }`                                                                                      |
+| Webhooks              | `client.microvms.webhooks.create({ url, events: ['microvm.stopped'] })` → `{ id, secret }`, `.list()`, `.update(id, { enabled })`, `.rotateSecret(id)`, `.listDeliveries(id)`; verify a request with `verifyMicroVmWebhook({ body, headers, secret })` |
+| Images                | `client.microvms.images.create({ name, from: 'python:3.13' \| { dockerfile } })`, `.waitUntilReady(id)`, `.list()`, `.get(id)`, `.delete(id)`                                                                                                          |
 
 Command output stays in the microVM, so `command.logs()` can be read from
 another process with `vm.commands.get(id)`, and a dropped connection resumes
@@ -378,7 +379,7 @@ or less on your plan.
 
 `client.microvms` is the low-level REST surface, one method per route
 (`create`, `list`, `listAll`, `get`, `getMetrics`, `extendTimeout`, `updateNetwork`, `stop`, `delete`,
-`commands.*`, `files.*`, `images.*`). The SDK uses only `fetch`, so it runs in
+`commands.*`, `files.*`, `images.*`, `webhooks.*`). The SDK uses only `fetch`, so it runs in
 Node.js 18+, Bun, Deno, edge runtimes and Gigadrive Functions.
 
 ## Pagination

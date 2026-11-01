@@ -11,6 +11,7 @@ import {
   type MicroVmImage,
   type MicroVmMetrics,
   type MicroVmStatus,
+  type MicroVmWebhookEventType,
 } from '@gigadrive/sdk';
 import { Config, Console, Effect, Exit, Option } from 'effect';
 import {
@@ -25,8 +26,10 @@ import {
   describeMicroVm,
   exitStatusOf,
   formatBytes,
+  formatDeliveryTable,
   formatImageTable,
   formatMicroVmTable,
+  formatWebhookTable,
   parseCopyTarget,
   parseKeyValues,
   posixBasename,
@@ -1013,6 +1016,141 @@ const imagesCommand = Command.make('images', {}, () => Effect.void).pipe(
 );
 
 // ---------------------------------------------------------------------------
+// webhooks
+// ---------------------------------------------------------------------------
+
+const WEBHOOK_EVENTS: ReadonlyArray<MicroVmWebhookEventType> = [
+  'microvm.created',
+  'microvm.running',
+  'microvm.paused',
+  'microvm.stopped',
+  'microvm.failed',
+];
+
+const webhookIdArg = Args.text({ name: 'webhook-id' }).pipe(Args.withDescription('The webhook ID'));
+
+const webhooksListCommand = Command.make('ls', { app: appOption, json: jsonOption }, ({ app, json }) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    const applicationId = yield* resolveApplicationId(app);
+    const webhooks = yield* apiClient.request((client) => client.microvms.webhooks.list({ applicationId }));
+    if (json) return yield* Console.log(JSON.stringify(webhooks, null, 2));
+    if (webhooks.length === 0)
+      return yield* Console.log('No webhooks yet. Add one with "gigadrive microvms webhooks add".');
+    for (const line of formatWebhookTable(webhooks)) yield* Console.log(line);
+  }).pipe(reportErrors('list webhooks'))
+).pipe(Command.withDescription("List the application's microVM webhooks"));
+
+/** Flags of `microvms webhooks add`. */
+export interface AddWebhookFlags {
+  readonly url: string;
+  readonly events: ReadonlyArray<string>;
+  readonly description: Option.Option<string>;
+  readonly app: Option.Option<string>;
+  readonly json: boolean;
+}
+
+/** Adds a webhook and prints its signing secret once. */
+export const addWebhook = (flags: AddWebhookFlags) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    const unknown = flags.events.find((event) => !(WEBHOOK_EVENTS as ReadonlyArray<string>).includes(event));
+    if (unknown !== undefined) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: `${unknown} is not a microVM event. Use ${WEBHOOK_EVENTS.join(', ')}.`,
+      });
+    }
+    // SAFETY: every entry was checked against WEBHOOK_EVENTS above.
+    const events = (flags.events.length > 0 ? [...new Set(flags.events)] : WEBHOOK_EVENTS) as MicroVmWebhookEventType[];
+    const applicationId = yield* resolveApplicationId(flags.app);
+    const webhook = yield* apiClient.request((client) =>
+      client.microvms.webhooks.create({
+        url: flags.url,
+        events,
+        ...(Option.isSome(flags.description) ? { description: flags.description.value } : {}),
+        ...(applicationId ? { applicationId } : {}),
+      })
+    );
+    if (flags.json) {
+      yield* Console.log(JSON.stringify(webhook, null, 2));
+    } else {
+      yield* Console.log(`Added webhook ${webhook.id} for ${webhook.events.join(', ')}.`);
+      yield* Console.log(`Signing secret (shown only now): ${webhook.secret}`);
+    }
+    return webhook;
+  });
+
+const webhooksAddCommand = Command.make(
+  'add',
+  {
+    url: Args.text({ name: 'url' }).pipe(Args.withDescription('HTTPS URL on a public host')),
+    events: Options.text('event').pipe(
+      Options.withDescription(`Event to send (repeatable; default: all of ${WEBHOOK_EVENTS.join(', ')})`),
+      Options.repeated
+    ),
+    description: Options.text('description').pipe(Options.withDescription('A note for yourself'), Options.optional),
+    app: appOption,
+    json: jsonOption,
+  },
+  (flags) => addWebhook(flags).pipe(Effect.asVoid, reportErrors('add the webhook'))
+).pipe(Command.withDescription('Add an endpoint for microVM lifecycle events and print its signing secret'));
+
+const webhooksEnableCommand = (enabled: boolean) =>
+  Command.make(enabled ? 'enable' : 'disable', { webhookId: webhookIdArg }, ({ webhookId }) =>
+    Effect.gen(function* () {
+      const apiClient = yield* ApiClientService;
+      const webhook = yield* apiClient.request((client) => client.microvms.webhooks.update(webhookId, { enabled }));
+      yield* Console.log(`${webhook.url} is ${webhook.enabled ? 'enabled' : 'disabled'}.`);
+    }).pipe(reportErrors(enabled ? 'enable the webhook' : 'disable the webhook'))
+  ).pipe(
+    Command.withDescription(
+      enabled ? 'Send events to a webhook again' : 'Stop sending events to a webhook; waiting retries are held'
+    )
+  );
+
+const webhooksSecretCommand = Command.make('rotate-secret', { webhookId: webhookIdArg }, ({ webhookId }) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    const webhook = yield* apiClient.request((client) => client.microvms.webhooks.rotateSecret(webhookId));
+    yield* Console.log(`New signing secret (shown only now): ${webhook.secret}`);
+  }).pipe(reportErrors('replace the signing secret'))
+).pipe(Command.withDescription('Replace the signing secret; the old one stops signing at once'));
+
+const webhooksDeliveriesCommand = Command.make(
+  'deliveries',
+  { webhookId: webhookIdArg, json: jsonOption },
+  ({ webhookId, json }) =>
+    Effect.gen(function* () {
+      const apiClient = yield* ApiClientService;
+      const deliveries = yield* apiClient.request((client) => client.microvms.webhooks.listDeliveries(webhookId));
+      if (json) return yield* Console.log(JSON.stringify(deliveries, null, 2));
+      if (deliveries.length === 0) return yield* Console.log('Nothing has been sent yet.');
+      for (const line of formatDeliveryTable(deliveries)) yield* Console.log(line);
+    }).pipe(reportErrors('list the deliveries'))
+).pipe(Command.withDescription("Show a webhook's 50 most recent deliveries"));
+
+const webhooksRemoveCommand = Command.make('rm', { webhookId: webhookIdArg }, ({ webhookId }) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    yield* apiClient.request((client) => client.microvms.webhooks.delete(webhookId));
+    yield* Console.log(`Deleted webhook ${webhookId}.`);
+  }).pipe(reportErrors('delete the webhook'))
+).pipe(Command.withDescription('Delete a webhook'));
+
+const webhooksCommand = Command.make('webhooks', {}, () => Effect.void).pipe(
+  Command.withDescription('Signed HTTPS requests when a microVM is created, starts, pauses, stops or fails'),
+  Command.withSubcommands([
+    webhooksListCommand,
+    webhooksAddCommand,
+    webhooksEnableCommand(true),
+    webhooksEnableCommand(false),
+    webhooksSecretCommand,
+    webhooksDeliveriesCommand,
+    webhooksRemoveCommand,
+  ])
+);
+
+// ---------------------------------------------------------------------------
 // microvms (parent)
 // ---------------------------------------------------------------------------
 
@@ -1029,6 +1167,7 @@ const SUBCOMMANDS = [
   extendCommand,
   networkCommand,
   imagesCommand,
+  webhooksCommand,
 ] as const;
 
 /** `gigadrive microvms`: create microVMs, run commands and shells in them, copy files, manage images. */
