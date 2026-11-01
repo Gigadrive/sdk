@@ -1,5 +1,16 @@
 # gigadrive
 
+## 2.14.0
+
+### Minor Changes
+
+- Receive microVM lifecycle webhooks. `client.microvms.webhooks` lists, creates, updates, deletes and rotates the secret of an application's webhooks, and lists a webhook's recent deliveries. A webhook gets a signed `POST` when a microVM is created, starts, pauses, stops or fails. `verifyMicroVmWebhook({ body, headers, secret })` checks the Standard Webhooks signature and timestamp of a request and returns its event, throwing `MicroVmWebhookVerificationError` otherwise. `gigadrive microvms webhooks ls | add <url> [--event ...] | enable | disable | rotate-secret | deliveries | rm` manages them from the terminal. The Python SDK gains `MicroVmWebhooks` and `verify_microvm_webhook`. ([#621](https://github.com/Gigadrive/sdk/pull/621))
+
+### Patch Changes
+
+- Updated dependencies [[`f4ef24c`](https://github.com/Gigadrive/sdk/commit/f4ef24c85471c2f0f3bde9be0554165e993cb76e)]:
+  - @gigadrive/sdk@0.16.0
+
 ## 2.13.0
 
 ### Minor Changes
