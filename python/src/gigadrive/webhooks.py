@@ -23,13 +23,7 @@ from urllib.parse import quote
 from ._client import HttpClient
 from .errors import GigadriveError
 
-WebhookEvent = Literal[
-    "microvm.created",
-    "microvm.running",
-    "microvm.paused",
-    "microvm.stopped",
-    "microvm.failed",
-]
+WebhookEvent = Literal["microvm.created", "microvm.running", "microvm.paused", "microvm.stopped", "microvm.failed"]
 
 
 class MicroVmWebhookVerificationError(GigadriveError):
@@ -43,16 +37,12 @@ def _path(webhook_id: str) -> str:
 class MicroVmWebhooks:
     """An application's microVM webhooks (``/microvm-webhooks``). Results are the API's JSON objects."""
 
-    def __init__(
-        self, *, client: Optional[HttpClient] = None, **client_options: Any
-    ) -> None:
+    def __init__(self, *, client: Optional[HttpClient] = None, **client_options: Any) -> None:
         self._http = client if client is not None else HttpClient(**client_options)
 
     def list(self, application_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """The application's webhooks, oldest first, without secrets."""
-        body = self._http.json(
-            "GET", "/microvm-webhooks", params={"applicationId": application_id}
-        )
+        body = self._http.json("GET", "/microvm-webhooks", params={"applicationId": application_id})
         return body.get("data", []) if isinstance(body, dict) else body
 
     def create(
@@ -141,25 +131,16 @@ def verify_microvm_webhook(
     # isdigit() alone accepts non-ASCII digits that int() rejects; 15 digits is far past any real time.
     valid = timestamp.isascii() and timestamp.isdigit() and len(timestamp) <= 15
     if not valid or abs(time.time() - int(timestamp)) > tolerance_seconds:
-        raise MicroVmWebhookVerificationError(
-            "The webhook timestamp is missing or too far from the current time."
-        )
+        raise MicroVmWebhookVerificationError("The webhook timestamp is missing or too far from the current time.")
     try:
-        key = base64.b64decode(
-            secret[len("whsec_") :] if secret.startswith("whsec_") else secret,
-            validate=True,
-        )
+        key = base64.b64decode(secret[len("whsec_"):] if secret.startswith("whsec_") else secret, validate=True)
     except binascii.Error:
         key = b""
     if not key:
-        raise MicroVmWebhookVerificationError(
-            "The signing secret is not a whsec_ secret."
-        )
+        raise MicroVmWebhookVerificationError("The signing secret is not a whsec_ secret.")
 
     raw = body if isinstance(body, bytes) else body.encode("utf-8")
-    expected = hmac.new(
-        key, f"{message_id}.{timestamp}.".encode("utf-8") + raw, hashlib.sha256
-    ).digest()
+    expected = hmac.new(key, f"{message_id}.{timestamp}.".encode("utf-8") + raw, hashlib.sha256).digest()
     for entry in signatures.split(" "):
         version, _, signature = entry.partition(",")
         if version != "v1" or not signature:
@@ -171,9 +152,7 @@ def verify_microvm_webhook(
         if hmac.compare_digest(received, expected):
             break
     else:
-        raise MicroVmWebhookVerificationError(
-            "No webhook signature matches the signing secret."
-        )
+        raise MicroVmWebhookVerificationError("No webhook signature matches the signing secret.")
 
     try:
         return json.loads(raw)

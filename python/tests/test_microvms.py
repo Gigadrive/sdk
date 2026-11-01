@@ -29,18 +29,12 @@ VM = {
 }
 
 
-def client(
-    handler: Callable[[httpx.Request], httpx.Response], calls: List[httpx.Request]
-) -> HttpClient:
+def client(handler: Callable[[httpx.Request], httpx.Response], calls: List[httpx.Request]) -> HttpClient:
     def record(request: httpx.Request) -> httpx.Response:
         calls.append(request)
         return handler(request)
 
-    return HttpClient(
-        bearer_token="token",
-        base_url="https://api.test",
-        transport=httpx.MockTransport(record),
-    )
+    return HttpClient(bearer_token="token", base_url="https://api.test", transport=httpx.MockTransport(record))
 
 
 def body(request: httpx.Request) -> dict:
@@ -49,12 +43,7 @@ def body(request: httpx.Request) -> dict:
 
 def test_create_sends_the_options_and_waits_for_running() -> None:
     calls: List[httpx.Request] = []
-    answers = iter(
-        [
-            httpx.Response(202, json={**VM, "status": "starting"}),
-            httpx.Response(200, json=VM),
-        ]
-    )
+    answers = iter([httpx.Response(202, json={**VM, "status": "starting"}), httpx.Response(200, json=VM)])
     http = client(lambda request: next(answers), calls)
 
     vm = MicroVM.create(
@@ -86,14 +75,7 @@ def test_create_sends_the_options_and_waits_for_running() -> None:
 
 def test_run_returns_the_output_and_check_raises_on_failure() -> None:
     calls: List[httpx.Request] = []
-    result = {
-        "id": "cmd-1",
-        "exitCode": 1,
-        "signal": None,
-        "timedOut": False,
-        "stdout": "",
-        "stderr": "boom\n",
-    }
+    result = {"id": "cmd-1", "exitCode": 1, "signal": None, "timedOut": False, "stdout": "", "stderr": "boom\n"}
     http = client(lambda request: httpx.Response(200, json=result), calls)
     vm = MicroVM(http, VM)
 
@@ -101,13 +83,7 @@ def test_run_returns_the_output_and_check_raises_on_failure() -> None:
     with pytest.raises(CommandFailedError) as failed:
         vm.run("false", check=True)
 
-    assert body(calls[0]) == {
-        "cmd": "ls",
-        "args": ["-la"],
-        "cwd": "/tmp",
-        "timeoutMs": 30_000,
-        "wait": True,
-    }
+    assert body(calls[0]) == {"cmd": "ls", "args": ["-la"], "cwd": "/tmp", "timeoutMs": 30_000, "wait": True}
     assert plain.exit_code == 1 and plain.stderr == "boom\n" and not plain.ok
     assert failed.value.result.exit_code == 1
 
@@ -122,12 +98,8 @@ def test_run_streams_output_to_callbacks() -> None:
                 f'event: stdout\ndata: {{"data": "{chunk}", "offset": 0}}\n\n'
                 'event: exit\ndata: {"exitCode": 0, "signal": null}\n\n'
             )
-            return httpx.Response(
-                200, text=stream, headers={"content-type": "text/event-stream"}
-            )
-        return httpx.Response(
-            200, json={"id": "cmd-2", "status": "running", "exitCode": None}
-        )
+            return httpx.Response(200, text=stream, headers={"content-type": "text/event-stream"})
+        return httpx.Response(200, json={"id": "cmd-2", "status": "running", "exitCode": None})
 
     vm = MicroVM(client(handler, calls), VM)
     seen: List[str] = []
@@ -143,20 +115,9 @@ def test_files_round_trip_bytes_and_map_missing_files() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "PUT":
-            return httpx.Response(
-                200,
-                json={
-                    "path": "/tmp/a.txt",
-                    "name": "a.txt",
-                    "type": "file",
-                    "size": 5,
-                    "mode": "644",
-                },
-            )
+            return httpx.Response(200, json={"path": "/tmp/a.txt", "name": "a.txt", "type": "file", "size": 5, "mode": "644"})
         if request.url.params.get("path") == "/missing":
-            return httpx.Response(
-                404, json={"error": "No such file", "code": "guest_not_found"}
-            )
+            return httpx.Response(404, json={"error": "No such file", "code": "guest_not_found"})
         return httpx.Response(200, content=b"hello")
 
     vm = MicroVM(client(handler, calls), VM)
@@ -176,12 +137,8 @@ def test_update_network_and_typed_refusals() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/network"):
-            return httpx.Response(
-                200, json={**VM, "network": {"egress": "deny", "previews": "public"}}
-            )
-        return httpx.Response(
-            409, json={"error": "The microVM is paused", "code": "microvm_paused"}
-        )
+            return httpx.Response(200, json={**VM, "network": {"egress": "deny", "previews": "public"}})
+        return httpx.Response(409, json={"error": "The microVM is paused", "code": "microvm_paused"})
 
     vm = MicroVM(client(handler, calls), VM)
 
@@ -196,12 +153,7 @@ def test_update_network_and_typed_refusals() -> None:
 
 def test_get_metrics_reads_the_window() -> None:
     calls: List[httpx.Request] = []
-    metrics = {
-        "microvmId": VM["id"],
-        "windowMinutes": 60,
-        "cpu": [{"time": "t", "cpuPercent": 5}],
-        "current": None,
-    }
+    metrics = {"microvmId": VM["id"], "windowMinutes": 60, "cpu": [{"time": "t", "cpuPercent": 5}], "current": None}
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=metrics)
@@ -217,16 +169,12 @@ def test_get_metrics_reads_the_window() -> None:
 
 def test_context_manager_stops_the_microvm() -> None:
     calls: List[httpx.Request] = []
-    http = client(
-        lambda request: httpx.Response(200, json={**VM, "status": "stopped"}), calls
-    )
+    http = client(lambda request: httpx.Response(200, json={**VM, "status": "stopped"}), calls)
 
     with MicroVM(http, VM):
         pass
 
-    assert [(call.method, call.url.path) for call in calls] == [
-        ("POST", "/microvms/vm-1/stop")
-    ]
+    assert [(call.method, call.url.path) for call in calls] == [("POST", "/microvms/vm-1/stop")]
 
 
 def test_api_key_is_exchanged_for_a_token_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -235,38 +183,26 @@ def test_api_key_is_exchanged_for_a_token_once(monkeypatch: pytest.MonkeyPatch) 
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/oauth2/token":
-            return httpx.Response(
-                200, json={"access_token": "exchanged", "expires_in": 3600}
-            )
+            return httpx.Response(200, json={"access_token": "exchanged", "expires_in": 3600})
         return httpx.Response(200, json=VM)
 
     http = HttpClient(
         client_id="key-id",
         client_secret="sk_test",
         base_url="https://api.test",
-        transport=httpx.MockTransport(
-            lambda request: (calls.append(request), handler(request))[1]
-        ),
+        transport=httpx.MockTransport(lambda request: (calls.append(request), handler(request))[1]),
     )
 
     MicroVM.get("vm-1", client=http)
     MicroVM.get("vm-1", client=http)
 
-    assert [call.url.path for call in calls] == [
-        "/oauth2/token",
-        "/microvms/vm-1",
-        "/microvms/vm-1",
-    ]
+    assert [call.url.path for call in calls] == ["/oauth2/token", "/microvms/vm-1", "/microvms/vm-1"]
     assert calls[0].headers["authorization"].startswith("Basic ")
     assert calls[1].headers["authorization"] == "Bearer exchanged"
 
 
 def test_missing_credentials_are_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in (
-        "GIGADRIVE_BEARER_TOKEN",
-        "GIGADRIVE_CLIENT_ID",
-        "GIGADRIVE_CLIENT_SECRET",
-    ):
+    for name in ("GIGADRIVE_BEARER_TOKEN", "GIGADRIVE_CLIENT_ID", "GIGADRIVE_CLIENT_SECRET"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(AuthenticationError):
         HttpClient()

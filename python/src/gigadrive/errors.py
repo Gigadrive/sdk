@@ -73,11 +73,7 @@ class CommandFailedError(GigadriveError):
     def __init__(self, result: "object") -> None:
         exit_code = getattr(result, "exit_code", None)
         signal = getattr(result, "signal", None)
-        reason = (
-            f"exited with code {exit_code}"
-            if exit_code is not None
-            else f"was killed by {signal or 'a signal'}"
-        )
+        reason = f"exited with code {exit_code}" if exit_code is not None else f"was killed by {signal or 'a signal'}"
         super().__init__(f"The command {reason}")
         self.result = result
 

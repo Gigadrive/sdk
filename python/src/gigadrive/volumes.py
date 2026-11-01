@@ -21,9 +21,7 @@ def _path(volume_id: str) -> str:
 class MicroVmVolumes:
     """An application's volumes (``/microvm-volumes``). Results are the API's JSON objects."""
 
-    def __init__(
-        self, *, client: Optional[HttpClient] = None, **client_options: Any
-    ) -> None:
+    def __init__(self, *, client: Optional[HttpClient] = None, **client_options: Any) -> None:
         self._http = client if client is not None else HttpClient(**client_options)
 
     def list(self, application_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -31,24 +29,14 @@ class MicroVmVolumes:
         volumes: List[Dict[str, Any]] = []
         cursor: Optional[str] = None
         while True:
-            body = self._http.json(
-                "GET",
-                "/microvm-volumes",
-                params={"applicationId": application_id, "cursor": cursor},
-            )
+            body = self._http.json("GET", "/microvm-volumes", params={"applicationId": application_id, "cursor": cursor})
             volumes.extend(body.get("data", []))
             pagination = body.get("pagination") or {}
             cursor = pagination.get("nextCursor") if pagination.get("hasMore") else None
             if not cursor:
                 return volumes
 
-    def create(
-        self,
-        name: str,
-        *,
-        size_mb: Optional[int] = None,
-        application_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    def create(self, name: str, *, size_mb: Optional[int] = None, application_id: Optional[str] = None) -> Dict[str, Any]:
         """Create an empty volume (1024 to 51200 MiB, default 10240). It is formatted on its first attach."""
         payload: Dict[str, Any] = {"name": name}
         if size_mb is not None:

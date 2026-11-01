@@ -24,11 +24,7 @@ from .errors import (
 )
 from .microvms import Command, CommandResult, FileEntry, Files, MicroVM, OutputChunk
 from .volumes import MicroVmVolumes
-from .webhooks import (
-    MicroVmWebhooks,
-    MicroVmWebhookVerificationError,
-    verify_microvm_webhook,
-)
+from .webhooks import MicroVmWebhooks, MicroVmWebhookVerificationError, verify_microvm_webhook
 
 __version__ = "0.1.0"
 
