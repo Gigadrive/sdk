@@ -126,6 +126,29 @@ describe('MicroVmsResource', () => {
     expect(request(fetch, 1).query).toEqual({ status: 'running', cursor: 'c2' });
   });
 
+  it('reads metrics with an optional window', async () => {
+    const { fetch, client } = setup();
+    const metrics = {
+      microvmId: 'vm-1',
+      vcpus: 1,
+      memoryMb: 2048,
+      windowMinutes: 15,
+      stepSeconds: 5,
+      cpu: [{ time: '2026-11-01T12:00:00.000Z', cpuPercent: 12.5 }],
+      current: null,
+    };
+    fetch.mockResolvedValueOnce(json(metrics)).mockResolvedValueOnce(json({ ...metrics, windowMinutes: 60 }));
+
+    await expect(client.microvms.getMetrics('vm-1')).resolves.toEqual(metrics);
+    await expect(client.microvms.getMetrics('vm-1', { windowMinutes: 60 })).resolves.toMatchObject({
+      windowMinutes: 60,
+    });
+
+    expect(`${request(fetch, 0).method} ${request(fetch, 0).path}`).toBe('GET /microvms/vm-1/metrics');
+    expect(request(fetch, 0).query).toEqual({});
+    expect(request(fetch, 1).query).toEqual({ windowMinutes: '60' });
+  });
+
   it('gets, extends, stops and deletes', async () => {
     const { fetch, client } = setup();
     fetch

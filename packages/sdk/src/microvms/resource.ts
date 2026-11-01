@@ -28,6 +28,7 @@ import type {
   MicroVmImage,
   MicroVmImageSource,
   MicroVmInfo,
+  MicroVmMetrics,
   MicroVmPage,
   PtySize,
   StartCommandInput,
@@ -40,6 +41,12 @@ export type MicroVmFileContent = string | Uint8Array | ArrayBuffer | Blob | Read
 export interface MicroVmRequestOptions {
   /** Cancels the request. */
   signal?: AbortSignal;
+}
+
+/** Options of {@link MicroVmsResource.getMetrics}. */
+export interface GetMicroVmMetricsOptions extends MicroVmRequestOptions {
+  /** How far back the CPU series reaches, in minutes: 1 to 1440, default 15. */
+  windowMinutes?: number;
 }
 
 const vmPath = (microvmId: string) => `/microvms/${encodeURIComponent(microvmId)}`;
@@ -678,6 +685,22 @@ export class MicroVmsResource extends BaseResource {
   /** Get one microVM (`GET /microvms/:id`). */
   get(microvmId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmInfo> {
     return read(() => this.httpClient.get<MicroVmInfo>(vmPath(microvmId), options), options.signal);
+  }
+
+  /**
+   * A microVM's CPU over the last `windowMinutes` (default 15, at most 1440) and,
+   * while it runs, its memory and disk use (`GET /microvms/:id/metrics`).
+   * Never resumes a paused microVM.
+   */
+  getMetrics(microvmId: string, options: GetMicroVmMetricsOptions = {}): Promise<MicroVmMetrics> {
+    return read(
+      () =>
+        this.httpClient.get<MicroVmMetrics>(`${vmPath(microvmId)}/metrics`, {
+          query: { windowMinutes: options.windowMinutes },
+          signal: options.signal,
+        }),
+      options.signal
+    );
   }
 
   /**

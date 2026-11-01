@@ -30,6 +30,7 @@ import type {
   MicroVmEgressPolicy,
   MicroVmFileChange,
   MicroVmInfo,
+  MicroVmMetrics,
   MicroVmNetworkPolicy,
   MicroVmPreviewAccess,
   MicroVmStatus,
@@ -729,6 +730,19 @@ export class MicroVM {
     const command = new Command(this.resource.commands, this.id, info);
     if (options.onStdout || options.onStderr) command.startOutputPump(options.onStdout, options.onStderr);
     return command;
+  }
+
+  /**
+   * The microVM's CPU over the last `windowMinutes` (default 15) and, while it
+   * runs, its memory and disk use. Reading metrics never resumes it.
+   *
+   * ```ts
+   * const { cpu, current } = await vm.getMetrics();
+   * console.log(cpu.at(-1)?.cpuPercent, current?.memoryUsedBytes);
+   * ```
+   */
+  getMetrics(options: { windowMinutes?: number; signal?: AbortSignal } = {}): Promise<MicroVmMetrics> {
+    return this.resource.getMetrics(this.id, options);
   }
 
   /**

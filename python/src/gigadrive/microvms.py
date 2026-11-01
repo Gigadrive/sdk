@@ -459,6 +459,16 @@ class MicroVM:
         self.info = self._http.json("POST", f"{_vm_path(self.id)}/timeout", json={"timeoutMs": _ms(seconds)})
         return self
 
+    def get_metrics(self, window_minutes: Optional[int] = None) -> Dict[str, Any]:
+        """CPU over the last ``window_minutes`` (default 15) and, while it runs, memory and disk use.
+
+        ``cpu`` is a list of ``{"time", "cpuPercent"}`` points, oldest first; ``current`` is ``None``
+        unless the microVM is running. Reading metrics never resumes a paused microVM.
+        """
+        return self._http.json(
+            "GET", f"{_vm_path(self.id)}/metrics", params={"windowMinutes": window_minutes}
+        )
+
     def update_network(self, egress: Egress = "allow", allow: Optional[Sequence[str]] = None) -> "MicroVM":
         """Replace what the microVM may reach, without restarting it."""
         body: Dict[str, Any] = {"egress": egress}

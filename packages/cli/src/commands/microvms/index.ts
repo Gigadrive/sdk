@@ -9,6 +9,7 @@ import {
   MICROVM_MAX_TIMEOUT_MS,
   type MicroVmDuration,
   type MicroVmImage,
+  type MicroVmMetrics,
   type MicroVmStatus,
 } from '@gigadrive/sdk';
 import { Config, Console, Effect, Exit, Option } from 'effect';
@@ -421,6 +422,47 @@ const getCommand = Command.make('get', { microvmId: microvmIdArg, json: jsonOpti
     for (const line of describeMicroVm(vm)) yield* Console.log(line);
   }).pipe(reportErrors('get the microVM'))
 ).pipe(Command.withDescription('Show a microVM'));
+
+const formatGigabytes = (bytes: number) => `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+
+/** The lines `microvms metrics` prints for a microVM's metrics. */
+export const describeMicroVmMetrics = (metrics: MicroVmMetrics): string[] => {
+  const latest = metrics.cpu.at(-1);
+  const peak = metrics.cpu.reduce((max, point) => Math.max(max, point.cpuPercent), 0);
+  return [
+    `CPU (last ${metrics.windowMinutes} min, ${metrics.vcpus} vCPU): ${
+      latest ? `${latest.cpuPercent}% at ${latest.time}, peak ${peak}%` : 'no samples'
+    }`,
+    metrics.current
+      ? `Memory: ${formatGigabytes(metrics.current.memoryUsedBytes)} of ${formatGigabytes(metrics.current.memoryTotalBytes)}`
+      : 'Memory: not running',
+    metrics.current
+      ? `Disk:   ${formatGigabytes(metrics.current.diskUsedBytes)} of ${formatGigabytes(metrics.current.diskTotalBytes)}`
+      : 'Disk:   not running',
+  ];
+};
+
+const metricsCommand = Command.make(
+  'metrics',
+  {
+    microvmId: microvmIdArg,
+    window: Options.integer('window').pipe(
+      Options.withDescription('Minutes of CPU history, 1 to 1440 (default: 15)'),
+      Options.optional
+    ),
+    json: jsonOption,
+  },
+  ({ microvmId, window, json }) =>
+    Effect.gen(function* () {
+      const apiClient = yield* ApiClientService;
+      const windowMinutes = Option.getOrUndefined(window);
+      const metrics = yield* apiClient.request((client) =>
+        client.microvms.getMetrics(microvmId, windowMinutes === undefined ? {} : { windowMinutes })
+      );
+      if (json) return yield* Console.log(JSON.stringify(metrics, null, 2));
+      for (const line of describeMicroVmMetrics(metrics)) yield* Console.log(line);
+    }).pipe(reportErrors('read the microVM metrics'))
+).pipe(Command.withDescription("Show a microVM's CPU, memory and disk use"));
 
 // ---------------------------------------------------------------------------
 // exec / shell
@@ -978,6 +1020,7 @@ const SUBCOMMANDS = [
   createCommand,
   listCommand,
   getCommand,
+  metricsCommand,
   execCommand,
   shellCommand,
   copyCommand,

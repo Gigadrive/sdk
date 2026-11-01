@@ -38,6 +38,7 @@ export type {
 } from './microvm';
 export { MicroVmCommandsResource, MicroVmFilesResource, MicroVmImagesResource, MicroVmsResource } from './resource';
 export type {
+  GetMicroVmMetricsOptions,
   MicroVmFileContent,
   MicroVmRequestOptions,
   ReadFileOptions,
