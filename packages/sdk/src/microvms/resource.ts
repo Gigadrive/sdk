@@ -684,7 +684,7 @@ export class MicroVmVolumesResource extends BaseResource {
     this.defaultApplicationId = defaultApplicationId || undefined;
   }
 
-  /** List the application's volumes, oldest first (`GET /microvm-volumes`), following every page. */
+  /** List the application's volumes, newest first (`GET /microvm-volumes`), following every page. */
   async list(query: { applicationId?: string } = {}, options: MicroVmRequestOptions = {}): Promise<MicroVmVolume[]> {
     const volumes: MicroVmVolume[] = [];
     let cursor: string | undefined;

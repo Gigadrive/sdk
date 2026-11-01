@@ -25,7 +25,7 @@ class MicroVmVolumes:
         self._http = client if client is not None else HttpClient(**client_options)
 
     def list(self, application_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Every volume of the application, oldest first."""
+        """Every volume of the application, newest first."""
         volumes: List[Dict[str, Any]] = []
         cursor: Optional[str] = None
         while True:
