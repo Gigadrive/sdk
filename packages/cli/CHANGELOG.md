@@ -1,5 +1,16 @@
 # gigadrive
 
+## 2.13.0
+
+### Minor Changes
+
+- Read a microVM's CPU, memory and disk use. `vm.getMetrics()` and `client.microvms.getMetrics(id, { windowMinutes })` return its CPU over the last `windowMinutes` (default 15, at most a day) as `{ time, cpuPercent }` points, and, while it runs, the memory and disk in use as the microVM reports them. `gigadrive microvms metrics <id> [--window <minutes>] [--json]` prints the same. Reading metrics never resumes a paused microVM. ([#619](https://github.com/Gigadrive/sdk/pull/619))
+
+### Patch Changes
+
+- Updated dependencies [[`57abc69`](https://github.com/Gigadrive/sdk/commit/57abc692dd40f90a24304ad6f8a25997b292c7f2)]:
+  - @gigadrive/sdk@0.15.0
+
 ## 2.12.0
 
 ### Minor Changes
