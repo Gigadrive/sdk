@@ -93,13 +93,16 @@ export async function verifyMicroVmWebhook(input: VerifyMicroVmWebhookInput): Pr
   const key = fromBase64(input.secret.replace(/^whsec_/, ''));
   if (!key || key.length === 0) throw new MicroVmWebhookVerificationError('The signing secret is not a whsec_ secret.');
 
-  const body = typeof input.body === 'string' ? input.body : decoder.decode(input.body);
+  // Sign the bytes as received: decoding and re-encoding would replace malformed UTF-8.
+  const bytes = typeof input.body === 'string' ? utf8Encode(input.body) : input.body;
+  const prefix = utf8Encode(`${id}.${timestamp}.`);
+  const message = new Uint8Array(prefix.length + bytes.length);
+  message.set(prefix);
+  message.set(bytes, prefix.length);
   const hmacKey = await crypto.subtle.importKey('raw', toArrayBuffer(key), { name: 'HMAC', hash: 'SHA-256' }, false, [
     'sign',
   ]);
-  const expected = new Uint8Array(
-    await crypto.subtle.sign('HMAC', hmacKey, toArrayBuffer(utf8Encode(`${id}.${timestamp}.${body}`)))
-  );
+  const expected = new Uint8Array(await crypto.subtle.sign('HMAC', hmacKey, toArrayBuffer(message)));
   const matches = signatures.split(' ').some((entry) => {
     const [version, signature] = entry.split(',', 2);
     const received = version === 'v1' && signature ? fromBase64(signature) : undefined;
@@ -108,7 +111,7 @@ export async function verifyMicroVmWebhook(input: VerifyMicroVmWebhookInput): Pr
   if (!matches) throw new MicroVmWebhookVerificationError('No webhook signature matches the signing secret.');
 
   try {
-    return JSON.parse(body) as MicroVmWebhookEvent;
+    return JSON.parse(typeof input.body === 'string' ? input.body : decoder.decode(input.body)) as MicroVmWebhookEvent;
   } catch {
     throw new MicroVmWebhookVerificationError('The webhook body is not JSON.');
   }

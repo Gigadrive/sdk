@@ -44,6 +44,8 @@ def test_accepts_the_reference_request() -> None:
         (BODY, {**HEADERS, "webhook-signature": "v2,g0hM9SsE+OTPJTGt"}, SECRET),
         (BODY, {"webhook-id": HEADERS["webhook-id"], "webhook-timestamp": HEADERS["webhook-timestamp"]}, SECRET),
         (BODY, {**HEADERS, "webhook-timestamp": "1614265330.5"}, SECRET),
+        (BODY, {**HEADERS, "webhook-timestamp": "\u00b2"}, SECRET),
+        (BODY, {**HEADERS, "webhook-timestamp": "9" * 5000}, SECRET),
     ],
 )
 def test_rejects_tampered_or_incomplete_requests(body: str, headers: dict, secret: str) -> None:

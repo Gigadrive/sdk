@@ -128,7 +128,9 @@ def verify_microvm_webhook(
         raise MicroVmWebhookVerificationError(
             "The request is missing the webhook-id, webhook-timestamp or webhook-signature header."
         )
-    if not timestamp.isdigit() or abs(time.time() - int(timestamp)) > tolerance_seconds:
+    # isdigit() alone accepts non-ASCII digits that int() rejects; 15 digits is far past any real time.
+    valid = timestamp.isascii() and timestamp.isdigit() and len(timestamp) <= 15
+    if not valid or abs(time.time() - int(timestamp)) > tolerance_seconds:
         raise MicroVmWebhookVerificationError("The webhook timestamp is missing or too far from the current time.")
     try:
         key = base64.b64decode(secret[len("whsec_"):] if secret.startswith("whsec_") else secret, validate=True)
