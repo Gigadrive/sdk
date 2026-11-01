@@ -197,11 +197,11 @@ describe('describeMicroVmMetrics', () => {
     ]);
   });
 
-  it('says when there are no samples and the microVM is not running', () => {
+  it('says when there are no samples and no current reading', () => {
     expect(describeMicroVmMetrics({ ...metrics, cpu: [], current: null })).toEqual([
       'CPU (last 15 min, 2 vCPU): no samples',
-      'Memory: not running',
-      'Disk:   not running',
+      'Memory: unavailable (not running, or no answer)',
+      'Disk:   unavailable (not running, or no answer)',
     ]);
   });
 });

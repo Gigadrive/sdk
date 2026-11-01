@@ -435,10 +435,10 @@ export const describeMicroVmMetrics = (metrics: MicroVmMetrics): string[] => {
     }`,
     metrics.current
       ? `Memory: ${formatGigabytes(metrics.current.memoryUsedBytes)} of ${formatGigabytes(metrics.current.memoryTotalBytes)}`
-      : 'Memory: not running',
+      : 'Memory: unavailable (not running, or no answer)',
     metrics.current
       ? `Disk:   ${formatGigabytes(metrics.current.diskUsedBytes)} of ${formatGigabytes(metrics.current.diskTotalBytes)}`
-      : 'Disk:   not running',
+      : 'Disk:   unavailable (not running, or no answer)',
   ];
 };
 
