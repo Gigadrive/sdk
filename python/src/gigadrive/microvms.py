@@ -30,6 +30,10 @@ def _vm_path(microvm_id: str) -> str:
     return f"/microvms/{quote(microvm_id, safe='')}"
 
 
+def _inject_rules(inject: Mapping[str, Mapping[str, str]]) -> List[Dict[str, Any]]:
+    return [{"domain": domain, "headers": dict(headers)} for domain, headers in inject.items()]
+
+
 def _ms(seconds: Optional[float]) -> Optional[int]:
     return None if seconds is None else int(seconds * 1000)
 
@@ -267,6 +271,7 @@ class MicroVM:
         metadata: Optional[Mapping[str, str]] = None,
         egress: Optional[Egress] = None,
         allow: Optional[Sequence[str]] = None,
+        inject: Optional[Mapping[str, Mapping[str, str]]] = None,
         private_previews: bool = False,
         region: Optional[str] = None,
         volumes: Optional[Mapping[str, str]] = None,
@@ -279,6 +284,10 @@ class MicroVM:
 
         ``timeout`` is its lifetime in seconds (default 300). ``allow`` limits
         outbound traffic to these domain names and public IPv4 networks.
+        ``inject`` maps up to 8 domains to headers the platform adds to the
+        microVM's HTTPS requests to them, such as
+        ``{"api.openai.com": {"Authorization": f"Bearer {key}"}}``; the values
+        never enter the microVM.
         ``on_timeout="pause"`` pauses it when the timeout ends instead of
         stopping it, and ``auto_resume=True`` resumes it when it is used.
         ``volumes`` maps up to 4 volume IDs to mount paths, such as
@@ -286,10 +295,12 @@ class MicroVM:
         """
         http, owns = _resolve_client(client, client_options)
         network: Dict[str, Any] = {}
-        if egress is not None or allow or private_previews:
+        if egress is not None or allow or inject or private_previews:
             network["egress"] = egress or "allow"
             if allow:
                 network["allow"] = list(allow)
+            if inject:
+                network["inject"] = _inject_rules(inject)
             if private_previews:
                 network["previews"] = "private"
         body = {
@@ -473,11 +484,24 @@ class MicroVM:
             "GET", f"{_vm_path(self.id)}/metrics", params={"windowMinutes": window_minutes}
         )
 
-    def update_network(self, egress: Egress = "allow", allow: Optional[Sequence[str]] = None) -> "MicroVM":
-        """Replace what the microVM may reach, without restarting it."""
+    def update_network(
+        self,
+        egress: Egress = "allow",
+        allow: Optional[Sequence[str]] = None,
+        inject: Optional[Mapping[str, Mapping[str, str]]] = None,
+    ) -> "MicroVM":
+        """Replace what the microVM may reach, without restarting it.
+
+        ``egress`` and ``allow`` replace the old ones whole. Injection rules are
+        kept when ``inject`` is ``None``, replaced by a new mapping and removed by
+        an empty mapping or by ``egress="deny"``. A rule's domain stays reachable
+        even when ``allow`` does not list it.
+        """
         body: Dict[str, Any] = {"egress": egress}
         if allow:
             body["allow"] = list(allow)
+        if inject is not None:
+            body["inject"] = _inject_rules(inject)
         self.info = self._http.json("PATCH", f"{_vm_path(self.id)}/network", json=body)
         return self
 

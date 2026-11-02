@@ -353,6 +353,18 @@ describe('MicroVM accessors', () => {
     expect(vm.info.network).toEqual(limited);
   });
 
+  it('sends injection rules and reads back only their header names', async () => {
+    const { vm, fetch } = await createVm();
+    const inject = [{ domain: 'api.openai.com', headers: { Authorization: 'Bearer sk-1' } }];
+    const redacted = { egress: 'allow' as const, inject: [{ domain: 'api.openai.com', headers: ['authorization'] }] };
+    fetch.mockResolvedValueOnce(json(vmInfo({ network: redacted })));
+
+    await vm.updateNetwork({ egress: 'allow', inject });
+
+    expect(request(fetch).json).toEqual({ egress: 'allow', inject });
+    expect(vm.info.network).toEqual(redacted);
+  });
+
   it('stops on async dispose and tolerates an already stopped microVM', async () => {
     const { vm, fetch } = await createVm();
     fetch
