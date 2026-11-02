@@ -492,13 +492,15 @@ class MicroVM:
     ) -> "MicroVM":
         """Replace what the microVM may reach, without restarting it.
 
-        The policy replaces the old one whole: pass ``inject`` again to keep its
-        rules, since their values are never returned.
+        ``egress`` and ``allow`` replace the old ones whole. Injection rules are
+        kept when ``inject`` is ``None``, replaced by a new mapping and removed by
+        an empty mapping or by ``egress="deny"``. A rule's domain stays reachable
+        even when ``allow`` does not list it.
         """
         body: Dict[str, Any] = {"egress": egress}
         if allow:
             body["allow"] = list(allow)
-        if inject:
+        if inject is not None:
             body["inject"] = _inject_rules(inject)
         self.info = self._http.json("PATCH", f"{_vm_path(self.id)}/network", json=body)
         return self

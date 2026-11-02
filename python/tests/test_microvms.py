@@ -80,10 +80,15 @@ def test_create_and_update_network_send_injection_rules() -> None:
 
     vm = MicroVM.create(inject=inject, client=http)
     vm.update_network(allow=["pypi.org"], inject=inject)
+    vm.update_network(inject={})
+    vm.update_network()
 
     rules = [{"domain": "api.openai.com", "headers": {"Authorization": "Bearer sk-1"}}]
     assert body(calls[0])["network"] == {"egress": "allow", "inject": rules}
     assert body(calls[1]) == {"egress": "allow", "allow": ["pypi.org"], "inject": rules}
+    # An empty mapping removes the rules; leaving `inject` out keeps them.
+    assert body(calls[2]) == {"egress": "allow", "inject": []}
+    assert body(calls[3]) == {"egress": "allow"}
 
 
 def test_run_returns_the_output_and_check_raises_on_failure() -> None:

@@ -945,14 +945,15 @@ export interface NetworkFlags {
   readonly allowEgress: ReadonlyArray<string>;
   readonly allowAllEgress: boolean;
   readonly inject: ReadonlyArray<string>;
+  readonly clearInject: boolean;
 }
 
 /** Replaces what a running or paused microVM may reach. */
 export const updateMicroVmNetwork = (microvmId: string, flags: NetworkFlags) =>
   Effect.gen(function* () {
     const chosen = [flags.denyEgress, flags.allowEgress.length > 0, flags.allowAllEgress].filter(Boolean).length;
-    // `--inject` alone keeps the whole internet reachable, like --allow-all-egress.
-    if (chosen > 1 || (chosen === 0 && flags.inject.length === 0)) {
+    // Egress is always explicit: `--inject` alone would silently drop an allowlist.
+    if (chosen !== 1) {
       return yield* new InvalidMicroVmOptionsError({
         message: 'Pass exactly one of --deny-egress, --allow-egress or --allow-all-egress.',
       });
@@ -961,6 +962,11 @@ export const updateMicroVmNetwork = (microvmId: string, flags: NetworkFlags) =>
     const inject = yield* parseInjectFlags(flags.inject);
     if (inject.length > 0 && flags.denyEgress) {
       return yield* new InvalidMicroVmOptionsError({ message: '--inject cannot be combined with --deny-egress.' });
+    }
+    if (flags.clearInject && (inject.length > 0 || flags.denyEgress)) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: '--clear-inject cannot be combined with --inject or --deny-egress.',
+      });
     }
     const apiClient = yield* ApiClientService;
     const vm = yield* apiClient.request((client) =>
@@ -971,7 +977,7 @@ export const updateMicroVmNetwork = (microvmId: string, flags: NetworkFlags) =>
           : {
               egress: 'allow',
               ...(flags.allowEgress.length > 0 ? { allow: flags.allowEgress.map((entry) => entry.trim()) } : {}),
-              ...(inject.length > 0 ? { inject } : {}),
+              ...(inject.length > 0 || flags.clearInject ? { inject } : {}),
             }
       )
     );
@@ -1007,6 +1013,9 @@ const networkCommand = Command.make(
         'Add a header to HTTPS requests to a domain, as DOMAIN:HEADER=VALUE (repeatable, up to 8 domains); the value never enters the microVM'
       ),
       Options.repeated
+    ),
+    clearInject: Options.boolean('clear-inject').pipe(
+      Options.withDescription('Remove every header rule added with --inject')
     ),
   },
   ({ microvmId, ...flags }) =>
