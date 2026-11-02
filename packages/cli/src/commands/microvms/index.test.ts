@@ -513,6 +513,7 @@ describe('parseInjectFlags', () => {
     const created = await run(createInput(createFlags({ inject: ['api.openai.com:Authorization=Bearer k'] })), layer);
     expect(created).toEqual(
       Either.right({
+        applicationId: 'app-linked',
         network: { egress: 'allow', inject: [{ domain: 'api.openai.com', headers: { Authorization: 'Bearer k' } }] },
       })
     );
