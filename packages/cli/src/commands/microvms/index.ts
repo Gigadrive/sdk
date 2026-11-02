@@ -214,6 +214,7 @@ export interface CreateFlags {
   readonly privatePreviews: boolean;
   readonly allowEgress: ReadonlyArray<string>;
   readonly inject: ReadonlyArray<string>;
+  readonly injectFile: Option.Option<string>;
   readonly pauseOnTimeout: boolean;
   readonly autoResume: boolean;
   readonly volumes: ReadonlyArray<string>;
@@ -261,7 +262,7 @@ export const parseInjectFlags = (values: ReadonlyArray<string>) =>
         return yield* new InvalidMicroVmOptionsError({
           // The entry is not echoed: it may hold the credential.
           message:
-            '--inject must be DOMAIN:HEADER=VALUE, such as "api.openai.com:Authorization=Bearer $OPENAI_API_KEY".',
+            '--inject and --inject-file take DOMAIN:HEADER=VALUE, such as "api.openai.com:Authorization=Bearer $OPENAI_API_KEY".',
         });
       }
       rules.set(domain, { ...rules.get(domain), [name]: value.slice(equals + 1) });
@@ -270,6 +271,30 @@ export const parseInjectFlags = (values: ReadonlyArray<string>) =>
       return yield* new InvalidMicroVmOptionsError({ message: '--inject takes at most 8 domains.' });
     }
     return [...rules].map(([domain, headers]): MicroVmInjectRule => ({ domain, headers }));
+  });
+
+/**
+ * Parses `--inject` together with the lines of `--inject-file`, one
+ * DOMAIN:HEADER=VALUE per line (blank lines and `#` comments skipped). A file
+ * keeps the credential out of the process arguments, which other users of the
+ * machine can read; `/dev/stdin` reads it from a pipe.
+ */
+const readInjectRules = (inject: ReadonlyArray<string>, injectFile: Option.Option<string>) =>
+  Effect.gen(function* () {
+    if (Option.isNone(injectFile)) return yield* parseInjectFlags(inject);
+    const fs = yield* FileSystem.FileSystem;
+    const content = yield* fs
+      .readFileString(injectFile.value)
+      .pipe(
+        Effect.mapError(
+          () => new InvalidMicroVmOptionsError({ message: `Could not read --inject-file ${injectFile.value}.` })
+        )
+      );
+    const lines = content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== '' && !line.startsWith('#'));
+    return yield* parseInjectFlags([...inject, ...lines]);
   });
 
 /** Checks `--deny-egress` and `--allow-egress` before any request is sent. */
@@ -309,7 +334,7 @@ export const createInput = (flags: CreateFlags) =>
     if (badPort !== undefined) {
       return yield* new InvalidMicroVmOptionsError({ message: `--port must be between 1 and 65535 (got ${badPort}).` });
     }
-    const inject = yield* parseInjectFlags(flags.inject);
+    const inject = yield* readInjectRules(flags.inject, flags.injectFile);
     if (inject.length > 0 && flags.denyEgress) {
       return yield* new InvalidMicroVmOptionsError({ message: '--inject cannot be combined with --deny-egress.' });
     }
@@ -443,6 +468,12 @@ const createCommand = Command.make(
         'Add a header to HTTPS requests to a domain, as DOMAIN:HEADER=VALUE (repeatable, up to 8 domains); the value never enters the microVM'
       ),
       Options.repeated
+    ),
+    injectFile: Options.text('inject-file').pipe(
+      Options.withDescription(
+        'Read --inject rules from a file, one DOMAIN:HEADER=VALUE per line (/dev/stdin for a pipe), so the values stay out of the command line'
+      ),
+      Options.optional
     ),
     pauseOnTimeout: Options.boolean('pause-on-timeout').pipe(
       Options.withDescription('Pause the microVM when its timeout ends instead of stopping it')
@@ -945,6 +976,7 @@ export interface NetworkFlags {
   readonly allowEgress: ReadonlyArray<string>;
   readonly allowAllEgress: boolean;
   readonly inject: ReadonlyArray<string>;
+  readonly injectFile: Option.Option<string>;
   readonly clearInject: boolean;
 }
 
@@ -959,7 +991,7 @@ export const updateMicroVmNetwork = (microvmId: string, flags: NetworkFlags) =>
       });
     }
     yield* checkEgressFlags(flags.denyEgress, flags.allowEgress);
-    const inject = yield* parseInjectFlags(flags.inject);
+    const inject = yield* readInjectRules(flags.inject, flags.injectFile);
     if (inject.length > 0 && flags.denyEgress) {
       return yield* new InvalidMicroVmOptionsError({ message: '--inject cannot be combined with --deny-egress.' });
     }
@@ -1013,6 +1045,12 @@ const networkCommand = Command.make(
         'Add a header to HTTPS requests to a domain, as DOMAIN:HEADER=VALUE (repeatable, up to 8 domains); the value never enters the microVM'
       ),
       Options.repeated
+    ),
+    injectFile: Options.text('inject-file').pipe(
+      Options.withDescription(
+        'Read --inject rules from a file, one DOMAIN:HEADER=VALUE per line (/dev/stdin for a pipe), so the values stay out of the command line'
+      ),
+      Options.optional
     ),
     clearInject: Options.boolean('clear-inject').pipe(
       Options.withDescription('Remove every header rule added with --inject')

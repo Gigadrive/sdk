@@ -149,6 +149,7 @@ const createFlags = (overrides: Partial<CreateFlags> = {}): CreateFlags => ({
   privatePreviews: false,
   allowEgress: [],
   inject: [],
+  injectFile: Option.none(),
   pauseOnTimeout: false,
   autoResume: false,
   volumes: [],
@@ -524,6 +525,71 @@ describe('parseInjectFlags', () => {
     );
     expect(Either.isLeft(denied) && denied.left._tag).toBe('InvalidMicroVmOptionsError');
   });
+
+  describe('--inject-file', () => {
+    let dir: string;
+    beforeEach(async () => {
+      dir = await mkdtemp(join(tmpdir(), 'gn-microvm-inject-'));
+    });
+    afterEach(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it('reads one rule per line, skipping blank lines and comments, next to --inject', async () => {
+      const file = join(dir, 'rules');
+      await writeFile(
+        file,
+        '# keys for the agent\r\napi.openai.com:Authorization=Bearer sk-file\n\n  *.github.com:Authorization=token ghp-file  \n'
+      );
+      const { layer } = fakeApi();
+
+      const created = await run(
+        createInput(createFlags({ inject: ['api.anthropic.com:x-api-key=sk-ant'], injectFile: Option.some(file) })),
+        layer
+      );
+
+      expect(Either.isRight(created) && created.right.network?.inject).toEqual([
+        { domain: 'api.anthropic.com', headers: { 'x-api-key': 'sk-ant' } },
+        { domain: 'api.openai.com', headers: { Authorization: 'Bearer sk-file' } },
+        { domain: '*.github.com', headers: { Authorization: 'token ghp-file' } },
+      ]);
+    });
+
+    it('refuses an unreadable file and a malformed line without echoing its value', async () => {
+      const malformed = join(dir, 'malformed');
+      await writeFile(malformed, 'api.openai.com Bearer sk-secret\n');
+      const { layer } = fakeApi();
+
+      const missing = await run(createInput(createFlags({ injectFile: Option.some(join(dir, 'none')) })), layer);
+      const bad = await run(createInput(createFlags({ injectFile: Option.some(malformed) })), layer);
+
+      expect(Either.isLeft(missing) && missing.left.message).toContain('Could not read --inject-file');
+      expect(Either.isLeft(bad) && bad.left._tag).toBe('InvalidMicroVmOptionsError');
+      expect(Either.isLeft(bad) && bad.left.message).not.toContain('sk-secret');
+    });
+
+    it('sends the file rules on a network update', async () => {
+      const file = join(dir, 'rules');
+      await writeFile(file, 'api.openai.com:Authorization=Bearer sk-file\n');
+      const api = fakeApi(route('PATCH', '/microvms/vm-1/network', () => json(vmInfo())));
+
+      await run(
+        updateMicroVmNetwork('vm-1', {
+          denyEgress: false,
+          allowEgress: [],
+          allowAllEgress: true,
+          inject: [],
+          injectFile: Option.some(file),
+          clearInject: false,
+        }),
+        api.layer
+      );
+
+      expect(api.calls.map((call) => call.body)).toEqual([
+        { egress: 'allow', inject: [{ domain: 'api.openai.com', headers: { Authorization: 'Bearer sk-file' } }] },
+      ]);
+    });
+  });
 });
 
 describe('updateMicroVmNetwork', () => {
@@ -533,6 +599,7 @@ describe('updateMicroVmNetwork', () => {
       allowEgress: string[];
       allowAllEgress: boolean;
       inject: string[];
+      injectFile: Option.Option<string>;
       clearInject: boolean;
     }> = {}
   ) => ({
@@ -540,6 +607,7 @@ describe('updateMicroVmNetwork', () => {
     allowEgress: [],
     allowAllEgress: false,
     inject: [],
+    injectFile: Option.none(),
     clearInject: false,
     ...overrides,
   });
