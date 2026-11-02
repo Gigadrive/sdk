@@ -1,5 +1,11 @@
 # @gigadrive/sdk
 
+## 0.18.0
+
+### Minor Changes
+
+- microVMs can add headers to their HTTPS requests to chosen domains, so a credential reaches an API without entering the microVM: `network.inject` on `MicroVM.create` and `updateNetwork`, `--inject DOMAIN:HEADER=VALUE` on `gigadrive microvms create` and `gigadrive microvms network` (with `--clear-inject` to remove the rules), and `inject=` in the Python client. Responses list the header names, never the values. ([#625](https://github.com/Gigadrive/sdk/pull/625))
+
 ## 0.17.0
 
 ### Minor Changes
