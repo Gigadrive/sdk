@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 5.5.1
+
+### Patch Changes
+
+- Regenerate Next.js prerenders that ship with a zeroed file timestamp, and record each prerender's runtime cache key in the build manifest so a regenerated page can be found by its Next.js key. ([#637](https://github.com/Gigadrive/sdk/pull/637))
+
 ## 5.5.0
 
 ### Minor Changes
