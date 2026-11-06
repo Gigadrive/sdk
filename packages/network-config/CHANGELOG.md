@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 5.5.2
+
+### Patch Changes
+
+- Report Next.js cache entries at their real age in processes resumed from a snapshot, where Next's monotonic clock falls behind the wall clock and entries would otherwise never go stale. ([#639](https://github.com/Gigadrive/sdk/pull/639))
+
 ## 5.5.1
 
 ### Patch Changes
