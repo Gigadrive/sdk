@@ -18,7 +18,8 @@ permissions:
 jobs:
   test:
     name: Python ${{ matrix.python }}
-    runs-on: ubuntu-latest
+    # Pinned: actions/setup-python has no Python 3.9 build for newer Ubuntu images.
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
