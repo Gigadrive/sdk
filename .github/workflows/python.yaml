@@ -18,7 +18,7 @@ permissions:
 jobs:
   test:
     name: Python ${{ matrix.python }}
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false

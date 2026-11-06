@@ -20,7 +20,7 @@ env:
 jobs:
   test:
     name: Tests
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
@@ -42,7 +42,7 @@ jobs:
 
   lint:
     name: ESLint
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -54,7 +54,7 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Restore ESLint cache
-        uses: useblacksmith/cache@71c7c918062ba3861252d84b07fe5ab2a6b467a6 # v5
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .eslintcache
           key: eslint-${{ runner.os }}-${{ hashFiles('eslint.config.*', '.eslintrc*', 'pnpm-lock.yaml') }}
@@ -66,7 +66,7 @@ jobs:
 
   format:
     name: Prettier
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -82,7 +82,7 @@ jobs:
 
   typecheck:
     name: Type Check
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -98,7 +98,7 @@ jobs:
 
   summary:
     name: Summary (CI)
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
     needs: [test, lint, format, typecheck]
