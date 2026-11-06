@@ -228,6 +228,10 @@ describe('Gigadrive Next.js adapter', () => {
     await mkdir(path.dirname(staticPagePath), { recursive: true });
     await mkdir(path.dirname(staticChunkPath), { recursive: true });
     await writeFile(fallbackPath, '<html>isr</html>');
+    await writeFile(
+      fallbackPath.replace(/\.html$/, '.meta'),
+      JSON.stringify({ routeCache: { key: '/route-cache/APP_PAGE/abc/$/isr' } })
+    );
     await writeFile(isrFallbackPath, '<html>isr plain</html>');
     await writeFile(dynamicFallbackPath, '<html>fallback</html>');
     await writeFile(dynamicRscPath, 'fallback-rsc');
@@ -384,6 +388,7 @@ describe('Gigadrive Next.js adapter', () => {
     expect(prerenderManifest?.prerenders[0]).toMatchObject({
       id: 'isr',
       pathname: '/isr',
+      cacheKey: '/route-cache/APP_PAGE/abc/$/isr',
       fallback: {
         filePath: 'apps/web/.next/server/app/isr.html',
         initialRevalidate: 5,
@@ -402,6 +407,7 @@ describe('Gigadrive Next.js adapter', () => {
       pathname: '/isr-plain',
       fallback: { filePath: 'apps/web/.next/server/app/isr-plain.html', initialRevalidate: 60 },
     });
+    expect(prerenderManifest?.prerenders[2]).not.toHaveProperty('cacheKey');
 
     expect(await readAssetManifest(projectDir)).toEqual({
       version: 1,

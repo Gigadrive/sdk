@@ -150,6 +150,49 @@ describe('GigadriveNextCacheHandler', () => {
     expect(fileSystemCache.get).toHaveBeenCalledWith('/about', { kind: 'APP_PAGE' });
   });
 
+  describe('a build-time prerender with a zeroed file timestamp', () => {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60_000;
+    const readFromDisk = async (context: { kind: string }) => {
+      runtimeCache.read.mockResolvedValue(null);
+      const onDisk = { lastModified: 0, value: { kind: context.kind, html: '<prerendered />' } };
+      const handler = new GigadriveNextCacheHandler();
+      Object.assign(handler, {
+        buildOutputCache: Promise.resolve({ get: vi.fn().mockResolvedValue(onDisk) }),
+      });
+      return handler.get('/about', context);
+    };
+
+    it('gets an age, so Next regenerates it in the background', async () => {
+      const before = Date.now();
+      const entry = await readFromDisk({ kind: 'APP_PAGE' });
+      const after = Date.now();
+
+      expect(entry?.lastModified).toBeGreaterThanOrEqual(before - THIRTY_DAYS_MS);
+      expect(entry?.lastModified).toBeLessThanOrEqual(after - THIRTY_DAYS_MS);
+    });
+
+    it('stays well short of the default one-year expire', async () => {
+      const entry = await readFromDisk({ kind: 'APP_PAGE' });
+
+      expect(Date.now() - (entry?.lastModified ?? 0)).toBeLessThan(365 * 24 * 60 * 60_000);
+    });
+
+    it('leaves fetch entries alone, which Next already reads as stale', async () => {
+      await expect(readFromDisk({ kind: 'FETCH' })).resolves.toMatchObject({ lastModified: 0 });
+    });
+  });
+
+  it('keeps the timestamp of a build-time prerender that has one', async () => {
+    runtimeCache.read.mockResolvedValue(null);
+    const onDisk = { lastModified: 500, value: { kind: 'APP_PAGE', html: '<prerendered />' } };
+    const handler = new GigadriveNextCacheHandler();
+    Object.assign(handler, {
+      buildOutputCache: Promise.resolve({ get: vi.fn().mockResolvedValue(onDisk) }),
+    });
+
+    await expect(handler.get('/about', { kind: 'APP_PAGE' })).resolves.toMatchObject({ lastModified: 500 });
+  });
+
   it('does not resurrect a build-time prerender whose tag was revalidated', async () => {
     runtimeCache.read.mockResolvedValue(null);
     runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: 9_000 });
