@@ -1,3 +1,4 @@
+import { nextClockLagMs } from './nextjs-cache-clock';
 import {
   getRuntimeCacheTagState,
   readRuntimeCache,
@@ -60,6 +61,17 @@ const valueTags = (value: unknown): string[] => {
     .split(',')
     .map((tag) => tag.trim())
     .filter(Boolean);
+};
+
+/** The `lastModified` of an entry forced stale, which must stay as it is for Next. */
+const FORCED_STALE_LAST_MODIFIED = 1;
+
+/** Moves a wall-clock entry onto the clock Next measures its age with. */
+const onNextClock = (entry: IncrementalCacheEntry | null): IncrementalCacheEntry | null => {
+  const lag = nextClockLagMs();
+  return entry && lag !== 0 && entry.lastModified > FORCED_STALE_LAST_MODIFIED
+    ? { ...entry, lastModified: entry.lastModified - lag }
+    : entry;
 };
 
 /** Every tag relevant to an entry: its own, the request's, and the value's headers. */
@@ -233,7 +245,7 @@ export default class GigadriveNextCacheHandler {
     if (tags.length === 0) return entry;
     const tagState = await getRuntimeCacheTagState('incremental', tags);
     if (tagState.expired > entry.lastModified) return null;
-    return tagState.stale > entry.lastModified ? { ...entry, lastModified: 1 } : entry;
+    return tagState.stale > entry.lastModified ? { ...entry, lastModified: FORCED_STALE_LAST_MODIFIED } : entry;
   }
 
   async get(key: string, context: IncrementalCacheContext = {}): Promise<IncrementalCacheEntry | null> {
@@ -244,13 +256,13 @@ export default class GigadriveNextCacheHandler {
 
     const local = localEntries.get(key);
     if (local) {
-      return this.applyTagState(local, collectTags(local.tags, local.value, context));
+      return onNextClock(await this.applyTagState(local, collectTags(local.tags, local.value, context)));
     }
 
     const remote = await readRuntimeCache('incremental', key);
     if (isIncrementalCacheEntry(remote)) {
       localEntries.set(key, remote);
-      return this.applyTagState(remote, collectTags(remote.tags, remote.value, context));
+      return onNextClock(await this.applyTagState(remote, collectTags(remote.tags, remote.value, context)));
     }
 
     // Nothing regenerated yet: fall back to the build-time prerender shipped in
@@ -260,9 +272,11 @@ export default class GigadriveNextCacheHandler {
     const buildOutputCache = await this.loadBuildOutputCache();
     const fromDisk = await buildOutputCache?.get(key, context).catch(() => null);
     if (!isIncrementalCacheEntry(fromDisk)) return null;
-    return this.applyTagState(
-      withBuildOutputAge(fromDisk, context),
-      collectTags(fromDisk.tags, fromDisk.value, context)
+    return onNextClock(
+      await this.applyTagState(
+        withBuildOutputAge(fromDisk, context),
+        collectTags(fromDisk.tags, fromDisk.value, context)
+      )
     );
   }
 

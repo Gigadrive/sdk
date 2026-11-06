@@ -78,6 +78,46 @@ describe('Gigadrive Next Cache Components handler', () => {
     await expect(readStream(entry!.value)).resolves.toEqual(new Uint8Array([1, 2, 3]));
   });
 
+  describe('when the process spent time paused', () => {
+    const LAG_MS = 3_600_000;
+
+    beforeEach(() => {
+      vi.spyOn(performance, 'now').mockImplementation(() => Date.now() - performance.timeOrigin - LAG_MS);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it('stores the wall-clock time and hands Next a timestamp on its own clock', async () => {
+      const nextTimestamp = performance.timeOrigin + performance.now();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1]));
+          controller.close();
+        },
+      });
+
+      await cacheHandler.set(
+        'paused-key',
+        Promise.resolve({ ...serializedEntry(), value: stream, timestamp: nextTimestamp })
+      );
+
+      const [, , stored] = runtimeCache.write.mock.calls[0] as [string, string, { timestamp: number }];
+      expect(stored.timestamp - nextTimestamp).toBeGreaterThanOrEqual(LAG_MS);
+      expect(stored.timestamp - nextTimestamp).toBeLessThan(LAG_MS + 1_000);
+
+      runtimeCache.read.mockResolvedValue(serializedEntry({ timestamp: stored.timestamp }));
+      const entry = await cacheHandler.get('paused-key', []);
+      expect(Math.abs((entry?.timestamp ?? 0) - nextTimestamp)).toBeLessThan(1_000);
+    });
+
+    it('compares tag times with the stored wall-clock timestamp', async () => {
+      const writtenAt = Date.now() - 60_000;
+      runtimeCache.read.mockResolvedValue(serializedEntry({ timestamp: writtenAt }));
+      runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: writtenAt - 1_000 });
+
+      await expect(cacheHandler.get('paused-tag-key', [])).resolves.toBeDefined();
+    });
+  });
+
   it('returns a miss when a tag expired after the entry was written', async () => {
     runtimeCache.read.mockResolvedValue(serializedEntry());
     runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: 2_000 });
