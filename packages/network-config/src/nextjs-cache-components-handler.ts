@@ -1,3 +1,4 @@
+import { nextClockLagMs } from './nextjs-cache-clock';
 import {
   getRuntimeCacheTagState,
   readRuntimeCache,
@@ -70,6 +71,8 @@ const cacheHandler = {
     if (tagState.expired > value.timestamp) return undefined;
     return {
       ...value,
+      // Build entries were stamped by Next itself, so only stored ones need moving.
+      timestamp: process.env.GIGADRIVE_NEXT_BUILD === '1' ? value.timestamp : value.timestamp - nextClockLagMs(),
       ...(tagState.stale > value.timestamp ? { revalidate: -1 } : {}),
       value: new ReadableStream<Uint8Array>({
         start(controller) {
@@ -88,7 +91,8 @@ const cacheHandler = {
       if (process.env.GIGADRIVE_NEXT_BUILD === '1') {
         buildEntries.set(cacheKey, serializedEntry);
       } else {
-        await writeRuntimeCache('component', cacheKey, serializedEntry, entry.tags);
+        const stored = { ...serializedEntry, timestamp: entry.timestamp + nextClockLagMs() };
+        await writeRuntimeCache('component', cacheKey, stored, entry.tags);
       }
     })();
     pendingWrites.set(cacheKey, write);

@@ -182,6 +182,40 @@ describe('GigadriveNextCacheHandler', () => {
     });
   });
 
+  describe('when the process spent time paused', () => {
+    const LAG_MS = 3_600_000;
+    const AGE_MS = 10 * 60_000;
+    const nextNow = () => performance.timeOrigin + performance.now();
+
+    beforeEach(() => {
+      vi.spyOn(performance, 'now').mockImplementation(() => Date.now() - performance.timeOrigin - LAG_MS);
+    });
+
+    it('reports a stored entry at its real age on the clock Next reads', async () => {
+      const entry = { lastModified: Date.now() - AGE_MS, value: { kind: 'APP_PAGE', html: '<p />' } };
+      runtimeCache.read.mockResolvedValue(entry);
+
+      const read = await new GigadriveNextCacheHandler().get('/paused', { kind: 'APP_PAGE' });
+
+      const age = nextNow() - (read?.lastModified ?? 0);
+      expect(age).toBeGreaterThanOrEqual(AGE_MS);
+      expect(age).toBeLessThan(AGE_MS + 1_000);
+    });
+
+    it('leaves an entry forced stale as Next expects it', async () => {
+      runtimeCache.read.mockResolvedValue({
+        lastModified: Date.now() - AGE_MS,
+        tags: ['page'],
+        value: { kind: 'APP_PAGE', html: '<p />' },
+      });
+      runtimeCache.getTagState.mockResolvedValue({ stale: Date.now(), expired: 0 });
+
+      await expect(new GigadriveNextCacheHandler().get('/forced', { kind: 'APP_PAGE' })).resolves.toMatchObject({
+        lastModified: 1,
+      });
+    });
+  });
+
   it('keeps the timestamp of a build-time prerender that has one', async () => {
     runtimeCache.read.mockResolvedValue(null);
     const onDisk = { lastModified: 500, value: { kind: 'APP_PAGE', html: '<prerendered />' } };
