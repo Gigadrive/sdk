@@ -247,12 +247,31 @@ const getEntryPagePaths = (prerenders: GigadriveNextPrerenderOutput[]): string[]
     .sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))
     .slice(0, MAXIMUM_ENTRY_PAGE_PATHS);
 
+const NextPrerenderMetaSchema = Schema.Struct({
+  routeCache: Schema.optional(Schema.Struct({ key: Schema.String })),
+});
+
+/**
+ * Reads the runtime cache key Next recorded beside a prerender's HTML. Newer
+ * Next versions scope keys by source route, so the pathname alone would miss the
+ * entry. Using Next's own value avoids depending on how a version builds it.
+ */
+const readPrerenderCacheKey = async (repoRoot: string, htmlPath: string): Promise<string | undefined> => {
+  if (!htmlPath.endsWith('.html')) return undefined;
+  const metaPath = path.resolve(repoRoot, htmlPath.replace(/\.html$/, '.meta'));
+  const content = await readFile(metaPath, 'utf8').catch(() => undefined);
+  return content === undefined ? undefined : decodeJson(NextPrerenderMetaSchema, content)?.routeCache?.key;
+};
+
 const serializePrerenderOutput = async (
   repoRoot: string,
   resolvedRepoRoot: string,
   output: NextPrerenderOutput
 ): Promise<GigadriveNextPrerenderOutput> => {
   const { bypassFor, ...prerenderConfig } = output.config;
+  const cacheKey = output.fallback?.filePath
+    ? await readPrerenderCacheKey(repoRoot, output.fallback.filePath)
+    : undefined;
   const serializedOutput = {
     id: output.id,
     type: 'PRERENDER' as const,
@@ -260,6 +279,7 @@ const serializePrerenderOutput = async (
     ...(output.route !== undefined ? { route: output.route } : {}),
     parentOutputId: output.parentOutputId,
     groupId: output.groupId,
+    ...(cacheKey !== undefined ? { cacheKey } : {}),
     ...(output.pprChain ? { pprChain: output.pprChain } : {}),
     ...(output.parentFallbackMode !== undefined ? { parentFallbackMode: toJsonValue(output.parentFallbackMode) } : {}),
     ...(output.fallback

@@ -76,6 +76,8 @@ const GigadriveNextPrerenderOutputFields = {
   route: Schema.optional(UrlPathnameSchema),
   parentOutputId: Schema.String,
   groupId: Schema.Number,
+  /** Next's key for the page's runtime cache entry, when its build metadata records one. */
+  cacheKey: Schema.optional(Schema.String),
   pprChain: Schema.optional(Schema.mutable(Schema.Struct({ headers: HttpSingleValueHeadersSchema }))),
   parentFallbackMode: Schema.optional(JsonValueSchema),
   fallback: Schema.optional(

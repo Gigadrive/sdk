@@ -74,6 +74,25 @@ const collectTags = (
 const isBuildPhase = (): boolean => process.env.GIGADRIVE_NEXT_BUILD === '1';
 
 /**
+ * Age reported for a build-time prerender whose file has no timestamp.
+ *
+ * Reproducible deployment images zero every mtime, and Next reads a
+ * `lastModified` of 0 as "written just now", so the page would stay fresh
+ * forever and never regenerate. The real age is unknown here, because build
+ * metadata carries neither the time nor the page's cache lifetime. This value
+ * is past most revalidate windows, which starts a background regeneration, and
+ * short of the default one-year `expire`, which would block the response on a
+ * render instead.
+ */
+const BUILD_OUTPUT_AGE_MS = 30 * 24 * 60 * 60_000;
+
+/** Gives page output a usable age. Fetch entries already read 0 as stale. */
+const withBuildOutputAge = (entry: IncrementalCacheEntry, context: IncrementalCacheContext): IncrementalCacheEntry =>
+  entry.lastModified === 0 && context.kind !== 'FETCH'
+    ? { ...entry, lastModified: Date.now() - BUILD_OUTPUT_AGE_MS }
+    : entry;
+
+/**
  * How long a locally cached entry may serve before the remote copy is re-read.
  * Bounds staleness when another instance rewrites the entry; tag-driven
  * invalidation is unaffected because tag state is checked remotely on every
@@ -241,7 +260,10 @@ export default class GigadriveNextCacheHandler {
     const buildOutputCache = await this.loadBuildOutputCache();
     const fromDisk = await buildOutputCache?.get(key, context).catch(() => null);
     if (!isIncrementalCacheEntry(fromDisk)) return null;
-    return this.applyTagState(fromDisk, collectTags(fromDisk.tags, fromDisk.value, context));
+    return this.applyTagState(
+      withBuildOutputAge(fromDisk, context),
+      collectTags(fromDisk.tags, fromDisk.value, context)
+    );
   }
 
   async set(key: string, data: unknown, context: IncrementalCacheContext): Promise<void> {
