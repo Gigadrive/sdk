@@ -1,7 +1,7 @@
 import { nextClockLagMs } from './nextjs-cache-clock';
 import {
   getRuntimeCacheTagState,
-  readRuntimeCache,
+  readRuntimeCacheWithTagState,
   revalidateRuntimeCacheTags,
   writeRuntimeCache,
 } from './nextjs-runtime-cache-client';
@@ -59,15 +59,14 @@ const streamToBytes = async (stream: ReadableStream<Uint8Array>): Promise<Uint8A
 const cacheHandler = {
   async get(cacheKey: string, softTags: string[]): Promise<CacheComponentEntry | undefined> {
     await pendingWrites.get(cacheKey);
-    const value =
+    const read =
       process.env.GIGADRIVE_NEXT_BUILD === '1'
-        ? buildEntries.get(cacheKey)
-        : await readRuntimeCache('component', cacheKey);
+        ? { value: buildEntries.get(cacheKey), tagState: { stale: 0, expired: 0 } }
+        : await readRuntimeCacheWithTagState('component', cacheKey, softTags);
+    const value = read?.value;
     if (!isSerializedCacheComponentEntry(value)) return undefined;
     const tagState =
-      process.env.GIGADRIVE_NEXT_BUILD === '1'
-        ? { stale: 0, expired: 0 }
-        : await getRuntimeCacheTagState('component', [...new Set([...value.tags, ...softTags])]);
+      read?.tagState ?? (await getRuntimeCacheTagState('component', [...new Set([...value.tags, ...softTags])]));
     if (tagState.expired > value.timestamp) return undefined;
     return {
       ...value,

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getRuntimeCacheTagState,
   readRuntimeCache,
+  readRuntimeCacheWithTagState,
   resetRuntimeCacheClientForTests,
   revalidateRuntimeCacheTags,
   writeRuntimeCache,
@@ -150,6 +151,74 @@ describe('nextjs runtime cache client', () => {
       'Gigadrive workload credentials are unavailable'
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  describe('combined entry and tag-state reads', () => {
+    const sentHeaders = () => new Headers((fetchMock.mock.calls[1][1] as RequestInit).headers);
+
+    it('sends the soft tags once and returns the tag state answered with the entry', async () => {
+      fetchMock
+        .mockResolvedValueOnce(tokenResponse())
+        .mockResolvedValueOnce(jsonResponse({ value: { hello: 'world' }, tagState: { stale: 5, expired: 3 } }));
+
+      const read = await readRuntimeCacheWithTagState('component', 'key', ['_N_T_/layout', '_N_T_/blog', '_N_T_/blog']);
+
+      expect(read).toEqual({ value: { hello: 'world' }, tagState: { stale: 5, expired: 3 } });
+      expect(sentHeaders().get('x-gigadrive-cache-soft-tags')).toBe('["_N_T_/layout","_N_T_/blog"]');
+    });
+
+    it('escapes non-ASCII tags so the header stays valid and decodes to the same tags', async () => {
+      fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(jsonResponse({ value: 1 }));
+
+      await readRuntimeCacheWithTagState('component', 'key', ['_N_T_/tags/café', '_N_T_/タグ']);
+
+      const header = sentHeaders().get('x-gigadrive-cache-soft-tags') ?? '';
+      expect(header).toMatch(/^[\x20-\x7e]+$/);
+      expect(JSON.parse(header)).toEqual(['_N_T_/tags/café', '_N_T_/タグ']);
+    });
+
+    it('returns the entry without a tag state when the API answers the entry alone', async () => {
+      fetchMock
+        .mockResolvedValueOnce(tokenResponse())
+        .mockResolvedValueOnce(jsonResponse({ value: { hello: 'world' } }));
+
+      await expect(readRuntimeCacheWithTagState('component', 'key', [])).resolves.toEqual({
+        value: { hello: 'world' },
+      });
+    });
+
+    it.each([
+      ['more than 128 soft tags', Array.from({ length: 129 }, (_, index) => `tag-${String(index)}`)],
+      ['a soft tag over 256 characters', ['x'.repeat(257)]],
+      [
+        'soft tags too long for one header',
+        Array.from({ length: 20 }, (_, index) => `${String(index)}${'x'.repeat(250)}`),
+      ],
+    ])('reads the entry alone for %s, which the API would refuse', async (_name, softTags) => {
+      fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(jsonResponse({ value: 1 }));
+
+      await expect(readRuntimeCacheWithTagState('component', 'key', softTags)).resolves.toEqual({ value: 1 });
+      expect(sentHeaders().has('x-gigadrive-cache-soft-tags')).toBe(false);
+    });
+
+    it('treats a stored value that fails to decode as a miss, on both read paths', async () => {
+      const malformed = { value: { __gigadriveType: 'map', value: [null] } };
+      fetchMock
+        .mockResolvedValueOnce(tokenResponse())
+        .mockResolvedValueOnce(jsonResponse(malformed))
+        .mockResolvedValueOnce(jsonResponse(malformed));
+
+      await expect(readRuntimeCache('component', 'key')).resolves.toBeUndefined();
+      await expect(readRuntimeCacheWithTagState('component', 'key', [])).resolves.toBeUndefined();
+    });
+
+    it('treats a miss or a transport error as no entry', async () => {
+      fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(jsonResponse({ error: 'nope' }, 404));
+      await expect(readRuntimeCacheWithTagState('component', 'key', [])).resolves.toBeUndefined();
+
+      fetchMock.mockRejectedValue(new Error('network down'));
+      await expect(readRuntimeCacheWithTagState('component', 'key', [])).resolves.toBeUndefined();
+    });
   });
 
   it('degrades tag-state reads to fresh on transport errors', async () => {
