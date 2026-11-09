@@ -201,6 +201,17 @@ describe('nextjs runtime cache client', () => {
       expect(sentHeaders().has('x-gigadrive-cache-soft-tags')).toBe(false);
     });
 
+    it('treats a stored value that fails to decode as a miss, on both read paths', async () => {
+      const malformed = { value: { __gigadriveType: 'map', value: [null] } };
+      fetchMock
+        .mockResolvedValueOnce(tokenResponse())
+        .mockResolvedValueOnce(jsonResponse(malformed))
+        .mockResolvedValueOnce(jsonResponse(malformed));
+
+      await expect(readRuntimeCache('component', 'key')).resolves.toBeUndefined();
+      await expect(readRuntimeCacheWithTagState('component', 'key', [])).resolves.toBeUndefined();
+    });
+
     it('treats a miss or a transport error as no entry', async () => {
       fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(jsonResponse({ error: 'nope' }, 404));
       await expect(readRuntimeCacheWithTagState('component', 'key', [])).resolves.toBeUndefined();

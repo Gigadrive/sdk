@@ -113,24 +113,24 @@ const request = async (pathname: string, init: RequestInit, attempt = 0): Promis
 const cachePath = (kind: string, key: string): string =>
   `/internal/runtime-cache/v1/entries/${encodeURIComponent(kind)}/${encodeURIComponent(key)}`;
 
-const readEnvelope = async (
+/** Reads and decodes an entry; anything that fails, malformed stored data included, is a miss. */
+const readEntry = async (
   kind: string,
   key: string,
   headers: Record<string, string> = {}
-): Promise<RuntimeCacheEnvelope | undefined> => {
+): Promise<{ value: unknown; tagState?: unknown } | undefined> => {
   try {
     const response = await request(cachePath(kind, key), { method: 'GET', headers });
     if (!response.ok) return undefined;
-    return (await response.json()) as RuntimeCacheEnvelope;
+    const envelope = (await response.json()) as RuntimeCacheEnvelope & { tagState?: unknown };
+    return { value: decodeBinary(envelope.value), tagState: envelope.tagState };
   } catch {
     return undefined;
   }
 };
 
-export const readRuntimeCache = async (kind: string, key: string): Promise<unknown | undefined> => {
-  const envelope = await readEnvelope(kind, key);
-  return envelope && decodeBinary(envelope.value);
-};
+export const readRuntimeCache = async (kind: string, key: string): Promise<unknown | undefined> =>
+  (await readEntry(kind, key))?.value;
 
 /** The API's limits on the soft tags of a combined read. */
 const MAX_SOFT_TAGS = 128;
@@ -160,11 +160,11 @@ export const readRuntimeCacheWithTagState = async (
     tags.length <= MAX_SOFT_TAGS &&
     tags.every((tag) => tag.length <= MAX_TAG_LENGTH) &&
     header.length <= MAX_SOFT_TAGS_HEADER_LENGTH;
-  const envelope = await readEnvelope(kind, key, sendable ? { 'x-gigadrive-cache-soft-tags': header } : {});
-  if (!envelope) return undefined;
-  const state = (envelope as { tagState?: { stale?: unknown; expired?: unknown } }).tagState;
+  const entry = await readEntry(kind, key, sendable ? { 'x-gigadrive-cache-soft-tags': header } : {});
+  if (!entry) return undefined;
+  const state = entry.tagState as { stale?: unknown; expired?: unknown } | undefined;
   return {
-    value: decodeBinary(envelope.value),
+    value: entry.value,
     ...(typeof state?.stale === 'number' && typeof state.expired === 'number'
       ? { tagState: { stale: state.stale, expired: state.expired } }
       : {}),
