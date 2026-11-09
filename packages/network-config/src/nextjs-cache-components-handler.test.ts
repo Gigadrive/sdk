@@ -9,7 +9,7 @@ const runtimeCache = vi.hoisted(() => ({
 
 vi.mock('./nextjs-runtime-cache-client', () => ({
   getRuntimeCacheTagState: runtimeCache.getTagState,
-  readRuntimeCache: runtimeCache.read,
+  readRuntimeCacheWithTagState: runtimeCache.read,
   revalidateRuntimeCacheTags: runtimeCache.revalidate,
   writeRuntimeCache: runtimeCache.write,
 }));
@@ -69,7 +69,7 @@ describe('Gigadrive Next Cache Components handler', () => {
   });
 
   it('restores persisted streams and validates explicit and soft tags together', async () => {
-    runtimeCache.read.mockResolvedValue(serializedEntry());
+    runtimeCache.read.mockResolvedValue({ value: serializedEntry() });
 
     const entry = await cacheHandler.get('component-key', ['implicit']);
 
@@ -104,36 +104,60 @@ describe('Gigadrive Next Cache Components handler', () => {
       expect(stored.timestamp - nextTimestamp).toBeGreaterThanOrEqual(LAG_MS);
       expect(stored.timestamp - nextTimestamp).toBeLessThan(LAG_MS + 1_000);
 
-      runtimeCache.read.mockResolvedValue(serializedEntry({ timestamp: stored.timestamp }));
+      runtimeCache.read.mockResolvedValue({ value: serializedEntry({ timestamp: stored.timestamp }) });
       const entry = await cacheHandler.get('paused-key', []);
       expect(Math.abs((entry?.timestamp ?? 0) - nextTimestamp)).toBeLessThan(1_000);
     });
 
     it('compares tag times with the stored wall-clock timestamp', async () => {
       const writtenAt = Date.now() - 60_000;
-      runtimeCache.read.mockResolvedValue(serializedEntry({ timestamp: writtenAt }));
+      runtimeCache.read.mockResolvedValue({ value: serializedEntry({ timestamp: writtenAt }) });
       runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: writtenAt - 1_000 });
 
       await expect(cacheHandler.get('paused-tag-key', [])).resolves.toBeDefined();
     });
   });
 
+  it('uses the tag state answered with the entry instead of asking a second time', async () => {
+    runtimeCache.read.mockResolvedValue({ value: serializedEntry(), tagState: { stale: 2_000, expired: 0 } });
+
+    const entry = await cacheHandler.get('component-key', ['implicit']);
+
+    expect(runtimeCache.read).toHaveBeenCalledWith('component', 'component-key', ['implicit']);
+    expect(runtimeCache.getTagState).not.toHaveBeenCalled();
+    expect(entry).toMatchObject({ revalidate: -1 });
+  });
+
+  it('misses when the tag state answered with the entry shows a later expiration', async () => {
+    runtimeCache.read.mockResolvedValue({ value: serializedEntry(), tagState: { stale: 0, expired: 2_000 } });
+
+    await expect(cacheHandler.get('component-key', [])).resolves.toBeUndefined();
+    expect(runtimeCache.getTagState).not.toHaveBeenCalled();
+  });
+
+  it('misses without a tag-state lookup when nothing is stored', async () => {
+    runtimeCache.read.mockResolvedValue(undefined);
+
+    await expect(cacheHandler.get('component-key', ['implicit'])).resolves.toBeUndefined();
+    expect(runtimeCache.getTagState).not.toHaveBeenCalled();
+  });
+
   it('returns a miss when a tag expired after the entry was written', async () => {
-    runtimeCache.read.mockResolvedValue(serializedEntry());
+    runtimeCache.read.mockResolvedValue({ value: serializedEntry() });
     runtimeCache.getTagState.mockResolvedValue({ stale: 0, expired: 2_000 });
 
     await expect(cacheHandler.get('component-key', [])).resolves.toBeUndefined();
   });
 
   it('fails open when a persisted entry is malformed', async () => {
-    runtimeCache.read.mockResolvedValue({ value: new Uint8Array([1]), tags: 'not-an-array' });
+    runtimeCache.read.mockResolvedValue({ value: { value: new Uint8Array([1]), tags: 'not-an-array' } });
 
     await expect(cacheHandler.get('component-key', [])).resolves.toBeUndefined();
     expect(runtimeCache.getTagState).not.toHaveBeenCalled();
   });
 
   it('marks entries stale during a timed revalidation window', async () => {
-    runtimeCache.read.mockResolvedValue(serializedEntry());
+    runtimeCache.read.mockResolvedValue({ value: serializedEntry() });
     runtimeCache.getTagState.mockResolvedValue({ stale: 2_000, expired: 0 });
 
     await expect(cacheHandler.get('component-key', [])).resolves.toMatchObject({ revalidate: -1 });

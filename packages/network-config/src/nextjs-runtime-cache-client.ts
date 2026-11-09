@@ -113,16 +113,62 @@ const request = async (pathname: string, init: RequestInit, attempt = 0): Promis
 const cachePath = (kind: string, key: string): string =>
   `/internal/runtime-cache/v1/entries/${encodeURIComponent(kind)}/${encodeURIComponent(key)}`;
 
-export const readRuntimeCache = async (kind: string, key: string): Promise<unknown | undefined> => {
+const readEnvelope = async (
+  kind: string,
+  key: string,
+  headers: Record<string, string> = {}
+): Promise<RuntimeCacheEnvelope | undefined> => {
   try {
-    const response = await request(cachePath(kind, key), { method: 'GET' });
-    if (response.status === 404) return undefined;
+    const response = await request(cachePath(kind, key), { method: 'GET', headers });
     if (!response.ok) return undefined;
-    const envelope = (await response.json()) as RuntimeCacheEnvelope;
-    return decodeBinary(envelope.value);
+    return (await response.json()) as RuntimeCacheEnvelope;
   } catch {
     return undefined;
   }
+};
+
+export const readRuntimeCache = async (kind: string, key: string): Promise<unknown | undefined> => {
+  const envelope = await readEnvelope(kind, key);
+  return envelope && decodeBinary(envelope.value);
+};
+
+/** The API's limits on the soft tags of a combined read. */
+const MAX_SOFT_TAGS = 128;
+const MAX_TAG_LENGTH = 256;
+/** Well under the header limits of the CDN and load balancer in front of the API. */
+const MAX_SOFT_TAGS_HEADER_LENGTH = 4096;
+
+/**
+ * Reads an entry and, in the same request, the tag state of its own tags plus `softTags`.
+ *
+ * Saves the separate tag-state round trip on every hit. `tagState` is absent when the API answers
+ * the entry alone (an API without combined reads, or soft tags too many or too long to send), so
+ * the caller asks for it separately.
+ */
+export const readRuntimeCacheWithTagState = async (
+  kind: string,
+  key: string,
+  softTags: readonly string[]
+): Promise<{ value: unknown; tagState?: RuntimeCacheTagState } | undefined> => {
+  const tags = [...new Set(softTags)];
+  // Escape everything outside ASCII so the list is always a valid header value.
+  const header = JSON.stringify(tags).replace(
+    /[\u007f-\uffff]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`
+  );
+  const sendable =
+    tags.length <= MAX_SOFT_TAGS &&
+    tags.every((tag) => tag.length <= MAX_TAG_LENGTH) &&
+    header.length <= MAX_SOFT_TAGS_HEADER_LENGTH;
+  const envelope = await readEnvelope(kind, key, sendable ? { 'x-gigadrive-cache-soft-tags': header } : {});
+  if (!envelope) return undefined;
+  const state = (envelope as { tagState?: { stale?: unknown; expired?: unknown } }).tagState;
+  return {
+    value: decodeBinary(envelope.value),
+    ...(typeof state?.stale === 'number' && typeof state.expired === 'number'
+      ? { tagState: { stale: state.stale, expired: state.expired } }
+      : {}),
+  };
 };
 
 export const writeRuntimeCache = async (
