@@ -316,6 +316,8 @@ describe('Next.js framework detection', () => {
       '/project/out/blog/first-post.html': 'post',
       '/project/out/404.html': 'not found',
       '/project/out/about.txt': 'rsc payload',
+      '/project/public/legacy/report.html': 'report',
+      '/project/out/legacy/report.html': 'report',
       '/project/out/_next/static/app.js': 'chunk',
     });
 
@@ -326,6 +328,8 @@ describe('Next.js framework detection', () => {
       'out/404.html': { path: '404' },
       // The client router fetches RSC payloads by their own file name.
       'out/about.txt': { path: 'about.txt' },
+      // A file copied from `public/` keeps the name it is requested by.
+      'out/legacy/report.html': { path: 'legacy/report.html' },
       'out/_next/static/app.js': { path: '_next/static/app.js' },
     });
   });

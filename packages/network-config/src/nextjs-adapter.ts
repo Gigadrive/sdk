@@ -495,11 +495,31 @@ const normalizeImages = (config: BuildCompleteContext['config']): NormalizedImag
  * the managed-runtime injections.
  */
 /**
- * The config Next 15 loaded, kept for its `onBuildComplete`, which receives none
- * of it. Next 15 calls `modifyConfig` only for production builds and servers,
- * in the same process as the build.
+ * The config this adapter returned to Next 15, kept for its `onBuildComplete`,
+ * which receives none of it. Next 15 calls `modifyConfig` only for production
+ * builds and servers, in the same process as the build, and keeps normalizing
+ * the returned object (an export build moves `distDir` back to `.next`).
  */
 let next15Config: NextConfigComplete | undefined;
+
+/**
+ * The application directory of a Next 15 build. Next looks for its config file
+ * in parent directories too, so a shared config can sit above the application.
+ * Every output it reports lives under `<application>/<distDir>/server/`.
+ */
+const findNext15ProjectDir = (outputs: unknown, distDir: string): string | undefined => {
+  const marker = `${path.sep}${path.normalize(distDir)}${path.sep}server${path.sep}`;
+  const lists = typeof outputs === 'object' && outputs !== null ? Object.values(outputs) : [];
+  for (const list of lists) {
+    for (const output of Array.isArray(list) ? list : []) {
+      const filePath: unknown =
+        typeof output === 'object' && output !== null && 'filePath' in output ? output.filePath : undefined;
+      const index = typeof filePath === 'string' ? filePath.indexOf(marker) : -1;
+      if (typeof filePath === 'string' && index > 0) return filePath.slice(0, index);
+    }
+  }
+  return undefined;
+};
 
 /** Reads the version of the Next.js the project at `projectDir` resolves. */
 const readNextVersion = (projectDir: string): string => {
@@ -514,12 +534,15 @@ const readNextVersion = (projectDir: string): string => {
 
 /**
  * Writes the legacy standalone manifest for a Next 15 build from the config its
- * `modifyConfig` saw: the project is the directory of its config file, and its
- * build id is the one Next wrote before calling `onBuildComplete`.
+ * `modifyConfig` returned and the outputs of the build. Its build id is the one
+ * Next wrote before calling `onBuildComplete`.
  */
-const writeNext15Manifest = async (config: NextConfigComplete | undefined) => {
-  const projectDir = config?.configFile ? path.dirname(config.configFile) : process.cwd();
-  const distDir = path.resolve(projectDir, config?.distDir ?? '.next');
+const writeNext15Manifest = async (config: NextConfigComplete | undefined, outputs: unknown) => {
+  const configuredDistDir = config?.distDir ?? '.next';
+  const projectDir =
+    findNext15ProjectDir(outputs, configuredDistDir) ??
+    (config?.configFile ? path.dirname(config.configFile) : process.cwd());
+  const distDir = path.resolve(projectDir, configuredDistDir);
   const repoRoot = config?.outputFileTracingRoot || projectDir;
   const buildId = (await readFile(path.join(distDir, 'BUILD_ID'), 'utf8')).trim();
   const manifest: GigadriveNextBuildManifestV1 = {
@@ -540,17 +563,18 @@ const gigadriveNextAdapter: NextAdapter = {
   modifyConfig(config, context?: ModifyConfigContext) {
     // Next 15 passes no context. It only calls this for production builds and
     // servers, and an unknown version takes the legacy standalone path below.
-    if (!context) next15Config = config;
     const { phase, nextVersion } = context ?? { phase: PRODUCTION_BUILD_PHASE, nextVersion: undefined };
     if (phase !== PRODUCTION_BUILD_PHASE) return config;
 
     const deploymentId = config.deploymentId ?? process.env.GIGADRIVE_DEPLOYMENT_ID;
     if (!supportsManagedRuntime(nextVersion)) {
-      return {
+      const legacyConfig = {
         ...config,
         ...(deploymentId ? { deploymentId } : {}),
-        output: config.output === 'export' ? 'export' : 'standalone',
+        output: config.output === 'export' ? ('export' as const) : ('standalone' as const),
       };
+      if (!context) next15Config = legacyConfig;
+      return legacyConfig;
     }
     if (config.output === 'export') {
       return { ...config, ...(deploymentId ? { deploymentId } : {}) };
@@ -597,7 +621,7 @@ const gigadriveNextAdapter: NextAdapter = {
 
   async onBuildComplete(context: BuildCompleteContext | Next15BuildCompleteContext) {
     if (!('projectDir' in context)) {
-      await writeNext15Manifest(next15Config);
+      await writeNext15Manifest(next15Config, context.outputs);
       return;
     }
     const { projectDir, repoRoot, distDir, config, nextVersion, buildId, routing, outputs } = context;

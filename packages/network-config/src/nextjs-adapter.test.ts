@@ -240,6 +240,30 @@ describe('Gigadrive Next.js adapter', () => {
 
       expect(await readManifest(projectDir)).toMatchObject({ version: 1, output: 'export' });
     });
+
+    it('finds the application from its outputs when Next 15 found its config in a parent directory', async () => {
+      const { projectDir, config } = await next15Project();
+      const repoRoot = path.dirname(path.dirname(projectDir));
+
+      next15ModifyConfig({ ...config, configFile: path.join(repoRoot, 'next.config.mjs') });
+      await onBuildComplete({
+        routes: {},
+        outputs: { appPages: [{ filePath: path.join(projectDir, '.next', 'server', 'app', 'page.js') }] },
+      });
+
+      expect(await readManifest(projectDir)).toMatchObject({ distDir: '.next', repoRootToProject: 'apps/web' });
+    });
+
+    it('reads the dist directory Next 15 settled on after the adapter returned the config', async () => {
+      const { projectDir, config } = await next15Project();
+
+      const returned = next15ModifyConfig({ ...config, output: 'export', distDir: 'dist' });
+      // An export build moves `distDir` back to `.next` on the object it got back.
+      returned.distDir = '.next';
+      await onBuildComplete({ routes: {}, outputs: {} });
+
+      expect(await readManifest(projectDir)).toMatchObject({ output: 'export', distDir: '.next' });
+    });
   });
 
   it('writes a portable legacy manifest for the Next 16.1 adapter contract', async () => {
