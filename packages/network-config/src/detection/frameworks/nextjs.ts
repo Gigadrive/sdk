@@ -83,6 +83,7 @@ const createStaticExportConfig = Effect.fn('nextjs.createStaticExportConfig')(fu
   defaults: FrameworkDefaultConfig,
   projectFolder: string
 ) {
+  const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const outputDirectory = pathService.join(projectFolder, 'out');
   const files = yield* getDefaultPathMap(outputDirectory);
@@ -94,12 +95,24 @@ const createStaticExportConfig = Effect.fn('nextjs.createStaticExportConfig')(fu
     const outputRelativePath = toPortablePath(pathService.relative(outputDirectory, absolutePath));
     assetPaths.push(projectRelativePath);
 
+    // Pages answer the URL Next links to. Next writes `out/about/index.html`
+    // with `trailingSlash: true` and `out/about.html` without it, its default,
+    // and links to `/about` either way. The content type still comes from the
+    // file name, so a page served at `/about` stays HTML. A file copied from
+    // `public/` keeps the name it is requested by.
+    const fromPublic =
+      outputRelativePath.endsWith('.html') &&
+      (yield* fs
+        .exists(pathService.join(projectFolder, 'public', outputRelativePath))
+        .pipe(Effect.catchAll(() => Effect.succeed(false))));
     const routePath =
       outputRelativePath === 'index.html'
         ? ''
         : outputRelativePath.endsWith('/index.html')
           ? outputRelativePath.slice(0, -'/index.html'.length)
-          : outputRelativePath;
+          : outputRelativePath.endsWith('.html') && !fromPublic
+            ? outputRelativePath.slice(0, -'.html'.length)
+            : outputRelativePath;
     assetOverrides[projectRelativePath] = { path: routePath };
   }
 

@@ -179,6 +179,93 @@ describe('Gigadrive Next.js adapter', () => {
     });
   });
 
+  describe("Next 15's adapter contract", () => {
+    // Next 15 calls `modifyConfig(config)` and `onBuildComplete({ routes, outputs })`.
+    const next15ModifyConfig = (config: Record<string, unknown>) => {
+      if (!gigadriveNextAdapter.modifyConfig) throw new Error('Expected modifyConfig');
+      return (
+        gigadriveNextAdapter.modifyConfig as unknown as (config: Record<string, unknown>) => Record<string, unknown>
+      )(config);
+    };
+
+    /** A monorepo app that Next 15 built: its own `next` install and the build id Next wrote. */
+    const next15Project = async () => {
+      const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-15-adapter-'));
+      temporaryDirectories.push(repoRoot);
+      const projectDir = path.join(repoRoot, 'apps', 'web');
+      await mkdir(path.join(projectDir, 'node_modules', 'next'), { recursive: true });
+      await mkdir(path.join(projectDir, '.next'), { recursive: true });
+      await writeFile(path.join(projectDir, 'package.json'), '{"name":"web"}');
+      await writeFile(path.join(projectDir, 'node_modules', 'next', 'package.json'), '{"version":"15.5.12"}');
+      await writeFile(path.join(projectDir, '.next', 'BUILD_ID'), 'next-15-build\n');
+      const config = nextConfig({
+        configFile: path.join(projectDir, 'next.config.mjs'),
+        distDir: '.next',
+        outputFileTracingRoot: repoRoot,
+      });
+      return { projectDir, config };
+    };
+
+    it('forces standalone output without a context, as Next 15 calls it', () => {
+      process.env.GIGADRIVE_DEPLOYMENT_ID = 'deployment-id';
+
+      const result = next15ModifyConfig(nextConfig());
+
+      expect(result).toMatchObject({ deploymentId: 'deployment-id', output: 'standalone' });
+      expect(result.cacheHandler).toBeUndefined();
+      expect(result.cacheHandlers).toBeUndefined();
+    });
+
+    it('writes the legacy standalone manifest from the config Next 15 loaded', async () => {
+      const { projectDir, config } = await next15Project();
+
+      next15ModifyConfig(config);
+      await onBuildComplete({ routes: {}, outputs: {} });
+
+      expect(await readManifest(projectDir)).toEqual({
+        version: 1,
+        output: 'standalone',
+        distDir: '.next',
+        repoRootToProject: 'apps/web',
+        nextVersion: '15.5.12',
+        buildId: 'next-15-build',
+      });
+    });
+
+    it('writes a static export manifest for a Next 15 export build', async () => {
+      const { projectDir, config } = await next15Project();
+
+      next15ModifyConfig({ ...config, output: 'export' });
+      await onBuildComplete({ routes: {}, outputs: {} });
+
+      expect(await readManifest(projectDir)).toMatchObject({ version: 1, output: 'export' });
+    });
+
+    it('finds the application from its outputs when Next 15 found its config in a parent directory', async () => {
+      const { projectDir, config } = await next15Project();
+      const repoRoot = path.dirname(path.dirname(projectDir));
+
+      next15ModifyConfig({ ...config, configFile: path.join(repoRoot, 'next.config.mjs') });
+      await onBuildComplete({
+        routes: {},
+        outputs: { appPages: [{ filePath: path.join(projectDir, '.next', 'server', 'app', 'page.js') }] },
+      });
+
+      expect(await readManifest(projectDir)).toMatchObject({ distDir: '.next', repoRootToProject: 'apps/web' });
+    });
+
+    it('reads the dist directory Next 15 settled on after the adapter returned the config', async () => {
+      const { projectDir, config } = await next15Project();
+
+      const returned = next15ModifyConfig({ ...config, output: 'export', distDir: 'dist' });
+      // An export build moves `distDir` back to `.next` on the object it got back.
+      returned.distDir = '.next';
+      await onBuildComplete({ routes: {}, outputs: {} });
+
+      expect(await readManifest(projectDir)).toMatchObject({ output: 'export', distDir: '.next' });
+    });
+  });
+
   it('writes a portable legacy manifest for the Next 16.1 adapter contract', async () => {
     const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-16-1-adapter-'));
     temporaryDirectories.push(repoRoot);
