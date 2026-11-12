@@ -20,6 +20,15 @@ import type {
 } from './nextjs-manifest';
 
 type BuildCompleteContext = Parameters<NonNullable<NextAdapter['onBuildComplete']>>[0];
+type NextConfigComplete = Parameters<NonNullable<NextAdapter['modifyConfig']>>[0];
+type ModifyConfigContext = Parameters<NonNullable<NextAdapter['modifyConfig']>>[1];
+/**
+ * What Next 15 passes to `onBuildComplete`. Next 15 loads the adapter through
+ * `experimental.adapterPath` (which `NEXT_ADAPTER_PATH` sets) but with an older
+ * contract: `modifyConfig(config)` gets no context, and `onBuildComplete` gets
+ * neither the project, the dist directory, the config nor the Next version.
+ */
+type Next15BuildCompleteContext = { readonly routes: unknown; readonly outputs: unknown };
 type NextRouteOutput =
   | BuildCompleteContext['outputs']['pages'][number]
   | BuildCompleteContext['outputs']['pagesApi'][number]
@@ -485,10 +494,54 @@ const normalizeImages = (config: BuildCompleteContext['config']): NormalizedImag
  * edge image services. Older releases retain the legacy standalone behavior without
  * the managed-runtime injections.
  */
+/**
+ * The config Next 15 loaded, kept for its `onBuildComplete`, which receives none
+ * of it. Next 15 calls `modifyConfig` only for production builds and servers,
+ * in the same process as the build.
+ */
+let next15Config: NextConfigComplete | undefined;
+
+/** Reads the version of the Next.js the project at `projectDir` resolves. */
+const readNextVersion = (projectDir: string): string => {
+  const nextPackage: unknown = createRequire(path.join(projectDir, 'package.json'))('next/package.json');
+  return typeof nextPackage === 'object' &&
+    nextPackage !== null &&
+    'version' in nextPackage &&
+    typeof nextPackage.version === 'string'
+    ? nextPackage.version
+    : '0.0.0';
+};
+
+/**
+ * Writes the legacy standalone manifest for a Next 15 build from the config its
+ * `modifyConfig` saw: the project is the directory of its config file, and its
+ * build id is the one Next wrote before calling `onBuildComplete`.
+ */
+const writeNext15Manifest = async (config: NextConfigComplete | undefined) => {
+  const projectDir = config?.configFile ? path.dirname(config.configFile) : process.cwd();
+  const distDir = path.resolve(projectDir, config?.distDir ?? '.next');
+  const repoRoot = config?.outputFileTracingRoot || projectDir;
+  const buildId = (await readFile(path.join(distDir, 'BUILD_ID'), 'utf8')).trim();
+  const manifest: GigadriveNextBuildManifestV1 = {
+    version: 1,
+    output: config?.output === 'export' ? 'export' : 'standalone',
+    distDir: toPortableRelativePath(projectDir, distDir),
+    repoRootToProject: toPortableRelativePath(repoRoot, projectDir, true),
+    nextVersion: readNextVersion(projectDir),
+    buildId,
+  };
+  await mkdir(path.join(projectDir, '.gigadrive'), { recursive: true });
+  await writeFile(path.join(projectDir, '.gigadrive', 'nextjs.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+};
+
 const gigadriveNextAdapter: NextAdapter = {
   name: 'Gigadrive Network',
 
-  modifyConfig(config, { phase, nextVersion }) {
+  modifyConfig(config, context?: ModifyConfigContext) {
+    // Next 15 passes no context. It only calls this for production builds and
+    // servers, and an unknown version takes the legacy standalone path below.
+    if (!context) next15Config = config;
+    const { phase, nextVersion } = context ?? { phase: PRODUCTION_BUILD_PHASE, nextVersion: undefined };
     if (phase !== PRODUCTION_BUILD_PHASE) return config;
 
     const deploymentId = config.deploymentId ?? process.env.GIGADRIVE_DEPLOYMENT_ID;
@@ -542,7 +595,12 @@ const gigadriveNextAdapter: NextAdapter = {
     };
   },
 
-  async onBuildComplete({ projectDir, repoRoot, distDir, config, nextVersion, buildId, routing, outputs }) {
+  async onBuildComplete(context: BuildCompleteContext | Next15BuildCompleteContext) {
+    if (!('projectDir' in context)) {
+      await writeNext15Manifest(next15Config);
+      return;
+    }
+    const { projectDir, repoRoot, distDir, config, nextVersion, buildId, routing, outputs } = context;
     const metadataDirectory = path.join(projectDir, '.gigadrive');
     await mkdir(metadataDirectory, { recursive: true });
     const manifestPath = path.join(metadataDirectory, 'nextjs.json');
