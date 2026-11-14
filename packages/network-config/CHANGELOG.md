@@ -1,5 +1,11 @@
 # @gigadrive/network-config
 
+## 5.5.5
+
+### Patch Changes
+
+- Encode Next.js images at quality 75 by default, like Next.js itself. The image loader sent no quality when an image set none, so the optimizer used its own higher default and images were about 40% larger than on Vercel. The quality is now the requested one or 75, snapped to the closest value in `images.qualities` when the app restricts them. ([`369b93e`](https://github.com/Gigadrive/sdk/commit/369b93eb39e9ec0e5c17f7d1a56649f642f37e66))
+
 ## 5.5.4
 
 ### Patch Changes
