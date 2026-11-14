@@ -129,6 +129,8 @@ describe('Gigadrive Next.js adapter', () => {
         loader: 'custom',
         loaderFile: expect.stringContaining('nextjs-image-loader.js'),
       },
+      // Next does not pass its image config to a custom loader.
+      env: { GIGADRIVE_NEXT_IMAGE_QUALITIES: '75' },
     });
     expect(result.cacheHandler).toEqual(expect.stringContaining('nextjs-cache-handler.js'));
     // The caller's config object is never mutated in place.

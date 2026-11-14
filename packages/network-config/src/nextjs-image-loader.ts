@@ -2,9 +2,18 @@ interface NextImageLoaderOptions {
   src: string;
   width: number;
   quality?: number;
-  /** The image config Next passes to every loader; only `qualities` is read. */
-  config?: { readonly qualities?: readonly number[] };
 }
+
+/**
+ * `images.qualities` as the adapter inlined it at build. Next calls a custom
+ * loader without its image config (`get-img-props`), so the adapter passes the
+ * list through `env`, which Next inlines for this exact `process.env` read.
+ */
+const configuredQualities = (): number[] =>
+  (process.env.GIGADRIVE_NEXT_IMAGE_QUALITIES ?? '')
+    .split(',')
+    .map(Number)
+    .filter((quality) => Number.isInteger(quality) && quality > 0);
 
 /** The quality Next's own loader uses when an image sets none. */
 const DEFAULT_QUALITY = 75;
@@ -16,9 +25,9 @@ const DEFAULT_QUALITY = 75;
  * encodes at its own, higher default, which made Gigadrive's images about 40%
  * larger than the same images on Vercel.
  */
-const resolveQuality = (quality: number | undefined, qualities: readonly number[] | undefined): number => {
+const resolveQuality = (quality: number | undefined, qualities: readonly number[]): number => {
   const requested = quality || DEFAULT_QUALITY;
-  if (!qualities?.length) return requested;
+  if (!qualities.length) return requested;
   return qualities.reduce(
     (closest, candidate) => (Math.abs(candidate - requested) < Math.abs(closest - requested) ? candidate : closest),
     qualities[0]
@@ -63,7 +72,7 @@ const stripDeploymentMarker = (src: string): string => {
 };
 
 /** Builds the stable app-host URL consumed by Gigadrive's managed image optimizer. */
-export default function gigadriveNextImageLoader({ src, width, quality, config }: NextImageLoaderOptions): string {
+export default function gigadriveNextImageLoader({ src, width, quality }: NextImageLoaderOptions): string {
   // No optimizer backend can rasterize SVG, so routing one through the optimizer
   // is always a pass-through: a wasted redirect and an extra request for bytes
   // the origin already serves. Next's own get-img-props marks `.svg` unoptimized
@@ -74,7 +83,7 @@ export default function gigadriveNextImageLoader({ src, width, quality, config }
   const stableSrc = stripDeploymentMarker(src);
   const parameters = new URLSearchParams({
     width: String(width),
-    quality: String(resolveQuality(quality, config?.qualities)),
+    quality: String(resolveQuality(quality, configuredQualities())),
   });
   const optimizerUrl = `/_gigadrive/image/${encodeURIComponent(stableSrc)}/${encodeURIComponent(filenameHint(stableSrc))}?${parameters}`;
   return optimizerUrl.length > MAXIMUM_OPTIMIZER_URL_LENGTH ? src : optimizerUrl;

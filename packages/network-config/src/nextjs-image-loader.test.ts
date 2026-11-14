@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { getImageProps } from 'next/image';
+import { afterEach, describe, expect, it } from 'vitest';
 import gigadriveNextImageLoader from './nextjs-image-loader';
 
 describe('gigadriveNextImageLoader', () => {
+  afterEach(() => {
+    delete process.env.GIGADRIVE_NEXT_IMAGE_QUALITIES;
+  });
+
   it('creates a same-host canonical URL for local images', () => {
     expect(gigadriveNextImageLoader({ src: '/images/photo.png', width: 1080, quality: 80 })).toBe(
       '/_gigadrive/image/%2Fimages%2Fphoto.png/photo.png?width=1080&quality=80'
@@ -17,14 +22,31 @@ describe('gigadriveNextImageLoader', () => {
   });
 
   it('snaps the quality to the closest one the app allows', () => {
-    const config = { qualities: [50, 90] };
+    process.env.GIGADRIVE_NEXT_IMAGE_QUALITIES = '50,90';
 
-    expect(gigadriveNextImageLoader({ src: '/images/photo.png', width: 640, config })).toBe(
+    expect(gigadriveNextImageLoader({ src: '/images/photo.png', width: 640 })).toBe(
       '/_gigadrive/image/%2Fimages%2Fphoto.png/photo.png?width=640&quality=90'
     );
-    expect(gigadriveNextImageLoader({ src: '/images/photo.png', width: 640, quality: 60, config })).toBe(
+    expect(gigadriveNextImageLoader({ src: '/images/photo.png', width: 640, quality: 60 })).toBe(
       '/_gigadrive/image/%2Fimages%2Fphoto.png/photo.png?width=640&quality=50'
     );
+  });
+
+  // Next calls a custom loader without `config`, so the qualities must come
+  // from the value the adapter inlines, not from the loader's arguments.
+  it('applies the configured qualities when Next itself calls the loader', () => {
+    process.env.GIGADRIVE_NEXT_IMAGE_QUALITIES = '50,90';
+
+    const { props } = getImageProps({
+      src: '/images/photo.png',
+      width: 640,
+      height: 480,
+      alt: '',
+      loader: gigadriveNextImageLoader,
+    });
+
+    expect(props.src).toContain('quality=90');
+    expect(props.srcSet).not.toContain('quality=75');
   });
 
   it('retains a filename hint for extensionless remote images', () => {
