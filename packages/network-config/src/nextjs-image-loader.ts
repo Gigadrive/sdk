@@ -2,7 +2,28 @@ interface NextImageLoaderOptions {
   src: string;
   width: number;
   quality?: number;
+  /** The image config Next passes to every loader; only `qualities` is read. */
+  config?: { readonly qualities?: readonly number[] };
 }
+
+/** The quality Next's own loader uses when an image sets none. */
+const DEFAULT_QUALITY = 75;
+
+/**
+ * The quality to encode at, chosen the way Next's default loader does
+ * (`findClosestQuality`): the requested one, or 75, snapped to the closest of
+ * `images.qualities` when the app restricts them. Without it the optimizer
+ * encodes at its own, higher default, which made Gigadrive's images about 40%
+ * larger than the same images on Vercel.
+ */
+const resolveQuality = (quality: number | undefined, qualities: readonly number[] | undefined): number => {
+  const requested = quality || DEFAULT_QUALITY;
+  if (!qualities?.length) return requested;
+  return qualities.reduce(
+    (closest, candidate) => (Math.abs(candidate - requested) < Math.abs(closest - requested) ? candidate : closest),
+    qualities[0]
+  );
+};
 
 /** The path portion of a source, with any query string or fragment removed. */
 const sourcePathname = (source: string): string =>
@@ -42,7 +63,7 @@ const stripDeploymentMarker = (src: string): string => {
 };
 
 /** Builds the stable app-host URL consumed by Gigadrive's managed image optimizer. */
-export default function gigadriveNextImageLoader({ src, width, quality }: NextImageLoaderOptions): string {
+export default function gigadriveNextImageLoader({ src, width, quality, config }: NextImageLoaderOptions): string {
   // No optimizer backend can rasterize SVG, so routing one through the optimizer
   // is always a pass-through: a wasted redirect and an extra request for bytes
   // the origin already serves. Next's own get-img-props marks `.svg` unoptimized
@@ -51,8 +72,10 @@ export default function gigadriveNextImageLoader({ src, width, quality }: NextIm
   if (isSvgSource(src)) return src;
 
   const stableSrc = stripDeploymentMarker(src);
-  const parameters = new URLSearchParams({ width: String(width) });
-  if (quality !== undefined) parameters.set('quality', String(quality));
+  const parameters = new URLSearchParams({
+    width: String(width),
+    quality: String(resolveQuality(quality, config?.qualities)),
+  });
   const optimizerUrl = `/_gigadrive/image/${encodeURIComponent(stableSrc)}/${encodeURIComponent(filenameHint(stableSrc))}?${parameters}`;
   return optimizerUrl.length > MAXIMUM_OPTIMIZER_URL_LENGTH ? src : optimizerUrl;
 }
