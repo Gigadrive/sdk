@@ -614,6 +614,10 @@ const gigadriveNextAdapter: NextAdapter = {
               loader: 'custom',
               loaderFile: IMAGE_LOADER_PATH(),
             },
+            // Next calls a custom loader without its image config, so the
+            // loader reads `images.qualities` from this inlined value to pick
+            // the quality Next's own loader would.
+            env: { ...config.env, GIGADRIVE_NEXT_IMAGE_QUALITIES: (images.qualities ?? []).join(',') },
           }
         : {}),
     };

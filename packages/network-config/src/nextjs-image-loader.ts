@@ -4,6 +4,36 @@ interface NextImageLoaderOptions {
   quality?: number;
 }
 
+/**
+ * `images.qualities` as the adapter inlined it at build. Next calls a custom
+ * loader without its image config (`get-img-props`), so the adapter passes the
+ * list through `env`, which Next inlines for this exact `process.env` read.
+ */
+const configuredQualities = (): number[] =>
+  (process.env.GIGADRIVE_NEXT_IMAGE_QUALITIES ?? '')
+    .split(',')
+    .map(Number)
+    .filter((quality) => Number.isInteger(quality) && quality > 0);
+
+/** The quality Next's own loader uses when an image sets none. */
+const DEFAULT_QUALITY = 75;
+
+/**
+ * The quality to encode at, chosen the way Next's default loader does
+ * (`findClosestQuality`): the requested one, or 75, snapped to the closest of
+ * `images.qualities` when the app restricts them. Without it the optimizer
+ * encodes at its own, higher default, which made Gigadrive's images about 40%
+ * larger than the same images on Vercel.
+ */
+const resolveQuality = (quality: number | undefined, qualities: readonly number[]): number => {
+  const requested = quality || DEFAULT_QUALITY;
+  if (!qualities.length) return requested;
+  return qualities.reduce(
+    (closest, candidate) => (Math.abs(candidate - requested) < Math.abs(closest - requested) ? candidate : closest),
+    qualities[0]
+  );
+};
+
 /** The path portion of a source, with any query string or fragment removed. */
 const sourcePathname = (source: string): string =>
   source.startsWith('http://') || source.startsWith('https://') ? new URL(source).pathname : source.split(/[?#]/, 1)[0];
@@ -51,8 +81,10 @@ export default function gigadriveNextImageLoader({ src, width, quality }: NextIm
   if (isSvgSource(src)) return src;
 
   const stableSrc = stripDeploymentMarker(src);
-  const parameters = new URLSearchParams({ width: String(width) });
-  if (quality !== undefined) parameters.set('quality', String(quality));
+  const parameters = new URLSearchParams({
+    width: String(width),
+    quality: String(resolveQuality(quality, configuredQualities())),
+  });
   const optimizerUrl = `/_gigadrive/image/${encodeURIComponent(stableSrc)}/${encodeURIComponent(filenameHint(stableSrc))}?${parameters}`;
   return optimizerUrl.length > MAXIMUM_OPTIMIZER_URL_LENGTH ? src : optimizerUrl;
 }
