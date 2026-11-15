@@ -81,11 +81,14 @@ const buildStandalonePublicAssets = Effect.fn('nextjs.buildStandalonePublicAsset
 
 const createStaticExportConfig = Effect.fn('nextjs.createStaticExportConfig')(function* (
   defaults: FrameworkDefaultConfig,
-  projectFolder: string
+  projectFolder: string,
+  // A custom `distDir` holds the export instead of `out`; the build manifest
+  // records which one Next wrote.
+  outDir = 'out'
 ) {
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
-  const outputDirectory = pathService.join(projectFolder, 'out');
+  const outputDirectory = pathService.join(projectFolder, outDir);
   const files = yield* getDefaultPathMap(outputDirectory);
   const assetPaths: string[] = [];
   const assetOverrides: Record<string, { path: string }> = {};
@@ -120,12 +123,56 @@ const createStaticExportConfig = Effect.fn('nextjs.createStaticExportConfig')(fu
     ...defaults,
     entrypoint: undefined,
     routes: [],
-    assetsDir: 'out',
+    assetsDir: outDir,
     assetsPrefixToStrip: '',
     assetPaths,
     assetOverrides,
     package: undefined,
   };
+});
+
+/**
+ * Finds the application inside a standalone build that no adapter described.
+ *
+ * Next 15.3 and older cannot load the build adapter, so no manifest says where
+ * the application sits relative to the repository root. The standalone tree
+ * mirrors the repository: the application is the directory holding `server.js`
+ * next to its traced `.next`, at the root for a single project and nested for a
+ * monorepo. Returns its path relative to the standalone root, `.` at the root.
+ */
+const findUnmanagedStandaloneProject = Effect.fn('nextjs.findUnmanagedStandaloneProject')(function* (
+  projectFolder: string
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+  const standaloneRoot = pathService.join(projectFolder, '.next', 'standalone');
+  const isDirectory = (candidate: string) =>
+    fs.stat(candidate).pipe(
+      Effect.map((info) => info.type === 'Directory'),
+      Effect.catchAll(() => Effect.succeed(false))
+    );
+  // Breadth first, so the shallowest application wins; a monorepo nests it a
+  // few levels deep (`apps/web`), never inside `node_modules`.
+  let level = [standaloneRoot];
+  for (let depth = 0; depth <= 4 && level.length > 0; depth += 1) {
+    const next: string[] = [];
+    for (const directory of level) {
+      const hasServer = yield* fs
+        .exists(pathService.join(directory, 'server.js'))
+        .pipe(Effect.catchAll(() => Effect.succeed(false)));
+      if (hasServer && (yield* isDirectory(pathService.join(directory, '.next')))) {
+        return toPortablePath(pathService.relative(standaloneRoot, directory)) || '.';
+      }
+      const entries = yield* fs.readDirectory(directory).pipe(Effect.catchAll(() => Effect.succeed([] as string[])));
+      for (const entry of [...entries].sort()) {
+        if (entry === 'node_modules' || entry === '.next') continue;
+        const child = pathService.join(directory, entry);
+        if (yield* isDirectory(child)) next.push(child);
+      }
+    }
+    level = next;
+  }
+  return undefined;
 });
 
 const createStandaloneConfig = Effect.fn('nextjs.createStandaloneConfig')(function* (
@@ -311,15 +358,30 @@ export const nextjs: FrameworkDefinition = {
         .readFileString(`${projectFolder}/.gigadrive/nextjs.json`)
         .pipe(Effect.catchAll(() => Effect.succeed(undefined)));
       const manifest = manifestContent ? parseGigadriveNextBuildManifest(manifestContent) : undefined;
-      if (!manifest) return defaults;
+      if (!manifest) {
+        // Next 15.3 and older never run the adapter. The build forces a
+        // standalone server for them (`NEXT_PRIVATE_STANDALONE`), which is
+        // served like a Next 15 build: one server, with `.next/static` and
+        // `public` published as files.
+        const repoRootToProject = yield* findUnmanagedStandaloneProject(projectFolder);
+        if (repoRootToProject === undefined) return defaults;
+        return yield* createStandaloneConfig(defaults, projectFolder, {
+          version: 1,
+          output: 'standalone',
+          distDir: '.next',
+          repoRootToProject,
+          nextVersion: 'unknown',
+          buildId: '',
+        });
+      }
 
       if (manifest.version === 2) {
         return manifest.mode === 'export'
-          ? yield* createStaticExportConfig(defaults, projectFolder)
+          ? yield* createStaticExportConfig(defaults, projectFolder, manifest.outDir)
           : yield* createStandaloneV2Config(defaults, projectFolder, manifest);
       }
       return manifest.output === 'export'
-        ? yield* createStaticExportConfig(defaults, projectFolder)
+        ? yield* createStaticExportConfig(defaults, projectFolder, manifest.outDir)
         : yield* createStandaloneConfig(defaults, projectFolder, manifest);
     }),
 };

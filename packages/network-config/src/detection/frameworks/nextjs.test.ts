@@ -265,6 +265,52 @@ describe('Next.js framework detection', () => {
     expect(result.config.framework?.outputs).not.toHaveProperty('entryPagePaths');
   });
 
+  it('should serve a standalone build from Next 15.3 or older, which writes no adapter manifest', async () => {
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.next/standalone/server.js': 'server',
+      '/project/.next/standalone/.next/BUILD_ID': 'build',
+      '/project/.next/standalone/node_modules/next/package.json': '{}',
+      '/project/.next/static/chunks/app.js': 'chunk',
+      '/project/public/favicon.ico': 'icon',
+    });
+
+    expect(result.config.entrypoints).toEqual([
+      expect.objectContaining({
+        path: 'server.js',
+        package: {
+          trace: false,
+          rootOverwrite: '/project/.next/standalone',
+          filePathMap: {
+            '/project/.next/static/chunks/app.js': '.next/static/chunks/app.js',
+            '/project/public/favicon.ico': 'public/favicon.ico',
+          },
+        },
+      }),
+    ]);
+    expect(result.config.assets?.overrides).toEqual({
+      'public/favicon.ico': { path: 'favicon.ico' },
+      '.next/static/chunks/app.js': { path: '_next/static/chunks/app.js' },
+    });
+    expect(result.config.framework).toBeUndefined();
+  });
+
+  it('should find the application of an older monorepo standalone build without entering node_modules', async () => {
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.next/standalone/node_modules/some-lib/server.js': 'not the app',
+      '/project/.next/standalone/node_modules/some-lib/.next/BUILD_ID': 'not the app',
+      '/project/.next/standalone/apps/web/server.js': 'server',
+      '/project/.next/standalone/apps/web/.next/BUILD_ID': 'build',
+      '/project/.next/static/chunks/app.js': 'chunk',
+    });
+
+    expect(result.config.entrypoints[0]?.path).toBe('apps/web/server.js');
+    expect(result.config.assets?.overrides).toEqual({
+      '.next/static/chunks/app.js': { path: '_next/static/chunks/app.js' },
+    });
+  });
+
   it('should ignore malformed, unsafe, or legacy adapter-v2 metadata', async () => {
     const malformed = await detectProject({
       '/project/package.json': packageJson(dependencies),
@@ -304,6 +350,29 @@ describe('Next.js framework detection', () => {
           'out/index.html': { path: '' },
           'out/about/index.html': { path: 'about' },
           'out/_next/static/app.js': { path: '_next/static/app.js' },
+        },
+      })
+    );
+  });
+
+  it('should publish a static export from the custom distDir Next wrote it to', async () => {
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.gigadrive/nextjs.json': buildManifest({ output: 'export', outDir: 'build' }),
+      '/project/build/index.html': 'home',
+      '/project/build/about.html': 'about',
+      '/project/build/_next/static/app.js': 'chunk',
+      '/project/out/stale.html': 'an older export',
+    });
+
+    expect(result.config.entrypoints).toEqual([]);
+    expect(result.config.assets).toEqual(
+      expect.objectContaining({
+        paths: ['build/index.html', 'build/about.html', 'build/_next/static/app.js'],
+        overrides: {
+          'build/index.html': { path: '' },
+          'build/about.html': { path: 'about' },
+          'build/_next/static/app.js': { path: '_next/static/app.js' },
         },
       })
     );

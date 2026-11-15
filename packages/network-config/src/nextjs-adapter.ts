@@ -503,6 +503,31 @@ const normalizeImages = (config: BuildCompleteContext['config']): NormalizedImag
 let next15Config: NextConfigComplete | undefined;
 
 /**
+ * The `distDir` a static export build was configured with. Next writes such an
+ * export to a custom `distDir` instead of `out`, then resets `distDir` to
+ * `.next` before `onBuildComplete`, so `modifyConfig` is the last place that
+ * sees it.
+ */
+let configuredExportDistDir: string | undefined;
+
+/**
+ * The export directory to record for a static export build, relative to the
+ * project, or nothing for a directory outside it, which no deployment can
+ * publish.
+ */
+const staticExportOutDir = (projectDir: string): string | undefined => {
+  const outDir =
+    configuredExportDistDir !== undefined && configuredExportDistDir !== '.next' ? configuredExportDistDir : 'out';
+  // One build reads it once; a later build in the same process sets its own.
+  configuredExportDistDir = undefined;
+  try {
+    return toPortableRelativePath(projectDir, outDir);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
  * The application directory of a Next 15 build. Next looks for its config file
  * in parent directories too, so a shared config can sit above the application.
  * Every output it reports lives under `<application>/<distDir>/server/`.
@@ -549,6 +574,7 @@ const writeNext15Manifest = async (config: NextConfigComplete | undefined, outpu
     version: 1,
     output: config?.output === 'export' ? 'export' : 'standalone',
     distDir: toPortableRelativePath(projectDir, distDir),
+    ...(config?.output === 'export' && { outDir: staticExportOutDir(projectDir) }),
     repoRootToProject: toPortableRelativePath(repoRoot, projectDir, true),
     nextVersion: readNextVersion(projectDir),
     buildId,
@@ -565,6 +591,7 @@ const gigadriveNextAdapter: NextAdapter = {
     // servers, and an unknown version takes the legacy standalone path below.
     const { phase, nextVersion } = context ?? { phase: PRODUCTION_BUILD_PHASE, nextVersion: undefined };
     if (phase !== PRODUCTION_BUILD_PHASE) return config;
+    configuredExportDistDir = config.output === 'export' ? config.distDir : undefined;
 
     const deploymentId = config.deploymentId ?? process.env.GIGADRIVE_DEPLOYMENT_ID;
     if (!supportsManagedRuntime(nextVersion)) {
@@ -640,6 +667,7 @@ const gigadriveNextAdapter: NextAdapter = {
         version: 1,
         output: config.output === 'export' ? 'export' : 'standalone',
         distDir: toPortableRelativePath(projectDir, distDir),
+        ...(config.output === 'export' && { outDir: staticExportOutDir(projectDir) }),
         repoRootToProject: toPortableRelativePath(repoRoot, projectDir, true),
         nextVersion,
         buildId,
@@ -656,6 +684,7 @@ const gigadriveNextAdapter: NextAdapter = {
         version: 2,
         mode: 'export',
         distDir: portableDistDir,
+        outDir: staticExportOutDir(projectDir),
         repoRootToProject,
         nextVersion,
         buildId,

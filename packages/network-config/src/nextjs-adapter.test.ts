@@ -264,7 +264,8 @@ describe('Gigadrive Next.js adapter', () => {
       returned.distDir = '.next';
       await onBuildComplete({ routes: {}, outputs: {} });
 
-      expect(await readManifest(projectDir)).toMatchObject({ output: 'export', distDir: '.next' });
+      // The export itself went to the configured `dist`.
+      expect(await readManifest(projectDir)).toMatchObject({ output: 'export', distDir: '.next', outDir: 'dist' });
     });
   });
 
@@ -1161,10 +1162,63 @@ describe('Gigadrive Next.js adapter', () => {
       version: 2,
       mode: 'export',
       distDir: '.next',
+      outDir: 'out',
       repoRootToProject: '.',
       nextVersion: '16.2.10',
       buildId: 'export-build',
     });
+  });
+
+  it('records the custom distDir a static export was written to', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-export-distdir-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = repoRoot;
+
+    modifyConfig(nextConfig({ output: 'export', distDir: 'build' }), 'phase-production-build', '16.2.10');
+    // Next writes the export to `build`, then builds into `.next` and reports that.
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir: path.join(projectDir, '.next'),
+      config: nextConfig({ output: 'export', distDir: '.next' }),
+      nextVersion: '16.2.10',
+      buildId: 'export-build',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
+    });
+    expect(await readManifest(projectDir)).toMatchObject({ mode: 'export', distDir: '.next', outDir: 'build' });
+
+    // The next build in the process does not inherit it.
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir: path.join(projectDir, '.next'),
+      config: nextConfig({ output: 'export' }),
+      nextVersion: '16.2.10',
+      buildId: 'export-build',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
+    });
+    expect(await readManifest(projectDir)).toMatchObject({ outDir: 'out' });
+  });
+
+  it('records no export directory outside the project', async () => {
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-export-outside-'));
+    temporaryDirectories.push(repoRoot);
+    const projectDir = repoRoot;
+
+    modifyConfig(nextConfig({ output: 'export', distDir: '../elsewhere' }), 'phase-production-build', '16.2.10');
+    await onBuildComplete({
+      projectDir,
+      repoRoot,
+      distDir: path.join(projectDir, '.next'),
+      config: nextConfig({ output: 'export', distDir: '.next' }),
+      nextVersion: '16.2.10',
+      buildId: 'export-build',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
+    });
+    expect(await readManifest(projectDir)).not.toHaveProperty('outDir');
   });
 
   it('rejects a prerender fallback outside the repository root', async () => {

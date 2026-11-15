@@ -226,6 +226,12 @@ export const GigadriveNextBuildManifestV1Schema = Schema.mutable(
     version: Schema.Literal(1),
     output: Schema.Literal('standalone', 'export'),
     distDir: PortableRelativePathSchema,
+    /**
+     * Where a static export was written, relative to the project: `out`, or a
+     * custom `distDir`, which Next writes the export to before it builds into
+     * `.next` (`hasCustomExportOutput`). Absent on older manifests, which mean `out`.
+     */
+    outDir: Schema.optional(PortableRelativePathSchema),
     repoRootToProject: RepositoryRelativePathSchema,
     nextVersion: Schema.String,
     buildId: Schema.String,
@@ -239,6 +245,12 @@ export const GigadriveNextBuildManifestV2ExportSchema = Schema.mutable(
     version: Schema.Literal(2),
     mode: Schema.Literal('export'),
     distDir: PortableRelativePathSchema,
+    /**
+     * Where a static export was written, relative to the project: `out`, or a
+     * custom `distDir`, which Next writes the export to before it builds into
+     * `.next` (`hasCustomExportOutput`). Absent on older manifests, which mean `out`.
+     */
+    outDir: Schema.optional(PortableRelativePathSchema),
     repoRootToProject: RepositoryRelativePathSchema,
     nextVersion: Schema.String,
     buildId: Schema.String,
