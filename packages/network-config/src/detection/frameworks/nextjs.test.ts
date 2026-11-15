@@ -1,5 +1,8 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
+import type { NormalizedConfig } from '../../normalized-config';
 import { AVAILABLE_REGIONS } from '../../regions';
+import { mergeWithFrameworkDefaults } from '../merge-config';
 import {
   detectProject,
   expectNodePackageManagerPriority,
@@ -332,5 +335,100 @@ describe('Next.js framework detection', () => {
       'out/legacy/report.html': { path: 'legacy/report.html' },
       'out/_next/static/app.js': { path: '_next/static/app.js' },
     });
+  });
+});
+
+describe('Next.js with a config file', () => {
+  const nextProject = () =>
+    detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.gigadrive/nextjs.json': standaloneV2Manifest(),
+      '/project/.next/standalone/server.js': 'server',
+      '/project/.next/standalone/node_modules/next/package.json': '{}',
+      '/project/public/gigadrive-mark.svg': '<svg />',
+    });
+
+  const userConfig = (overrides: Partial<NormalizedConfig> = {}): NormalizedConfig => ({
+    regions: ['fr-par'],
+    commands: [],
+    entrypoints: [],
+    routes: [],
+    assets: { paths: [], prefixToStrip: '/', dynamicRoutes: true, populateCache: false },
+    environmentVariables: { API_URL: 'https://api.example.com' },
+    warnings: [],
+    errors: [],
+    ...overrides,
+  });
+
+  const redirect = {
+    path: '/old',
+    destination: 'https://example.com/new',
+    handler: 'HTTP_REDIRECT' as const,
+    methods: ['ANY' as const],
+    headers: {},
+  };
+
+  it('keeps the Next.js integration when the config file declares no functions', async () => {
+    const detected = await nextProject();
+    const merged = await Effect.runPromise(
+      mergeWithFrameworkDefaults(userConfig({ routes: [redirect] }), detected.config)
+    );
+
+    expect(merged.framework).toEqual(detected.config.framework);
+    expect(merged.framework?.type).toBe('nextjs');
+    expect(merged.images).toEqual(detected.config.images);
+    expect(merged.sharedArtifacts).toEqual(detected.config.sharedArtifacts);
+    // The CLI must still upload the project, config file included.
+    expect(merged.userArchive).toBeUndefined();
+    expect(merged.entrypoints).toEqual(detected.config.entrypoints);
+    // The config file's routes run first; the server's catch-all stays last.
+    expect(merged.routes).toEqual([redirect, ...detected.config.routes]);
+    expect(merged.assets).toEqual(detected.config.assets);
+    expect(merged.environmentVariables).toMatchObject({ API_URL: 'https://api.example.com' });
+    expect(merged.regions).toEqual(['fr-par']);
+    expect(merged.warnings.join('\n')).not.toContain('integration is off');
+  });
+
+  it('keeps the Next.js assets and warns when the config file declares assets', async () => {
+    const detected = await nextProject();
+    const merged = await Effect.runPromise(
+      mergeWithFrameworkDefaults(
+        userConfig({ assets: { paths: ['static/a.txt'], prefixToStrip: 'static/' } }),
+        detected.config
+      )
+    );
+
+    expect(merged.framework?.type).toBe('nextjs');
+    expect(merged.assets).toEqual(detected.config.assets);
+    expect(merged.warnings).toContain(
+      '`assets` in your config file is ignored: Next.js publishes `.next/static` and `public` itself.'
+    );
+  });
+
+  it('prefers an image policy from the config file', async () => {
+    const detected = await nextProject();
+    const detectedImages = detected.config.images;
+    if (!detectedImages) throw new Error('the Next.js build declares an image policy');
+    const images = { ...detectedImages, qualities: [50] };
+    const merged = await Effect.runPromise(mergeWithFrameworkDefaults(userConfig({ images }), detected.config));
+
+    expect(merged.images).toEqual(images);
+    expect(merged.framework?.type).toBe('nextjs');
+  });
+
+  it('turns the integration off with a warning when the config file declares functions', async () => {
+    const detected = await nextProject();
+    const own = { path: 'api/index.js', runtime: 'node-22' as const, memory: 256, maxDuration: 30 };
+    const merged = await Effect.runPromise(
+      mergeWithFrameworkDefaults(userConfig({ entrypoints: [own] }), detected.config)
+    );
+
+    expect(merged.framework).toBeUndefined();
+    expect(merged.sharedArtifacts).toBeUndefined();
+    expect(merged.userArchive).toBeUndefined();
+    expect(merged.entrypoints).toEqual([own]);
+    expect(merged.warnings).toContain(
+      'The Next.js integration is off because your config file declares its own functions. Remove them to keep Next.js routing, prerendering and image optimization.'
+    );
   });
 });
