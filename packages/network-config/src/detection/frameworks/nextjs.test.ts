@@ -378,7 +378,8 @@ describe('Next.js with a config file', () => {
     expect(merged.framework?.type).toBe('nextjs');
     expect(merged.images).toEqual(detected.config.images);
     expect(merged.sharedArtifacts).toEqual(detected.config.sharedArtifacts);
-    expect(merged.userArchive).toEqual({ rootOverwrite: '/project/.next/standalone' });
+    // The CLI must still upload the project, config file included.
+    expect(merged.userArchive).toBeUndefined();
     expect(merged.entrypoints).toEqual(detected.config.entrypoints);
     // The config file's routes run first; the server's catch-all stays last.
     expect(merged.routes).toEqual([redirect, ...detected.config.routes]);

@@ -20,7 +20,8 @@ import { CONTAINER_RUNTIME, type NormalizedConfig } from '../normalized-config';
  * - framework, sharedArtifacts: the framework's gateway metadata (only Next.js
  *   has any) is kept as long as the framework's functions are, because it
  *   describes those functions. Declaring file functions turns it off.
- * - images, userArchive: use user's if set, otherwise framework's
+ * - images: use user's if set, otherwise framework's
+ * - userArchive: always user's, so a CLI upload keeps the config file
  * - excludeFiles: use user's if non-empty, otherwise framework's
  * - regions: always use user's (always populated from parsing)
  * - environmentVariables: deep merge (framework base, user overrides)
@@ -103,7 +104,10 @@ export const mergeWithFrameworkDefaults = Effect.fn('mergeWithFrameworkDefaults'
 
     services: userConfig.services,
     ...(userConfig.sidecars !== undefined && { sidecars: userConfig.sidecars }),
-    userArchive: userConfig.userArchive ?? (keepsManagedFramework ? frameworkConfig.userArchive : undefined),
+    // Never the framework's: a standalone archive root would upload only the
+    // build output, leaving the config file and any container build context
+    // behind. With a config file, the CLI uploads the project as before.
+    userArchive: userConfig.userArchive,
 
     warnings: [...frameworkConfig.warnings, ...userConfig.warnings, ...managedWarnings],
     errors: [...frameworkConfig.errors, ...userConfig.errors],
