@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
+import type { NormalizedImagePolicy } from '../image-policy';
 import type { NormalizedConfig } from '../normalized-config';
 import { mergeWithFrameworkDefaults } from './merge-config';
 
@@ -189,6 +190,29 @@ describe('mergeWithFrameworkDefaults', () => {
 
     const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, framework));
     expect(result.excludeFiles).toEqual(['tests/', '.ddev']);
+  });
+
+  it('should keep the user image policy next to a framework without one', async () => {
+    const images: NormalizedImagePolicy = {
+      localPatterns: [{ pathname: '/**' }],
+      remotePatterns: [],
+      widths: [640],
+      heights: [],
+      qualities: [75],
+      formats: ['image/webp'],
+      minimumCacheTTL: 60,
+      dangerouslyAllowSVG: false,
+      contentSecurityPolicy: "default-src 'none'",
+      contentDispositionType: 'inline',
+      maximumRedirects: 3,
+      maximumResponseBody: 50_000_000,
+      variants: {},
+    };
+    const user = makeConfig({ images });
+
+    const result = await Effect.runPromise(mergeWithFrameworkDefaults(user, makeConfig()));
+    expect(result.images).toEqual(images);
+    expect(result.framework).toBeUndefined();
   });
 
   it('should keep user sidecars and never take them from the framework', async () => {
