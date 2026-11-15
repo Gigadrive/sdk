@@ -1,5 +1,13 @@
 # @gigadrive/network-config
 
+## 5.7.0
+
+### Minor Changes
+
+- Publish a Next.js static export from a custom `distDir`. Next writes `output: 'export'` to that directory instead of `out`, so a deployment published only the stale or missing `out` folder. The adapter now records the export directory in `.gigadrive/nextjs.json`. ([#649](https://github.com/Gigadrive/sdk/pull/649))
+
+  Serve standalone builds of Next.js 15.3 and older, which cannot load the build adapter. Detection now finds the standalone server without an adapter manifest and publishes `.next/static` and `public` next to it, as it does for Next.js 15.4 and 15.5.
+
 ## 5.6.0
 
 ### Minor Changes
