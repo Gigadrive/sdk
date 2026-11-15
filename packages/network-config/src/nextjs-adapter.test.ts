@@ -1202,24 +1202,28 @@ describe('Gigadrive Next.js adapter', () => {
     expect(await readManifest(projectDir)).toMatchObject({ outDir: 'out' });
   });
 
-  it('records no export directory outside the project', async () => {
-    const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-export-outside-'));
-    temporaryDirectories.push(repoRoot);
-    const projectDir = repoRoot;
+  it.each(['../elsewhere', 'build:static'])(
+    'fails the build for an export directory it cannot publish: %s',
+    async (distDir) => {
+      const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-export-outside-'));
+      temporaryDirectories.push(repoRoot);
+      const projectDir = repoRoot;
 
-    modifyConfig(nextConfig({ output: 'export', distDir: '../elsewhere' }), 'phase-production-build', '16.2.10');
-    await onBuildComplete({
-      projectDir,
-      repoRoot,
-      distDir: path.join(projectDir, '.next'),
-      config: nextConfig({ output: 'export', distDir: '.next' }),
-      nextVersion: '16.2.10',
-      buildId: 'export-build',
-      routing: emptyRouting,
-      outputs: emptyOutputs,
-    });
-    expect(await readManifest(projectDir)).not.toHaveProperty('outDir');
-  });
+      modifyConfig(nextConfig({ output: 'export', distDir }), 'phase-production-build', '16.2.10');
+      await expect(
+        onBuildComplete({
+          projectDir,
+          repoRoot,
+          distDir: path.join(projectDir, '.next'),
+          config: nextConfig({ output: 'export', distDir: '.next' }),
+          nextVersion: '16.2.10',
+          buildId: 'export-build',
+          routing: emptyRouting,
+          outputs: emptyOutputs,
+        })
+      ).rejects.toThrow();
+    }
+  );
 
   it('rejects a prerender fallback outside the repository root', async () => {
     const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'network-next-adapter-safe-'));

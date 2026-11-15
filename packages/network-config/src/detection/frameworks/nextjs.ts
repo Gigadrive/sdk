@@ -154,7 +154,7 @@ const findUnmanagedStandaloneProject = Effect.fn('nextjs.findUnmanagedStandalone
   // Breadth first, so the shallowest application wins; a monorepo nests it a
   // few levels deep (`apps/web`), never inside `node_modules`.
   let level = [standaloneRoot];
-  for (let depth = 0; depth <= 4 && level.length > 0; depth += 1) {
+  for (let depth = 0; depth <= 8 && level.length > 0; depth += 1) {
     const next: string[] = [];
     for (const directory of level) {
       const hasServer = yield* fs

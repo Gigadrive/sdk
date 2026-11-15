@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StaticAssetHeaders, StaticAssetManifestEntry, StaticAssetManifestV1 } from './asset-manifest';
 import type { NormalizedImagePolicy } from './image-policy';
-import { decodeJson, decodeUnknown, HttpHeadersSchema } from './manifest-schema';
+import { decodeJson, decodeUnknown, HttpHeadersSchema, PortableRelativePathSchema } from './manifest-schema';
 import { MAXIMUM_ENTRY_PAGE_PATHS } from './nextjs-constants';
 import type {
   GigadriveNextBuildManifestV1,
@@ -512,19 +512,24 @@ let configuredExportDistDir: string | undefined;
 
 /**
  * The export directory to record for a static export build, relative to the
- * project, or nothing for a directory outside it, which no deployment can
- * publish.
+ * project.
+ *
+ * @throws When the directory is outside the project or cannot be written as a
+ * portable path. Leaving it out would make detection publish `out`, which this
+ * build never wrote, so the deployment would go live empty.
  */
-const staticExportOutDir = (projectDir: string): string | undefined => {
+const staticExportOutDir = (projectDir: string): string => {
   const outDir =
     configuredExportDistDir !== undefined && configuredExportDistDir !== '.next' ? configuredExportDistDir : 'out';
   // One build reads it once; a later build in the same process sets its own.
   configuredExportDistDir = undefined;
-  try {
-    return toPortableRelativePath(projectDir, outDir);
-  } catch {
-    return undefined;
+  const portable = toPortableRelativePath(projectDir, outDir);
+  if (!Schema.is(PortableRelativePathSchema)(portable)) {
+    throw new Error(
+      `Next.js wrote the static export to "${outDir}", which Gigadrive Network cannot publish. Set a distDir inside the project without a colon.`
+    );
   }
+  return portable;
 };
 
 /**
