@@ -74,6 +74,7 @@ src/
   normalized-config.ts                # central NormalizedConfig interface + types
   parse-config.ts                     # main entry: parseConfig / parseConfigRaw / postProcessConfig
   define-config.ts                    # defineConfig identity helper for gigadrive.ts configs
+  crons.ts                            # cron job validation (5-field UTC schedules) + vercel.json `crons` reader
   errors.ts                           # Schema.TaggedError types (ConfigFileParseError, …)
   filter-functions-from-assets.ts     # separates function files from static assets
   regions.ts                          # AVAILABLE_REGIONS constant + Region type

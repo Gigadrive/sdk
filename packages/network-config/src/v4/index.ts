@@ -108,6 +108,22 @@ export interface ConfigV4 extends Config {
   services?: ConfigV4Services;
 
   /**
+   * Cron jobs that call a path of the app on a schedule, in the shape of
+   * Vercel's `vercel.json`. They run for production deployments and call the
+   * function that serves every path, such as a Next.js server. When this list
+   * is set, even empty, it replaces the `crons` of `vercel.json`.
+   *
+   * @maxItems 100
+   * @example
+   * ```yaml
+   * crons:
+   *   - path: /api/cron
+   *     schedule: '0 5 * * *'
+   * ```
+   */
+  crons?: ConfigV4Cron[] | null;
+
+  /**
    * Container images to run, keyed by name. A container without `sidecar: true`
    * runs as a function that routes target with `destination: container:<name>`.
    * A sidecar runs next to every function instance and answers at `<name>:<port>`.
@@ -133,6 +149,14 @@ export interface ConfigV4 extends Config {
    * same name.
    */
   compose?: string | null;
+}
+
+/** One entry of the v4 `crons` list. */
+export interface ConfigV4Cron {
+  /** Path the scheduled `GET` request is sent to. Starts with `/` and may carry a query string. */
+  path: string;
+  /** Five-field cron expression, evaluated in UTC. */
+  schedule: string;
 }
 
 /** One entry of the v4 `containers` map. Exactly one of `image` and `build` is required. */

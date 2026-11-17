@@ -1,6 +1,7 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
 import { getDefaultPathMap } from '../../build-output-v3/get-default-path-map';
+import { parseVercelJsonCrons } from '../../crons';
 import { MAXIMUM_ENTRY_PAGE_PATHS } from '../../nextjs-constants';
 import {
   parseGigadriveNextBuildManifest,
@@ -328,6 +329,90 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
   };
 });
 
+/**
+ * Adds the cron jobs a project declares in `vercel.json`, so a Next.js app
+ * moved from Vercel keeps its schedules without a config file. Only the
+ * `crons` key is read. A static export has no server to call, so its cron jobs
+ * are skipped with a warning; invalid entries are skipped with a warning too,
+ * since deployments never read this file before.
+ */
+const withVercelCrons = Effect.fn('nextjs.withVercelCrons')(function* (
+  config: FrameworkDefaultConfig,
+  projectFolder: string
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+  const content = yield* fs
+    .readFileString(pathService.join(projectFolder, 'vercel.json'))
+    .pipe(Effect.catchAll(() => Effect.succeed(undefined)));
+  if (content === undefined) return config;
+
+  const { crons, warnings } = parseVercelJsonCrons(content);
+  if (crons.length === 0 && warnings.length === 0) return config;
+
+  const servesRequests = config.entrypoint !== undefined || (config.normalizedConfig?.entrypoints?.length ?? 0) > 0;
+  if (!servesRequests) {
+    return crons.length === 0
+      ? config
+      : {
+          ...config,
+          normalizedConfig: {
+            ...config.normalizedConfig,
+            warnings: [
+              ...(config.normalizedConfig?.warnings ?? []),
+              'vercel.json declares cron jobs, but a static export has no server for them to call, so they are skipped.',
+            ],
+          },
+        };
+  }
+
+  return {
+    ...config,
+    normalizedConfig: {
+      ...config.normalizedConfig,
+      crons,
+      ...(warnings.length > 0 && { warnings: [...(config.normalizedConfig?.warnings ?? []), ...warnings] }),
+    },
+  };
+});
+
+/** Resolves the Next.js build output the adapter (or, for Next 15.3 and older, the standalone tree) describes. */
+const refineNextjsBuild = Effect.fn('nextjs.refineBuild')(function* (
+  defaults: FrameworkDefaultConfig,
+  projectFolder: string
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const manifestContent = yield* fs
+    .readFileString(`${projectFolder}/.gigadrive/nextjs.json`)
+    .pipe(Effect.catchAll(() => Effect.succeed(undefined)));
+  const manifest = manifestContent ? parseGigadriveNextBuildManifest(manifestContent) : undefined;
+  if (!manifest) {
+    // Next 15.3 and older never run the adapter. The build forces a
+    // standalone server for them (`NEXT_PRIVATE_STANDALONE`), which is
+    // served like a Next 15 build: one server, with `.next/static` and
+    // `public` published as files.
+    const repoRootToProject = yield* findUnmanagedStandaloneProject(projectFolder);
+    if (repoRootToProject === undefined) return defaults;
+    return yield* createStandaloneConfig(defaults, projectFolder, {
+      version: 1,
+      output: 'standalone',
+      distDir: '.next',
+      repoRootToProject,
+      nextVersion: 'unknown',
+      buildId: '',
+    });
+  }
+
+  if (manifest.version === 2) {
+    return manifest.mode === 'export'
+      ? yield* createStaticExportConfig(defaults, projectFolder, manifest.outDir)
+      : yield* createStandaloneV2Config(defaults, projectFolder, manifest);
+  }
+  return manifest.output === 'export'
+    ? yield* createStaticExportConfig(defaults, projectFolder, manifest.outDir)
+    : yield* createStandaloneConfig(defaults, projectFolder, manifest);
+});
+
 export const nextjs: FrameworkDefinition = {
   slug: 'nextjs',
   name: 'Next.js',
@@ -353,35 +438,7 @@ export const nextjs: FrameworkDefinition = {
   }),
   refineDefaultConfig: (defaults, projectFolder) =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const manifestContent = yield* fs
-        .readFileString(`${projectFolder}/.gigadrive/nextjs.json`)
-        .pipe(Effect.catchAll(() => Effect.succeed(undefined)));
-      const manifest = manifestContent ? parseGigadriveNextBuildManifest(manifestContent) : undefined;
-      if (!manifest) {
-        // Next 15.3 and older never run the adapter. The build forces a
-        // standalone server for them (`NEXT_PRIVATE_STANDALONE`), which is
-        // served like a Next 15 build: one server, with `.next/static` and
-        // `public` published as files.
-        const repoRootToProject = yield* findUnmanagedStandaloneProject(projectFolder);
-        if (repoRootToProject === undefined) return defaults;
-        return yield* createStandaloneConfig(defaults, projectFolder, {
-          version: 1,
-          output: 'standalone',
-          distDir: '.next',
-          repoRootToProject,
-          nextVersion: 'unknown',
-          buildId: '',
-        });
-      }
-
-      if (manifest.version === 2) {
-        return manifest.mode === 'export'
-          ? yield* createStaticExportConfig(defaults, projectFolder, manifest.outDir)
-          : yield* createStandaloneV2Config(defaults, projectFolder, manifest);
-      }
-      return manifest.output === 'export'
-        ? yield* createStaticExportConfig(defaults, projectFolder, manifest.outDir)
-        : yield* createStandaloneConfig(defaults, projectFolder, manifest);
+      const refined = yield* refineNextjsBuild(defaults, projectFolder);
+      return yield* withVercelCrons(refined, projectFolder);
     }),
 };

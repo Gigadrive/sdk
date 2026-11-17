@@ -1124,3 +1124,103 @@ describe('V4ConfigParser runtime docker functions', () => {
     );
   });
 });
+
+describe('V4ConfigParser crons', () => {
+  const parse = (config: ConfigV4, files: Record<string, string> = {}) =>
+    Effect.runPromise(
+      V4ConfigParser.parse(config, '/project').pipe(
+        Effect.flatMap((parsed) => postProcessConfig(parsed, '/project')),
+        Effect.provide(V4ConfigParser.Default),
+        Effect.provide(VercelBuildOutputParser.Default),
+        Effect.provide(RawConfigReader.Default),
+        Effect.provide(Layer.merge(makeTestFs(files), TestPathLayer))
+      )
+    );
+
+  const validate = (crons: unknown) => {
+    const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '../v4/schema.json'), 'utf8'));
+    const ajv = new Ajv({ allErrors: true });
+    addFormats(ajv);
+    return ajv.compile(schema)({ version: 4, crons });
+  };
+
+  it('keeps cron jobs for the function that serves every path, with whitespace collapsed', async () => {
+    const result = await parse({
+      version: 4,
+      containers: { web: { image: 'acme/web', port: 3000 } },
+      crons: [
+        { path: '/api/cron', schedule: '0 5 * * *' },
+        { path: '/api/cleanup?scope=all', schedule: '*/15  *  * * 1-5' },
+      ],
+    });
+
+    expect(result.crons).toEqual([
+      { path: '/api/cron', schedule: '0 5 * * *' },
+      { path: '/api/cleanup?scope=all', schedule: '*/15 * * * 1-5' },
+    ]);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('keeps an explicitly empty list, so it can switch off the cron jobs of vercel.json', async () => {
+    const result = await parse({ version: 4, containers: { web: { image: 'acme/web' } }, crons: [] });
+
+    expect(result.crons).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('leaves crons out when the config file does not declare them', async () => {
+    const result = await parse({ version: 4, containers: { web: { image: 'acme/web' } }, crons: null });
+
+    expect(result).not.toHaveProperty('crons');
+  });
+
+  it('reports a schedule whose fields are out of range as a config error', async () => {
+    const result = await parse({
+      version: 4,
+      containers: { web: { image: 'acme/web' } },
+      crons: [
+        { path: '/api/ok', schedule: '0 5 * * *' },
+        { path: '/api/minute', schedule: '75 * * * *' },
+        { path: '/api/month', schedule: '0 0 1 13 *' },
+        { path: '/api/backwards', schedule: '0 10-2 * * *' },
+      ],
+    });
+
+    expect(result.crons).toEqual([{ path: '/api/ok', schedule: '0 5 * * *' }]);
+    expect(result.errors).toEqual([
+      'Cron job 2 in the config file (/api/minute at "75 * * * *") is invalid: minute "75" is outside 0-59.',
+      'Cron job 3 in the config file (/api/month at "0 0 1 13 *") is invalid: month "13" is outside 1-12.',
+      'Cron job 4 in the config file (/api/backwards at "0 10-2 * * *") is invalid: hour "10-2" starts after it ends.',
+    ]);
+  });
+
+  it('skips cron jobs with a warning when no function serves every path', async () => {
+    const result = await parse(
+      { version: 4, assets: 'public', crons: [{ path: '/api/cron', schedule: '0 5 * * *' }] },
+      { '/project/public/index.html': '<html></html>' }
+    );
+
+    expect(result.crons).toBeUndefined();
+    expect(result.warnings).toContain(
+      'Cron jobs need one function that serves every path, such as a Next.js server, and this deployment has none, so they are skipped. Use a `schedule` on a function instead.'
+    );
+  });
+
+  it('validates cron jobs against the published schema', () => {
+    expect(validate([{ path: '/api/cron', schedule: '0 5 * * *' }])).toBe(true);
+    expect(validate([{ path: '/api/cron?x=1', schedule: '*/10 0-6,22-23 1,15 * 1-5' }])).toBe(true);
+    expect(validate(null)).toBe(true);
+    expect(validate([])).toBe(true);
+    // Vercel's shape only: a path relative to the host, a five-field numeric expression.
+    expect(validate([{ path: 'api/cron', schedule: '0 5 * * *' }])).toBe(false);
+    expect(validate([{ path: '/api/cron', schedule: '0 5 * * MON' }])).toBe(false);
+    expect(validate([{ path: '/api/cron', schedule: '@daily' }])).toBe(false);
+    expect(validate([{ path: '/api/cron', schedule: '0 0 5 * * *' }])).toBe(false);
+    expect(validate([{ path: '/api/cron', schedule: 'rate(1 hour)' }])).toBe(false);
+    expect(validate([{ path: '/api/cron' }])).toBe(false);
+    expect(validate([{ path: '/api/cron', schedule: '0 5 * * *', method: 'POST' }])).toBe(false);
+    expect(validate([{ path: `/${'a'.repeat(512)}`, schedule: '0 5 * * *' }])).toBe(false);
+    expect(validate(Array.from({ length: 101 }, () => ({ path: '/api/cron', schedule: '0 5 * * *' })))).toBe(false);
+  });
+});

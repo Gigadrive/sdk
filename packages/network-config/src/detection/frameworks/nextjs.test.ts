@@ -501,3 +501,148 @@ describe('Next.js with a config file', () => {
     );
   });
 });
+
+describe('Next.js cron jobs', () => {
+  const vercelJson = (crons: unknown) => JSON.stringify({ $schema: 'https://openapi.vercel.sh/vercel.json', crons });
+
+  const standaloneProject = (files: Record<string, string> = {}) =>
+    detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.gigadrive/nextjs.json': standaloneV2Manifest(),
+      '/project/.next/standalone/server.js': 'server',
+      '/project/.next/standalone/node_modules/next/package.json': '{}',
+      ...files,
+    });
+
+  const userConfig = (overrides: Partial<NormalizedConfig> = {}): NormalizedConfig => ({
+    regions: ['fr-par'],
+    commands: [],
+    entrypoints: [],
+    routes: [],
+    environmentVariables: {},
+    warnings: [],
+    errors: [],
+    ...overrides,
+  });
+
+  it('reads the cron jobs of vercel.json for a standalone server', async () => {
+    const result = await standaloneProject({
+      '/project/vercel.json': vercelJson([
+        { path: '/api/cron', schedule: '0 5 * * *' },
+        { path: '/api/digest?period=weekly', schedule: '0 8 * * 1' },
+      ]),
+    });
+
+    expect(result.config.crons).toEqual([
+      { path: '/api/cron', schedule: '0 5 * * *' },
+      { path: '/api/digest?period=weekly', schedule: '0 8 * * 1' },
+    ]);
+    // The cron jobs ride along with the server they call.
+    expect(result.config.framework?.type).toBe('nextjs');
+    expect(result.config.routes).toEqual([expect.objectContaining({ path: '/*', destination: 'server.js' })]);
+    expect(result.config.warnings).toEqual(['Auto-detected framework: Next.js. Create a gigadrive.yaml to customize.']);
+  });
+
+  it('reads the cron jobs of vercel.json for Next.js 15.3 and older, which writes no adapter manifest', async () => {
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.next/standalone/server.js': 'server',
+      '/project/.next/standalone/.next/BUILD_ID': 'build',
+      '/project/vercel.json': vercelJson([{ path: '/api/cron', schedule: '*/30 * * * *' }]),
+    });
+
+    expect(result.config.crons).toEqual([{ path: '/api/cron', schedule: '*/30 * * * *' }]);
+    expect(result.config.entrypoints).toEqual([expect.objectContaining({ path: 'server.js' })]);
+  });
+
+  it('leaves crons out without a vercel.json, or with one that declares none', async () => {
+    expect((await standaloneProject()).config).not.toHaveProperty('crons');
+    expect(
+      (await standaloneProject({ '/project/vercel.json': JSON.stringify({ cleanUrls: true }) })).config
+    ).not.toHaveProperty('crons');
+  });
+
+  it('skips invalid entries with a warning and keeps the valid ones', async () => {
+    const result = await standaloneProject({
+      '/project/vercel.json': vercelJson([
+        { path: '/api/cron', schedule: '0 5 * * *' },
+        { path: 'api/relative', schedule: '0 5 * * *' },
+      ]),
+    });
+
+    expect(result.config.crons).toEqual([{ path: '/api/cron', schedule: '0 5 * * *' }]);
+    expect(result.config.errors).toEqual([]);
+    expect(result.config.warnings).toEqual([
+      'Auto-detected framework: Next.js. Create a gigadrive.yaml to customize.',
+      'Cron job 2 in vercel.json (api/relative at "0 5 * * *") is invalid: the path must start with /. It is skipped.',
+    ]);
+  });
+
+  it('warns instead of failing the deployment for a vercel.json that is not JSON', async () => {
+    const result = await standaloneProject({ '/project/vercel.json': '{ "crons": [' });
+
+    expect(result.config).not.toHaveProperty('crons');
+    expect(result.config.errors).toEqual([]);
+    expect(result.config.warnings[1]).toMatch(/^vercel\.json is not valid JSON, so its cron jobs are ignored: /);
+  });
+
+  it('skips the cron jobs of a static export, which has no server to call', async () => {
+    const result = await detectProject({
+      '/project/package.json': packageJson(dependencies),
+      '/project/.gigadrive/nextjs.json': buildManifest({ output: 'export' }),
+      '/project/out/index.html': 'home',
+      '/project/vercel.json': vercelJson([{ path: '/api/cron', schedule: '0 5 * * *' }]),
+    });
+
+    expect(result.config.entrypoints).toEqual([]);
+    expect(result.config).not.toHaveProperty('crons');
+    expect(result.config.warnings).toContain(
+      'vercel.json declares cron jobs, but a static export has no server for them to call, so they are skipped.'
+    );
+  });
+
+  it('keeps the cron jobs of vercel.json when the config file declares none', async () => {
+    const detected = await standaloneProject({
+      '/project/vercel.json': vercelJson([{ path: '/api/cron', schedule: '0 5 * * *' }]),
+    });
+    const merged = await Effect.runPromise(mergeWithFrameworkDefaults(userConfig(), detected.config));
+
+    expect(merged.crons).toEqual([{ path: '/api/cron', schedule: '0 5 * * *' }]);
+  });
+
+  it('lets the cron jobs of the config file replace those of vercel.json, keeping the Next.js integration', async () => {
+    const detected = await standaloneProject({
+      '/project/vercel.json': vercelJson([{ path: '/api/from-vercel', schedule: '0 5 * * *' }]),
+    });
+    const merged = await Effect.runPromise(
+      mergeWithFrameworkDefaults(
+        userConfig({ crons: [{ path: '/api/from-config', schedule: '15 * * * *' }] }),
+        detected.config
+      )
+    );
+
+    expect(merged.crons).toEqual([{ path: '/api/from-config', schedule: '15 * * * *' }]);
+    expect(merged.framework?.type).toBe('nextjs');
+    expect(merged.entrypoints).toEqual(detected.config.entrypoints);
+    expect(merged.warnings.join('\n')).not.toContain('integration is off');
+  });
+
+  it('turns the cron jobs of vercel.json off with an empty list in the config file', async () => {
+    const detected = await standaloneProject({
+      '/project/vercel.json': vercelJson([{ path: '/api/cron', schedule: '0 5 * * *' }]),
+    });
+    const merged = await Effect.runPromise(mergeWithFrameworkDefaults(userConfig({ crons: [] }), detected.config));
+
+    expect(merged.crons).toEqual([]);
+  });
+
+  it('adds config-file cron jobs to a Next.js project without a vercel.json', async () => {
+    const detected = await standaloneProject();
+    const merged = await Effect.runPromise(
+      mergeWithFrameworkDefaults(userConfig({ crons: [{ path: '/api/cron', schedule: '0 0 * * *' }] }), detected.config)
+    );
+
+    expect(merged.crons).toEqual([{ path: '/api/cron', schedule: '0 0 * * *' }]);
+    expect(merged.framework?.type).toBe('nextjs');
+  });
+});

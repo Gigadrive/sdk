@@ -122,6 +122,26 @@ export const postProcessConfig = Effect.fn('postProcessConfig')(function* (
       }
     }
   }
+  // A cron job calls a path on the function that serves every path, the way
+  // Vercel calls a Next.js app. Without such a function there is nothing to
+  // call; a function `schedule` is the way to run one of several functions.
+  if ((result.crons?.length ?? 0) > 0) {
+    const servesEveryPath = result.routes.some(
+      (route) =>
+        route.path === '/*' &&
+        result.entrypoints.some((entrypoint) => route.destination.replace(/^\/+/, '') === entrypoint.path)
+    );
+    if (!servesEveryPath) {
+      result = {
+        ...result,
+        crons: undefined,
+        warnings: [
+          ...result.warnings,
+          'Cron jobs need one function that serves every path, such as a Next.js server, and this deployment has none, so they are skipped. Use a `schedule` on a function instead.',
+        ],
+      };
+    }
+  }
   if ((result.sidecars?.length ?? 0) > 0 && result.entrypoints.length === 0) {
     result.warnings.push('Sidecars run next to functions, and this deployment has none, so no sidecar will start.');
   }

@@ -372,6 +372,32 @@ export const schema = {
         },
       },
     },
+    crons: {
+      type: ['array', 'null'],
+      maxItems: 100,
+      description:
+        "Cron jobs that call a path of the app on a schedule, in the shape of Vercel's vercel.json. They run for production deployments and call the function that serves every path, such as a Next.js server. When set, even empty, this list replaces the crons of vercel.json.",
+      items: {
+        type: 'object',
+        required: ['path', 'schedule'],
+        additionalProperties: false,
+        properties: {
+          path: {
+            type: 'string',
+            pattern: '^/',
+            maxLength: 512,
+            description: 'Path the scheduled GET request is sent to. Starts with / and may carry a query string.',
+          },
+          schedule: {
+            type: 'string',
+            pattern: '^[0-9*,/-]+( +[0-9*,/-]+){4}$',
+            maxLength: 256,
+            description:
+              'Five-field cron expression (minute hour day-of-month month day-of-week), evaluated in UTC. Names such as MON are not supported.',
+          },
+        },
+      },
+    },
     services: {
       type: 'object',
       description: 'Managed services to provision for the deployment environment.',
