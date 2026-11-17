@@ -262,12 +262,23 @@ const createStandaloneV2Config = Effect.fn('nextjs.createStandaloneV2Config')(fu
       .sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))
       .slice(0, MAXIMUM_ENTRY_PAGE_PATHS);
 
+  // A route without its own `maxDuration` runs for the platform default, as a
+  // function without one does, so the one server must outlast that default
+  // too, not only the longest route that sets a limit.
+  const routeWithoutLimit = Object.values(manifest.server.routes ?? {}).some(
+    (route) => route.maxDuration === undefined
+  );
   const singleEntrypoint: NormalizedConfigEntrypoint = {
     displayName: 'next-server',
     path: entrypoint,
     runtime: defaults.runtime,
     memory: Math.max(defaults.memory, STANDALONE_SERVER_MEMORY_MB),
-    maxDuration: manifest.server.maxDuration ?? defaults.maxDuration,
+    maxDuration:
+      manifest.server.maxDuration === undefined
+        ? defaults.maxDuration
+        : routeWithoutLimit
+          ? Math.max(manifest.server.maxDuration, defaults.maxDuration)
+          : manifest.server.maxDuration,
     streaming: true,
     environmentVariables: {
       NEXT_BUILD_ID: manifest.buildId,
