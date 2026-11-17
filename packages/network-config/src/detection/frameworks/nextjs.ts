@@ -370,7 +370,7 @@ const withVercelCrons = Effect.fn('nextjs.withVercelCrons')(function* (
     ...config,
     normalizedConfig: {
       ...config.normalizedConfig,
-      crons,
+      ...(crons.length > 0 && { crons }),
       ...(warnings.length > 0 && { warnings: [...(config.normalizedConfig?.warnings ?? []), ...warnings] }),
     },
   };
