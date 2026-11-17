@@ -201,12 +201,34 @@ export const GigadriveNextMiddlewareDescriptorSchema = Schema.Union(
 );
 export type GigadriveNextMiddlewareDescriptor = Schema.Schema.Type<typeof GigadriveNextMiddlewareDescriptorSchema>;
 
-/** Aggregated runtime configuration for the standalone server. */
-export const GigadriveNextServerDescriptorSchema = Schema.mutable(
+/** Segment config one route declares (`export const maxDuration`, `export const preferredRegion`). */
+export const GigadriveNextRouteConfigSchema = Schema.mutable(
   Schema.Struct({
     maxDuration: Schema.optional(Schema.Number),
     preferredRegion: Schema.optional(Schema.Union(Schema.String, StringArraySchema)),
+  })
+);
+export type GigadriveNextRouteConfig = Schema.Schema.Type<typeof GigadriveNextRouteConfigSchema>;
+
+/** Aggregated runtime configuration for the standalone server. */
+export const GigadriveNextServerDescriptorSchema = Schema.mutable(
+  Schema.Struct({
+    /** The longest `maxDuration` of any route, which the one server must honor. */
+    maxDuration: Schema.optional(Schema.Number),
+    preferredRegion: Schema.optional(Schema.Union(Schema.String, StringArraySchema)),
     env: Schema.optional(StringRecordSchema),
+    /**
+     * Every route's own segment config, keyed by the pathname of its build
+     * output (pages, API routes, app pages and route handlers, including their
+     * `.rsc` and `/_next/data` variants). A route that declares nothing maps to
+     * an empty object, so a consumer can tell it apart from an unknown path and
+     * give it the platform default instead of another route's limit. Middleware
+     * runs before every route and is left out. Absent on manifests written by
+     * older SDK releases.
+     */
+    routes: Schema.optional(
+      Schema.mutable(Schema.Record({ key: Schema.String, value: GigadriveNextRouteConfigSchema }))
+    ),
   })
 );
 export type GigadriveNextServerDescriptor = Schema.Schema.Type<typeof GigadriveNextServerDescriptorSchema>;
