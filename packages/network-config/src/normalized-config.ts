@@ -118,6 +118,16 @@ export interface NormalizedConfig {
   services?: NormalizedConfigService[];
 
   /**
+   * Cron jobs that call a path of the deployment on a schedule, in the shape
+   * Vercel uses in `vercel.json`. Each one sends a `GET` request to `path` on
+   * the function that serves the deployment's catch-all route (`/*`), such as
+   * a Next.js server. Read from the top-level `crons` list of the config file,
+   * or from `vercel.json` in a Next.js project; the config file wins when it
+   * declares the list, even an empty one.
+   */
+  crons?: NormalizedConfigCron[];
+
+  /**
    * Container images that run inside the microVM of every function instance of
    * the deployment, next to the function. Each one is reachable from the
    * function, and from every other sidecar, at `<name>:<port>`.
@@ -160,6 +170,14 @@ export interface NormalizedConfig {
    * Error codes to be printed to the output during deployment.
    */
   errors: string[];
+}
+
+/** One cron job: a path of the deployment called on a schedule. */
+export interface NormalizedConfigCron {
+  /** Path requested on the deployment's host, starting with `/`. May carry a query string. */
+  path: string;
+  /** Five-field cron expression, evaluated in UTC. */
+  schedule: string;
 }
 
 export interface NormalizedConfigService {

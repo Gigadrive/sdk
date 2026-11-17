@@ -10,6 +10,7 @@ import {
   normalizeContainers,
   readComposeContainers,
 } from '../containers';
+import { normalizeCrons } from '../crons';
 import { ContainerConfigError, FunctionConfigError } from '../errors';
 import {
   CONTAINER_RUNTIME,
@@ -490,6 +491,9 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         )
       );
       const warnings = [...containers.warnings];
+      // Ranges the schema pattern cannot check (minute 75, month 13) fail the
+      // deployment here, the way the schema fails any other invalid entry.
+      const crons = config.crons == null ? undefined : normalizeCrons(config.crons, 'the config file');
 
       return {
         regions: resolveRegions(config.regions),
@@ -505,7 +509,8 @@ export class V4ConfigParser extends Effect.Service<V4ConfigParser>()('V4ConfigPa
         services: normalizeServices(config.services),
         ...(containers.sidecars.length > 0 && { sidecars: containers.sidecars }),
         entrypoints,
-        errors: [],
+        ...(crons !== undefined && { crons: crons.crons }),
+        errors: crons?.problems ?? [],
         warnings,
         routes,
       };

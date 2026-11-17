@@ -27,6 +27,9 @@ import { CONTAINER_RUNTIME, type NormalizedConfig } from '../normalized-config';
  * - environmentVariables: deep merge (framework base, user overrides)
  * - services: always use user's (frameworks don't define services)
  * - sidecars: always use user's (frameworks don't define sidecars)
+ * - crons: use user's if the config file declares the list (even empty),
+ *   otherwise framework's (a Next.js project's `vercel.json`). Declaring cron
+ *   jobs never turns a managed framework off.
  * - warnings/errors: concatenate both
  *
  * @param userConfig - The config parsed from the user's config file
@@ -103,6 +106,9 @@ export const mergeWithFrameworkDefaults = Effect.fn('mergeWithFrameworkDefaults'
         : frameworkConfig.excludeFiles,
 
     services: userConfig.services,
+    ...((userConfig.crons ?? frameworkConfig.crons) !== undefined && {
+      crons: userConfig.crons ?? frameworkConfig.crons,
+    }),
     ...(userConfig.sidecars !== undefined && { sidecars: userConfig.sidecars }),
     // Never the framework's: a standalone archive root would upload only the
     // build output, leaving the config file and any container build context

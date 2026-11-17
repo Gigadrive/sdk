@@ -131,9 +131,14 @@ export const generateConfig = Effect.fn('generateConfig')(function* (
     entrypoints,
     routes,
     excludeFiles: defaults.excludeFiles && defaults.excludeFiles.length > 0 ? [...defaults.excludeFiles] : undefined,
-    warnings: [`Auto-detected framework: ${framework.name}. Create a gigadrive.yaml to customize.`],
-    errors: [],
     ...defaults.normalizedConfig,
+    // Framework output may carry its own diagnostics (a Next.js `vercel.json`
+    // with invalid cron jobs, say): keep them next to the detection notice.
+    warnings: [
+      `Auto-detected framework: ${framework.name}. Create a gigadrive.yaml to customize.`,
+      ...(defaults.normalizedConfig?.warnings ?? []),
+    ],
+    errors: [...(defaults.normalizedConfig?.errors ?? [])],
   };
 
   if (defaults.assetsDir || defaults.assetPaths || defaults.assetPrefixes || defaults.assetManifests) {
