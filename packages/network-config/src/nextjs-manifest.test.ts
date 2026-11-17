@@ -212,6 +212,29 @@ describe('parseGigadriveNextBuildManifest', () => {
     expect(parse(withoutServer)).toBeUndefined();
   });
 
+  it('accepts per-route segment config next to the server-wide maximum', () => {
+    const routes = {
+      '/': {},
+      '/api/slow': { maxDuration: 120 },
+      '/report.rsc': { maxDuration: 45, preferredRegion: ['fra1', 'cdg1'] },
+      '/dashboard': { preferredRegion: 'fra1' },
+    };
+    const manifest = parse(standaloneV2({ server: { maxDuration: 120, routes } }));
+    expect(manifest).toMatchObject({ server: { maxDuration: 120, routes } });
+  });
+
+  it('keeps accepting a server descriptor without a route table', () => {
+    const manifest = parse(standaloneV2());
+    expect(manifest).toBeDefined();
+    expect(manifest && 'server' in manifest ? manifest.server.routes : 'missing').toBeUndefined();
+  });
+
+  it('rejects a malformed route segment config', () => {
+    expect(parse(standaloneV2({ server: { routes: { '/api/slow': { maxDuration: '120' } } } }))).toBeUndefined();
+    expect(parse(standaloneV2({ server: { routes: { '/api/slow': { preferredRegion: 1 } } } }))).toBeUndefined();
+    expect(parse(standaloneV2({ server: { routes: ['/api/slow'] } }))).toBeUndefined();
+  });
+
   it('rejects a standalone-v2 manifest missing routing', () => {
     const { routing: _routing, ...withoutRouting } = standaloneV2();
     expect(parse(withoutRouting)).toBeUndefined();

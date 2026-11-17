@@ -244,6 +244,51 @@ describe('Next.js framework detection', () => {
     expect(result.config.sharedArtifacts).toEqual([]);
   });
 
+  describe('server duration with a per-route table', () => {
+    const detectWithServer = (server: Record<string, unknown>) =>
+      detectProject({
+        '/project/package.json': packageJson(dependencies),
+        '/project/.gigadrive/nextjs.json': standaloneV2Manifest({ server }),
+        '/project/.next/standalone/server.js': 'server',
+        '/project/.next/standalone/node_modules/next/package.json': '{}',
+      });
+
+    it('keeps the longest route limit when every route sets one', async () => {
+      const result = await detectWithServer({
+        maxDuration: 10,
+        routes: { '/api/a': { maxDuration: 10 }, '/api/b': { maxDuration: 5 } },
+      });
+      expect(result.config.entrypoints[0]?.maxDuration).toBe(10);
+    });
+
+    it('covers the platform default when a route sets no limit of its own', async () => {
+      const result = await detectWithServer({
+        maxDuration: 10,
+        routes: { '/api/a': { maxDuration: 10 }, '/': {} },
+      });
+      expect(result.config.entrypoints[0]?.maxDuration).toBe(30);
+    });
+
+    it('keeps a route limit above the platform default', async () => {
+      const result = await detectWithServer({
+        maxDuration: 120,
+        routes: { '/api/slow': { maxDuration: 120 }, '/': {} },
+      });
+      expect(result.config.entrypoints[0]?.maxDuration).toBe(120);
+    });
+
+    it('uses the platform default when no route sets a limit', async () => {
+      const result = await detectWithServer({ routes: { '/': {} } });
+      expect(result.config.entrypoints[0]?.maxDuration).toBe(30);
+    });
+
+    it('passes the route table through to the framework config', async () => {
+      const routes = { '/api/slow': { maxDuration: 120 }, '/': {} };
+      const result = await detectWithServer({ maxDuration: 120, routes });
+      expect(result.config.framework?.server.routes).toEqual(routes);
+    });
+  });
+
   it('should bound adapter-provided entry paths without duplicating them in outputs', async () => {
     const suppliedPaths = Array.from({ length: 75 }, (_, index) => `/docs/${index}`);
     const result = await detectProject({

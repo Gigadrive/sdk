@@ -14,6 +14,7 @@ import type {
   GigadriveNextBuildManifestV2Standalone,
   GigadriveNextPrerenderManifestV1,
   GigadriveNextPrerenderOutput,
+  GigadriveNextRouteConfig,
   GigadriveNextServerDescriptor,
   GigadriveNextStaticAssetPrefix,
   JsonValue,
@@ -328,21 +329,41 @@ const serializePrerenderOutput = async (
 
 /**
  * Collapses per-route runtime config onto the one standalone server. `maxDuration`
- * becomes the max across routes (one function honors one limit); `env` is the union
- * of every route's declared env (the single server runs them all in-process).
+ * becomes the max across routes and middleware (one function must honor the
+ * longest limit); `env` is the union of every declared env (the single server
+ * runs them all in-process). `routes` keeps each route's own `maxDuration` and
+ * `preferredRegion` by output pathname, so a request can be held to the limit of
+ * the route it reaches rather than the longest one.
  */
-const aggregateServerDescriptor = (outputs: NextRouteOutput[]): GigadriveNextServerDescriptor => {
+const aggregateServerDescriptor = (
+  routeOutputs: NextRouteOutput[],
+  middleware: NextRouteOutput | undefined
+): GigadriveNextServerDescriptor => {
   let maxDuration: number | undefined;
   const env: Record<string, string> = {};
-  for (const output of outputs) {
+  const routes: Record<string, GigadriveNextRouteConfig> = {};
+  for (const output of middleware ? [...routeOutputs, middleware] : routeOutputs) {
     if (output.config.maxDuration !== undefined) {
       maxDuration = Math.max(maxDuration ?? 0, output.config.maxDuration);
     }
     if (output.config.env) Object.assign(env, output.config.env);
   }
+  for (const output of routeOutputs) {
+    const route = (routes[output.pathname] ??= {});
+    const { maxDuration: routeMaxDuration, preferredRegion } = output.config;
+    // Outputs that share a pathname (parallel routes) run as one route; the
+    // longest limit wins, as it does for the server.
+    if (routeMaxDuration !== undefined) {
+      route.maxDuration = Math.max(route.maxDuration ?? 0, routeMaxDuration);
+    }
+    if (preferredRegion !== undefined && route.preferredRegion === undefined) {
+      route.preferredRegion = Array.isArray(preferredRegion) ? [...preferredRegion] : preferredRegion;
+    }
+  }
   return {
     ...(maxDuration !== undefined ? { maxDuration } : {}),
     ...(Object.keys(env).length > 0 ? { env } : {}),
+    ...(Object.keys(routes).length > 0 ? { routes } : {}),
   };
 };
 
@@ -725,13 +746,10 @@ const gigadriveNextAdapter: NextAdapter = {
       writeFile(path.join(projectDir, NEXT_ASSET_MANIFEST_PATH), `${JSON.stringify(assetManifest)}\n`, 'utf8'),
       writeFile(path.join(projectDir, NEXT_PRERENDER_MANIFEST_PATH), `${JSON.stringify(prerenderManifest)}\n`, 'utf8'),
     ]);
-    const server = aggregateServerDescriptor([
-      ...outputs.pages,
-      ...outputs.pagesApi,
-      ...outputs.appPages,
-      ...outputs.appRoutes,
-      ...(outputs.middleware ? [outputs.middleware] : []),
-    ]);
+    const server = aggregateServerDescriptor(
+      [...outputs.pages, ...outputs.pagesApi, ...outputs.appPages, ...outputs.appRoutes],
+      outputs.middleware ?? undefined
+    );
     const images = normalizeImages(config);
     // `.next/static` is thousands of content-hashed, immutable chunks. Register
     // the whole subtree as one edge-served prefix instead of enumerating files.

@@ -471,6 +471,8 @@ describe('Gigadrive Next.js adapter', () => {
       },
     });
     expect(manifest.outputs.prerenders).toEqual([]);
+    // Each route keeps its own limit, so a request can be held to the route it reaches.
+    expect(manifest.server.routes).toEqual({ '/': { maxDuration: 30 }, '/blog': { maxDuration: 60 } });
 
     const prerenderManifest = await readPrerenderManifest(projectDir);
     expect(prerenderManifest?.seedMethods).toEqual(['GET', 'HEAD']);
@@ -570,6 +572,84 @@ describe('Gigadrive Next.js adapter', () => {
     expect(manifest.outputs.middleware).toEqual({ present: true, matchers: originalMatchers });
     expect(matchers).toEqual(originalMatchers);
     expect(manifest.outputs.middleware?.matchers[0]).not.toBe(matchers[0]);
+  });
+
+  it('records every route segment config by output pathname next to the server-wide maximum', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-route-config-'));
+    temporaryDirectories.push(projectDir);
+    const distDir = path.join(projectDir, '.next');
+    const output = (type: string, pathname: string, config: Record<string, unknown>) => ({
+      id: pathname,
+      type,
+      filePath: path.join(distDir, 'server', `${pathname}.js`),
+      pathname,
+      sourcePage: pathname,
+      runtime: 'nodejs',
+      assets: {},
+      config,
+    });
+    const regions = ['fra1', 'cdg1'];
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir,
+      config: nextConfig(),
+      nextVersion: '16.3.1',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: {
+        ...emptyOutputs,
+        pages: [output('PAGES', '/legacy', {})],
+        pagesApi: [output('PAGES_API', '/api/upload', { maxDuration: 120 })],
+        appPages: [
+          output('APP_PAGE', '/report', { maxDuration: 45, preferredRegion: regions }),
+          output('APP_PAGE', '/report.rsc', { maxDuration: 45, preferredRegion: regions }),
+          // Parallel routes share one pathname; the longer limit wins.
+          output('APP_PAGE', '/dashboard', { maxDuration: 10 }),
+          output('APP_PAGE', '/dashboard', { maxDuration: 20, preferredRegion: 'fra1' }),
+        ],
+        appRoutes: [output('APP_ROUTE', '/api/stream', { maxDuration: 300 })],
+        middleware: {
+          ...output('MIDDLEWARE', '/_middleware', { maxDuration: 600, matchers: [] }),
+          sourcePage: 'middleware.ts',
+        },
+      },
+    });
+
+    const manifest = (await readManifest(projectDir)) as GigadriveNextBuildManifestV2Standalone;
+    // The one server must outlast the longest limit, middleware included.
+    expect(manifest.server.maxDuration).toBe(600);
+    expect(manifest.server.routes).toEqual({
+      // A route that declares nothing is listed, so it gets the platform default.
+      '/legacy': {},
+      '/api/upload': { maxDuration: 120 },
+      '/report': { maxDuration: 45, preferredRegion: ['fra1', 'cdg1'] },
+      '/report.rsc': { maxDuration: 45, preferredRegion: ['fra1', 'cdg1'] },
+      '/dashboard': { maxDuration: 20, preferredRegion: 'fra1' },
+      '/api/stream': { maxDuration: 300 },
+    });
+    // Middleware runs before every route, so it has no entry of its own.
+    expect(manifest.server.routes).not.toHaveProperty('/_middleware');
+  });
+
+  it('omits the route table when a build has no routes', async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), 'network-next-route-config-empty-'));
+    temporaryDirectories.push(projectDir);
+
+    await onBuildComplete({
+      projectDir,
+      repoRoot: projectDir,
+      distDir: path.join(projectDir, '.next'),
+      config: nextConfig(),
+      nextVersion: '16.3.1',
+      buildId: 'build-id',
+      routing: emptyRouting,
+      outputs: emptyOutputs,
+    });
+
+    const manifest = (await readManifest(projectDir)) as GigadriveNextBuildManifestV2Standalone;
+    expect(manifest.server).toEqual({});
   });
 
   it('serializes a compile-time-conformant Next 16.3 generated route and its related outputs', async () => {
