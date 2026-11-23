@@ -1,5 +1,5 @@
 import { ApiError, GigadriveClient } from '@gigadrive/sdk';
-import { Config, Effect, Option, Redacted } from 'effect';
+import { Config, Effect, Option, Redacted, Runtime } from 'effect';
 import { ApiRequestError } from '../errors';
 import { AuthService } from './auth';
 
@@ -40,6 +40,29 @@ export class ApiClientService extends Effect.Service<ApiClientService>()('ApiCli
     const baseUrl = yield* ApiBaseUrl;
     const serviceCredentials = yield* ServiceCredentials;
     const authService = yield* AuthService;
+    const runPromise = Runtime.runPromise(yield* Effect.runtime<never>());
+
+    /**
+     * Sends every request with a current access token. A long command (a
+     * capacity wait, a large copy) outlives a 5-minute token; this refreshes
+     * it before it expires instead of failing with 401 halfway. The token is
+     * held in memory, so this costs nothing while it is fresh.
+     */
+    const fetchWithFreshToken: typeof globalThis.fetch = async (input, init) => {
+      if (!new Headers(init?.headers).has('Authorization')) return globalThis.fetch(input, init);
+      const authorization = `Bearer ${await runPromise(authService.getAccessToken)}`;
+      const headers = init?.headers;
+      // The SDK sends a plain object; keep that shape and replace only the token.
+      if (headers && !(headers instanceof Headers) && !Array.isArray(headers)) {
+        const rest = Object.fromEntries(
+          Object.entries(headers).filter(([name]) => name.toLowerCase() !== 'authorization')
+        );
+        return globalThis.fetch(input, { ...init, headers: { ...rest, Authorization: authorization } });
+      }
+      const replaced = new Headers(headers);
+      replaced.set('Authorization', authorization);
+      return globalThis.fetch(input, { ...init, headers: replaced });
+    };
     const hasServiceCredentials =
       Option.isSome(serviceCredentials.bearerToken) ||
       Option.isSome(serviceCredentials.clientId) ||
@@ -62,7 +85,7 @@ export class ApiClientService extends Effect.Service<ApiClientService>()('ApiCli
         )
       : Effect.gen(function* () {
           const token = yield* authService.getAccessToken;
-          return new GigadriveClient({ bearerToken: token, baseUrl });
+          return new GigadriveClient({ bearerToken: token, baseUrl, fetch: fetchWithFreshToken });
         });
 
     /**

@@ -1,10 +1,13 @@
+import { Command } from '@effect/cli';
 import { NodeContext } from '@effect/platform-node';
+import type { MicroVmSnapshot } from '@gigadrive/sdk';
 import { GigadriveClient, type MicroVmInfo } from '@gigadrive/sdk';
 import { Effect, Either, Layer, Logger, LogLevel, Option } from 'effect';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { normalizeArgv } from '../../lib/argv';
 import type { SessionIo } from '../../lib/microvm-session';
 import { ApiClientService, toApiRequestError } from '../../services/api-client';
 import { ProjectLinkService } from '../../services/project-link';
@@ -19,10 +22,18 @@ import {
   errorMessage,
   execInMicroVm,
   extendMicroVm,
+  forkMicroVm,
+  isTransientCopyError,
   listMicroVms,
+  listSnapshots,
+  microvmsCommand,
   parseDuration,
   parseInjectFlags,
+  pauseMicroVm,
   removeImage,
+  requireId,
+  resumeMicroVm,
+  snapshotMicroVm,
   updateMicroVmNetwork,
   type CreateFlags,
   type ExecFlags,
@@ -248,7 +259,7 @@ describe('createInput', () => {
           memory: Option.some(4096),
           disk: Option.some(20_480),
           timeout: Option.some('1h'),
-          ports: [3000, 8080],
+          ports: ['3000', '8080', '3000'],
           env: ['A=1', 'B=two=2'],
           metadata: ['team=ai'],
           denyEgress: true,
@@ -335,8 +346,11 @@ describe('createInput', () => {
     for (const flags of [
       createFlags({ env: ['NOPE'] }),
       createFlags({ metadata: ['=x'] }),
-      createFlags({ ports: [0] }),
-      createFlags({ ports: [70_000] }),
+      createFlags({ ports: ['0'] }),
+      createFlags({ ports: ['70000'] }),
+      createFlags({ ports: ['abc'] }),
+      createFlags({ ports: ['80.5'] }),
+      createFlags({ ports: [''] }),
       createFlags({ timeout: Option.some('5') }),
       createFlags({ timeout: Option.some('25h') }),
     ]) {
@@ -1232,5 +1246,533 @@ describe('volumes', () => {
     await run(createVolume({ name: 'cache', size: Option.some(20480), app: Option.none(), json: true }), api.layer);
 
     expect(api.calls[0]?.body).toEqual({ applicationId: 'app-linked', name: 'cache', sizeMb: 20480 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// --port parsing through the real command line (#654)
+// ---------------------------------------------------------------------------
+
+const VM_ID = '0197b2f1-2f4a-7a0b-8a2d-000000000001';
+const SNAPSHOT_ID = '0197b2f1-2f4a-7a0b-8a2d-000000000002';
+
+/** Runs `gigadrive <args>` with the real parser and the argv rewrites of the entry point. */
+const runCli = (args: string[], layer: ReturnType<typeof fakeApi>['layer']) => {
+  const cli = Command.run(Command.make('gigadrive').pipe(Command.withSubcommands([microvmsCommand])), {
+    name: 'gigadrive',
+    version: '0.0.0',
+  });
+  return Effect.runPromise(
+    Effect.either(cli(normalizeArgv(['node', 'gigadrive', ...args]).argv).pipe(Effect.provide(layer)))
+  );
+};
+
+/** A fake stderr for progress lines. */
+const fakeStream = () => {
+  const writes: string[] = [];
+  return { writes, stream: { isTTY: false, write: (text: string) => writes.push(text) } };
+};
+
+describe('microvms create --port', () => {
+  const createdBodies = (api: ReturnType<typeof fakeApi>) =>
+    api.calls.filter((call) => call.method === 'POST' && call.url.pathname === '/microvms').map((call) => call.body);
+
+  it.each([
+    [
+      ['-p', '3000', '-p', '8080'],
+      [3000, 8080],
+    ],
+    [['--port', '3000'], [3000]],
+    [['-p=3000'], [3000]],
+    [
+      ['--port=3000', '-p', '8080'],
+      [3000, 8080],
+    ],
+  ])('sends %j as ports %j', async (portArgs, ports) => {
+    const api = fakeApi(route('POST', '/microvms', () => json(vmInfo(), 201)));
+
+    const result = await runCli(['microvms', 'create', '-a', 'app-x', ...portArgs, '--json'], api.layer);
+
+    expect(Either.isRight(result)).toBe(true);
+    expect(createdBodies(api)).toEqual([{ applicationId: 'app-x', ports }]);
+  });
+
+  it.each([['abc'], ['0'], ['65536'], ['80.5']])('refuses --port %s before sending anything', async (value) => {
+    const api = fakeApi(route('POST', '/microvms', () => json(vmInfo(), 201)));
+
+    const result = await runCli(['microvms', 'create', '-p', value, '--json'], api.layer);
+
+    expect(Either.isLeft(result) && result.left).toMatchObject({ _tag: 'InvalidMicroVmOptionsError' });
+    expect(String(errorSpy.mock.calls.at(-1)?.[0])).toContain(`--port must be a whole number from 1 to 65535`);
+    expect(createdBodies(api)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// create waits for the microVM to run (#655)
+// ---------------------------------------------------------------------------
+
+describe('createMicroVm waiting', () => {
+  /** Answers GET /microvms/vm-1 with each status in turn, repeating the last. */
+  const statuses = (...list: Array<Partial<MicroVmInfo>>) => {
+    let index = 0;
+    return route('GET', '/microvms/vm-1', () => json(vmInfo(list[Math.min(index++, list.length - 1)])));
+  };
+
+  it('polls a pending microVM until it runs, with progress on stderr only', async () => {
+    const api = fakeApi(
+      route('POST', '/microvms', () => json(vmInfo({ status: 'pending' }), 202)),
+      statuses({ status: 'pending' }, { status: 'starting' }, { status: 'running' })
+    );
+    const { writes, stream } = fakeStream();
+
+    const result = await run(createMicroVm(createFlags(), { stream, pollInterval: 1 }), api.layer);
+
+    expect(Either.isRight(result) && result.right.status).toBe('running');
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({ id: 'vm-1', status: 'running' });
+    expect(writes.join('')).toContain('Waiting for capacity...');
+    expect(writes.join('')).toContain('Starting...');
+  });
+
+  it('does not poll a microVM that already runs', async () => {
+    const api = fakeApi(route('POST', '/microvms', () => json(vmInfo(), 201)));
+
+    await run(createMicroVm(createFlags(), { stream: fakeStream().stream, pollInterval: 1 }), api.layer);
+
+    expect(api.calls.map((call) => call.method)).toEqual(['POST']);
+  });
+
+  it('returns the pending microVM with --no-wait', async () => {
+    const api = fakeApi(route('POST', '/microvms', () => json(vmInfo({ status: 'pending' }), 202)));
+
+    const result = await run(createMicroVm(createFlags({ noWait: true })), api.layer);
+
+    expect(Either.isRight(result) && result.right.status).toBe('pending');
+    expect(api.calls).toHaveLength(1);
+  });
+
+  it('fails with the stop reason when the microVM fails, after printing its JSON', async () => {
+    const api = fakeApi(
+      route('POST', '/microvms', () => json(vmInfo({ status: 'pending' }), 202)),
+      statuses({ status: 'failed', stopReason: 'no_capacity' })
+    );
+
+    const result = await run(createMicroVm(createFlags(), { stream: fakeStream().stream, pollInterval: 1 }), api.layer);
+
+    expect(Either.isLeft(result) && result.left).toMatchObject({ _tag: 'MicroVmStateError', status: 'failed' });
+    expect(Either.isLeft(result) && result.left.message).toContain('no_capacity');
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({ status: 'failed' });
+  });
+
+  it('gives up after --wait-timeout and says how to follow up', async () => {
+    const api = fakeApi(
+      route('POST', '/microvms', () => json(vmInfo({ status: 'pending' }), 202)),
+      statuses({ status: 'pending' })
+    );
+
+    const result = await run(
+      createMicroVm(createFlags({ waitTimeout: Option.some('5ms') }), {
+        stream: fakeStream().stream,
+        pollInterval: 10,
+      }),
+      api.layer
+    );
+
+    expect(Either.isLeft(result) && result.left).toMatchObject({ _tag: 'MicroVmStateError', status: 'pending' });
+    expect(Either.isLeft(result) && result.left.message).toContain('gigadrive microvms rm vm-1');
+  });
+
+  it('refuses a --wait-timeout without a unit', async () => {
+    const api = fakeApi(route('POST', '/microvms', () => json(vmInfo({ status: 'pending' }), 202)));
+
+    const result = await run(createMicroVm(createFlags({ waitTimeout: Option.some('10') })), api.layer);
+
+    expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pause / resume / snapshot / snapshots / fork (#658)
+// ---------------------------------------------------------------------------
+
+const snapshotInfo = (overrides: Partial<MicroVmSnapshot> = {}): MicroVmSnapshot => ({
+  id: SNAPSHOT_ID,
+  name: 'after-install',
+  applicationId: 'app-of-snapshot',
+  organizationId: 'org-1',
+  sourceMicrovmId: VM_ID,
+  status: 'ready',
+  image: { id: 'img', name: 'node22' },
+  vcpus: 1,
+  memoryMb: 2048,
+  diskMb: 10240,
+  sizeBytes: 2_000_000,
+  error: null,
+  expiresAt: '2026-12-01T12:00:00.000Z',
+  createdAt: '2026-11-01T12:00:00.000Z',
+  readyAt: '2026-11-01T12:00:05.000Z',
+  ...overrides,
+});
+
+describe('pause and resume', () => {
+  const lifecycle = { json: false, waitTimeout: Option.none<string>() };
+  const io = () => ({ stream: fakeStream().stream, pollInterval: 1 });
+
+  it('asks the API not to hold the request and polls a 202 until paused', async () => {
+    const api = fakeApi(
+      route('POST', `/microvms/${VM_ID}/pause`, () => json(vmInfo({ id: VM_ID, status: 'pausing' }), 202)),
+      route('GET', `/microvms/${VM_ID}`, () => json(vmInfo({ id: VM_ID, status: 'paused' })))
+    );
+
+    const result = await run(pauseMicroVm(VM_ID, lifecycle, io()), api.layer);
+
+    expect(Either.isRight(result)).toBe(true);
+    expect(api.calls[0]?.url.searchParams.get('wait')).toBe('false');
+    expect(String(logSpy.mock.calls[0]?.[0])).toContain(`gigadrive microvms resume ${VM_ID}`);
+  });
+
+  it('accepts a pause the API finished at once (200) without polling', async () => {
+    const api = fakeApi(route('POST', `/microvms/${VM_ID}/pause`, () => json(vmInfo({ id: VM_ID, status: 'paused' }))));
+
+    const result = await run(pauseMicroVm(VM_ID, { ...lifecycle, json: true }, io()), api.layer);
+
+    expect(Either.isRight(result)).toBe(true);
+    expect(api.calls).toHaveLength(1);
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({ status: 'paused' });
+  });
+
+  it('fails when the capture did not take and the microVM keeps running', async () => {
+    const api = fakeApi(
+      route('POST', `/microvms/${VM_ID}/pause`, () => json(vmInfo({ id: VM_ID, status: 'pausing' }), 202)),
+      route('GET', `/microvms/${VM_ID}`, () => json(vmInfo({ id: VM_ID, status: 'running' })))
+    );
+
+    const result = await run(pauseMicroVm(VM_ID, lifecycle, io()), api.layer);
+
+    expect(Either.isLeft(result) && result.left).toMatchObject({ _tag: 'MicroVmStateError', status: 'running' });
+  });
+
+  it('resumes through a 202 and fails when it stays paused', async () => {
+    const ok = fakeApi(
+      route('POST', `/microvms/${VM_ID}/resume`, () => json(vmInfo({ id: VM_ID, status: 'resuming' }), 202)),
+      route('GET', `/microvms/${VM_ID}`, () => json(vmInfo({ id: VM_ID, status: 'running' })))
+    );
+    const stuck = fakeApi(
+      route('POST', `/microvms/${VM_ID}/resume`, () => json(vmInfo({ id: VM_ID, status: 'resuming' }), 202)),
+      route('GET', `/microvms/${VM_ID}`, () => json(vmInfo({ id: VM_ID, status: 'paused' })))
+    );
+
+    expect(Either.isRight(await run(resumeMicroVm(VM_ID, lifecycle, io()), ok.layer))).toBe(true);
+    const failed = await run(resumeMicroVm(VM_ID, lifecycle, io()), stuck.layer);
+    expect(Either.isLeft(failed) && failed.left).toMatchObject({ _tag: 'MicroVmStateError', status: 'paused' });
+  });
+
+  it('maps a paused microVM to a resume hint', () => {
+    expect(
+      errorMessage('run the command', {
+        _tag: 'ApiRequestError',
+        message: 'The microVM is paused',
+        code: 'microvm_paused',
+        statusCode: 409,
+      })
+    ).toContain('gigadrive microvms resume');
+  });
+});
+
+describe('snapshot', () => {
+  const flags = {
+    name: Option.some('after-install'),
+    expires: Option.some('24h'),
+    json: false,
+    waitTimeout: Option.none<string>(),
+  };
+  const io = () => ({ stream: fakeStream().stream, pollInterval: 1 });
+
+  it('sends the name and expiry and polls a 202 until the snapshot is ready', async () => {
+    const api = fakeApi(
+      route('POST', `/microvms/${VM_ID}/snapshots`, () => json(snapshotInfo({ status: 'creating' }), 202)),
+      route('GET', `/microvm-snapshots/${SNAPSHOT_ID}`, () => json(snapshotInfo()))
+    );
+
+    const result = await run(snapshotMicroVm(VM_ID, flags, io()), api.layer);
+
+    expect(Either.isRight(result)).toBe(true);
+    expect(api.calls[0]?.body).toEqual({ name: 'after-install', expiresInMs: 86_400_000 });
+    expect(api.calls[0]?.url.searchParams.get('wait')).toBe('false');
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain(`gigadrive microvms fork ${SNAPSHOT_ID}`);
+  });
+
+  it('accepts a snapshot the API finished at once (201) and prints JSON', async () => {
+    const api = fakeApi(route('POST', `/microvms/${VM_ID}/snapshots`, () => json(snapshotInfo(), 201)));
+
+    await run(snapshotMicroVm(VM_ID, { ...flags, json: true }, io()), api.layer);
+
+    expect(api.calls).toHaveLength(1);
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({ id: SNAPSHOT_ID, status: 'ready' });
+  });
+
+  it('fails with the error of a failed snapshot', async () => {
+    const api = fakeApi(
+      route('POST', `/microvms/${VM_ID}/snapshots`, () => json(snapshotInfo({ status: 'creating' }), 202)),
+      route('GET', `/microvm-snapshots/${SNAPSHOT_ID}`, () =>
+        json(snapshotInfo({ status: 'failed', error: 'capture failed' }))
+      )
+    );
+
+    const result = await run(snapshotMicroVm(VM_ID, flags, io()), api.layer);
+
+    expect(Either.isLeft(result) && result.left.message).toContain('capture failed');
+  });
+
+  it('refuses an expiry under a minute or without a unit', async () => {
+    const api = fakeApi();
+    for (const expires of ['30s', '5']) {
+      const result = await run(snapshotMicroVm(VM_ID, { ...flags, expires: Option.some(expires) }, io()), api.layer);
+      expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    }
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it('lists snapshots of the linked application as a table', async () => {
+    const api = fakeApi(
+      route('GET', '/microvm-snapshots', () =>
+        json({ data: [snapshotInfo()], pagination: { nextCursor: null, hasMore: false } })
+      )
+    );
+
+    await run(listSnapshots({ app: Option.none(), limit: 50, json: false }), api.layer);
+
+    expect(api.calls[0]?.url.searchParams.get('applicationId')).toBe('app-linked');
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain(SNAPSHOT_ID);
+    expect(output).toContain('after-install');
+  });
+
+  it('forks a snapshot into a new microVM and waits for it', async () => {
+    const api = fakeApi(
+      route('POST', '/microvms', () => json(vmInfo({ status: 'pending' }), 202)),
+      route('GET', '/microvms/vm-1', () => json(vmInfo()))
+    );
+
+    const result = await run(
+      forkMicroVm(
+        SNAPSHOT_ID,
+        {
+          app: Option.none(),
+          disk: Option.none(),
+          timeout: Option.some('30m'),
+          ports: ['3000'],
+          env: [],
+          metadata: [],
+          denyEgress: false,
+          privatePreviews: false,
+          allowEgress: [],
+          inject: [],
+          injectFile: Option.none(),
+          pauseOnTimeout: false,
+          autoResume: false,
+          region: Option.none(),
+          json: true,
+        },
+        io()
+      ),
+      api.layer
+    );
+
+    expect(Either.isRight(result) && result.right.status).toBe('running');
+    expect(api.calls[0]?.body).toEqual({
+      applicationId: 'app-linked',
+      snapshotId: SNAPSHOT_ID,
+      timeoutMs: 1_800_000,
+      ports: [3000],
+    });
+  });
+
+  it('refuses IDs that cannot be a microVM or snapshot', async () => {
+    const microvm = await Effect.runPromise(Effect.either(requireId('microVM', 'nope')));
+    const snapshot = await Effect.runPromise(Effect.either(requireId('snapshot', 'nope')));
+    expect(Either.isLeft(microvm) && microvm.left.message).toBe(
+      'nope is not a microVM ID. List your microVMs with "gigadrive microvms ls".'
+    );
+    expect(Either.isLeft(snapshot) && snapshot.left.message).toContain('gigadrive microvms snapshots ls');
+    expect(Either.isRight(await Effect.runPromise(Effect.either(requireId('microVM', VM_ID))))).toBe(true);
+  });
+
+  it('rejects a malformed ID on the command line without calling the API', async () => {
+    const api = fakeApi();
+
+    const result = await runCli(['microvms', 'pause', 'nope'], api.layer);
+
+    expect(Either.isLeft(result)).toBe(true);
+    expect(String(errorSpy.mock.calls.at(-1)?.[0])).toBe(
+      'nope is not a microVM ID. List your microVMs with "gigadrive microvms ls".'
+    );
+    expect(api.calls).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// error messages (#659)
+// ---------------------------------------------------------------------------
+
+describe('errorMessage hints', () => {
+  it('tells how to pick an application', () => {
+    expect(
+      errorMessage('list microVMs', {
+        _tag: 'ApiRequestError',
+        message: '`applicationId` is required unless the credential belongs to an application, deployment or function',
+        statusCode: 400,
+      })
+    ).toBe('No application selected. Pass --app <id> or run "gigadrive link" in your project directory.');
+  });
+
+  it('explains a malformed ID and a missing resource', () => {
+    expect(
+      errorMessage('get the microVM', {
+        _tag: 'ApiRequestError',
+        message: "Property 'id' should be uuid",
+        statusCode: 400,
+      })
+    ).toContain('not in the right format');
+    expect(
+      errorMessage('get the microVM', { _tag: 'ApiRequestError', message: 'microVM not found', statusCode: 404 })
+    ).toContain('gigadrive microvms ls');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cp concurrency and retries (#657)
+// ---------------------------------------------------------------------------
+
+describe('copyFiles concurrency', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'gigadrive-cp-concurrency-'));
+    await mkdir(join(dir, 'site'));
+    for (let index = 0; index < 12; index += 1) await writeFile(join(dir, 'site', `f${index}.txt`), `file ${index}`);
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('keeps at most --concurrency uploads in flight and reports progress on stderr', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const api = fakeApi(
+      route('GET', '/microvms/vm-1/files/stat', () => json({ error: 'Not found' }, 404)),
+      async (url, init) => {
+        if (init?.method !== 'PUT') return undefined;
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await sleep(5);
+        inFlight -= 1;
+        return json({ path: url.searchParams.get('path'), bytes: 6 });
+      }
+    );
+    const { writes, stream } = fakeStream();
+
+    const result = await run(
+      copyFiles(join(dir, 'site'), 'vm:vm-1:/srv', { concurrency: 3, progress: stream }),
+      api.layer
+    );
+
+    expect(Either.isRight(result) && result.right.files).toBe(12);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(writes.join('')).toContain('Uploaded 12/12 files');
+  });
+
+  it('retries a file after a server error or a dropped connection, but not after a 4xx', async () => {
+    const attempts = new Map<string, number>();
+    const api = fakeApi(
+      route('GET', '/microvms/vm-1/files/stat', () => json({ error: 'Not found' }, 404)),
+      (url, init) => {
+        if (init?.method !== 'PUT') return undefined;
+        const path = url.searchParams.get('path') ?? '';
+        const attempt = (attempts.get(path) ?? 0) + 1;
+        attempts.set(path, attempt);
+        if (path.endsWith('f1.txt') && attempt === 1) return json({ error: 'Bad gateway' }, 502);
+        if (path.endsWith('f2.txt') && attempt === 1) throw new TypeError('fetch failed');
+        return json({ path, bytes: 6 });
+      }
+    );
+
+    const result = await run(
+      copyFiles(join(dir, 'site'), 'vm:vm-1:/srv', { progress: fakeStream().stream, retryDelay: '1 millis' }),
+      api.layer
+    );
+
+    expect(Either.isRight(result)).toBe(true);
+    expect(attempts.get('/srv/f1.txt')).toBe(2);
+    expect(attempts.get('/srv/f2.txt')).toBe(2);
+    expect(isTransientCopyError(toApiRequestError(new Error('fetch failed')))).toBe(true);
+  });
+
+  it('fails without retrying on a client error', async () => {
+    let puts = 0;
+    const api = fakeApi(
+      route('GET', '/microvms/vm-1/files/stat', () => json({ error: 'Not found' }, 404)),
+      route('PUT', '/microvms/vm-1/files/content', () => {
+        puts += 1;
+        return json({ error: 'Forbidden' }, 403);
+      })
+    );
+
+    const result = await run(
+      copyFiles(join(dir, 'site', 'f0.txt'), 'vm:vm-1:/srv/f0.txt', { retryDelay: '1 millis' }),
+      api.layer
+    );
+
+    expect(Either.isLeft(result) && result.left).toMatchObject({ _tag: 'ApiRequestError', statusCode: 403 });
+    expect(puts).toBe(1);
+  });
+
+  it('refuses a concurrency outside 1 to 64', async () => {
+    const result = await run(copyFiles(join(dir, 'site'), 'vm:vm-1:/srv', { concurrency: 0 }), fakeApi().layer);
+
+    expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+  });
+
+  it('downloads a directory with bounded concurrency', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const entries = Array.from({ length: 10 }, (_, index) => ({
+      path: `/app/dist/f${index}.js`,
+      name: `f${index}.js`,
+      type: 'file',
+      size: 1,
+      mode: '0644',
+      modifiedAt: '2026-10-23T12:00:00.000Z',
+    }));
+    const api = fakeApi(
+      route('GET', '/microvms/vm-1/files/stat', () =>
+        json({ path: '/app/dist', name: 'dist', type: 'directory', size: 0, mode: '0755', modifiedAt: '' })
+      ),
+      route('GET', '/microvms/vm-1/files', () => json({ entries, truncated: false })),
+      async (url, init) => {
+        if ((init?.method ?? 'GET') !== 'GET' || url.pathname !== '/microvms/vm-1/files/content') return undefined;
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await sleep(5);
+        inFlight -= 1;
+        return new Response('x');
+      }
+    );
+
+    const result = await run(
+      copyFiles('vm:vm-1:/app/dist', join(dir, 'out'), { concurrency: 4, progress: fakeStream().stream }),
+      api.layer
+    );
+
+    expect(Either.isRight(result) && result.right.files).toBe(10);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(await readFile(join(dir, 'out', 'f9.js'), 'utf8')).toBe('x');
   });
 });

@@ -74,7 +74,7 @@ export class AuthStorageService extends Effect.Service<AuthStorageService>()('Au
             })
         )
       );
-      yield* Effect.log('Auth data saved to local storage');
+      yield* Effect.logDebug('Auth data saved to local storage');
     });
 
     const remove = Effect.gen(function* () {
@@ -95,7 +95,7 @@ export class AuthStorageService extends Effect.Service<AuthStorageService>()('Au
               )
         )
       );
-      yield* Effect.log('Auth data removed from local storage');
+      yield* Effect.logDebug('Auth data removed from local storage');
     });
 
     return { load, save, remove };

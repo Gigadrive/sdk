@@ -32,9 +32,9 @@ const lastFetchCall = () => {
   const calls = vi.mocked(globalThis.fetch).mock.calls;
   const [url, init] = calls[calls.length - 1]!;
   const headers: Record<string, string> = {};
-  for (const [key, value] of Object.entries((init?.headers ?? {}) as Record<string, string>)) {
+  new Headers(init?.headers).forEach((value, key) => {
     headers[key.toLowerCase()] = value;
-  }
+  });
   return { url: String(url), method: init?.method, headers };
 };
 
@@ -45,6 +45,33 @@ const listApps = Effect.gen(function* () {
 
 describe('ApiClientService', () => {
   const originalFetch = globalThis.fetch;
+
+  it('sends each request with the current token, so a long command survives a token refresh', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 }))
+      );
+    let token = 'token-1';
+    const layer = makeTestLayer({ getAccessToken: Effect.sync(() => token) });
+
+    await Effect.runPromise(
+      Effect.provide(
+        Effect.gen(function* () {
+          const apiClient = yield* ApiClientService;
+          const client = yield* apiClient.getClient;
+          yield* Effect.promise(() => client.applications.list());
+          token = 'token-2';
+          yield* Effect.promise(() => client.applications.list());
+        }),
+        layer
+      )
+    );
+
+    const calls = vi.mocked(globalThis.fetch).mock.calls;
+    expect(new Headers(calls[0]?.[1]?.headers).get('authorization')).toBe('Bearer token-1');
+    expect(new Headers(calls[1]?.[1]?.headers).get('authorization')).toBe('Bearer token-2');
+  });
 
   beforeEach(() => {
     vi.restoreAllMocks();

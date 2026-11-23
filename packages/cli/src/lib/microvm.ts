@@ -2,6 +2,7 @@ import type {
   CommandInfo,
   MicroVmImage,
   MicroVmInfo,
+  MicroVmSnapshot,
   MicroVmVolume,
   MicroVmWebhook,
   MicroVmWebhookDelivery,
@@ -238,6 +239,22 @@ export const formatVolumeTable = (volumes: ReadonlyArray<MicroVmVolume>): string
   ]);
 
 /** Rows of `gigadrive microvms webhooks deliveries`. */
+/** The table `microvms snapshots ls` prints. */
+export const formatSnapshotTable = (snapshots: ReadonlyArray<MicroVmSnapshot>, now = Date.now()): string[] =>
+  formatTable([
+    ['ID', 'NAME', 'STATUS', 'IMAGE', 'SIZE', 'FROM', 'CREATED', 'EXPIRES'],
+    ...snapshots.map((snapshot) => [
+      snapshot.id,
+      snapshot.name ?? '-',
+      snapshot.status,
+      snapshot.image.name,
+      snapshot.sizeBytes === null ? '-' : formatBytes(snapshot.sizeBytes),
+      snapshot.sourceMicrovmId ?? '-',
+      relativeTime(snapshot.createdAt, now),
+      relativeTime(snapshot.expiresAt, now),
+    ]),
+  ]);
+
 export const formatDeliveryTable = (deliveries: ReadonlyArray<MicroVmWebhookDelivery>): string[] =>
   formatTable([
     ['CREATED', 'EVENT', 'STATUS', 'ATTEMPTS', 'RESPONSE', 'MICROVM'],
