@@ -37,9 +37,11 @@ export type {
   WaitUntilRunningOptions,
 } from './microvm';
 export {
+  MICROVM_TRANSITIONAL_STATUSES,
   MicroVmCommandsResource,
   MicroVmFilesResource,
   MicroVmImagesResource,
+  MicroVmSnapshotsResource,
   MicroVmVolumesResource,
   MicroVmWebhooksResource,
   MicroVmsResource,
@@ -47,9 +49,11 @@ export {
 export type {
   GetMicroVmMetricsOptions,
   MicroVmFileContent,
+  MicroVmLifecycleOptions,
   MicroVmRequestOptions,
   ReadFileOptions,
   WaitForImageOptions,
+  WaitUntilSettledOptions,
   WatchDirectoryOptions,
   WriteFileOptions,
 } from './resource';
