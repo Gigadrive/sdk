@@ -10,7 +10,8 @@ structured error handling, and composable dependency injection.
 ```text
 packages/cli/
   src/
-    index.ts                    # Entry point — CLI wiring + layer composition
+    index.ts                    # Entry point — answers `--version`, else loads main.ts
+    main.ts                     # CLI wiring, layer composition, one-line error reporting
     domain.ts                   # Branded types + domain schemas
     errors.ts                   # All error types (Schema.TaggedError)
     services/
@@ -31,6 +32,8 @@ packages/cli/
       domain-output.ts          # custom domain state labels + DNS record table (pure)
       microvm.ts                # microVM cp targets, tables, exit codes, StdinBatcher (pure)
       microvm-session.ts        # attachCommand: stream a remote command, forward stdin/resizes
+      argv.ts                   # normalizeArgv: split --opt=value, hoist --log-level (pure)
+      progress.ts               # progress line on stderr for long waits
     commands/
       login/index.ts            # `gigadrive login`
       logout/index.ts           # `gigadrive logout`
@@ -42,7 +45,7 @@ packages/cli/
       deployments/index.ts      # `gigadrive deployments list|inspect`
       domains/index.ts          # `gigadrive domains list|add|update|claim|inspect|check|rm|owners`
       ai/index.ts               # `gigadrive ai usage|budgets|policies|models|chat`
-      microvms/index.ts         # `gigadrive microvms|vm create|ls|get|exec|shell|cp|stop|rm|extend|images`
+      microvms/index.ts         # `gigadrive microvms|vm create|ls|get|exec|shell|cp|stop|rm|extend|pause|resume|snapshot|snapshots|fork|images`
       build/index.ts            # `gigadrive build`
       debug/index.ts            # `gigadrive debug` (parent)
       debug/config/index.ts     # `gigadrive debug config`
@@ -92,7 +95,7 @@ PackageManagerService    (standalone — detects npm/yarn/pnpm/bun)
 ArchiveService           (standalone — zip creation with ignore rules)
 ```
 
-All layers are composed flat in `src/index.ts`. `DeploymentApiService` declares
+All layers are composed flat in `src/main.ts`. `DeploymentApiService` declares
 `dependencies: [ApiClientService.Default]`, so `ApiClientService` is already baked
 into `DeploymentApiService.Default`; both layers only need `BaseServices` for the
 transitive `AuthService` requirement:
@@ -114,10 +117,28 @@ const ApiClientLive = Layer.provide(ApiClientService.Default, BaseServices);
 const DeploymentApiLive = Layer.provide(DeploymentApiService.Default, BaseServices);
 
 const ServicesLive = Layer.mergeAll(BaseServices, ApiClientLive, DeploymentApiLive);
-const AppLive = Layer.mergeAll(ServicesLive, Logger.minimumLogLevel(LogLevel.Info)).pipe(
+const AppLive = Layer.mergeAll(ServicesLive, Logger.minimumLogLevel(LogLevel.Warning)).pipe(
   Layer.provideMerge(NodeContext.layer)
 );
 ```
+
+## Startup Time and Error Output
+
+- `src/index.ts` answers `--version` without loading anything else; every other
+  command loads `src/main.ts` through a dynamic import (tsup `splitting: true`).
+- Import `@effect/platform-node` through its subpaths (`/NodeContext`,
+  `/NodeRuntime`). The package root also loads the HTTP server, sockets and
+  workers, about half a second the CLI never uses.
+- The OIDC discovery document is cached on disk for its HTTP cache lifetime (24
+  hours without cache headers); access tokens are refreshed 30 seconds before
+  they expire, and `ApiClientService` puts a current token on every request, so
+  long commands survive a refresh.
+- Commands print their own one-line errors with a next step (see
+  `errorMessage` in `commands/microvms`). `main.ts` prints one line only for a
+  failure nobody explained, and the full cause with stack traces only at
+  `--log-level debug`. The default log level is `warning`; use `Effect.logDebug`
+  for progress chatter. `normalizeArgv` accepts `--log-level` anywhere and
+  `--opt=value` everywhere.
 
 ## Best Practices Enforced in This Package
 
@@ -236,7 +257,7 @@ const parentCommand = Command.make('parent', {}, () => Effect.void).pipe(
 - Use `Layer.mergeAll` for same-level, independent services
 - Use `Layer.provideMerge` when one layer depends on another
 - Declare `dependencies` in the service definition, not at usage sites
-- Compose all layers at the app root in `src/index.ts`
+- Compose all layers at the app root in `src/main.ts`
 
 ```ts
 // CORRECT — dependencies declared in service
@@ -310,7 +331,7 @@ const data = Option.getOrThrow(stored);
      }).pipe(Effect.catchTags({/* error handlers */}))
    );
    ```
-3. Register it in `src/index.ts` via `Command.withSubcommands`
+3. Register it in `src/main.ts` via `Command.withSubcommands`
 4. If your command needs a new service, create it in `src/services/`
 
 ## Adding a New Service
@@ -329,7 +350,7 @@ const data = Option.getOrThrow(stored);
    ```
 3. Add any new error types to `src/errors.ts`
 4. Add any new domain types/schemas to `src/domain.ts`
-5. Add `MyService.Default` to the layer composition in `src/index.ts`
+5. Add `MyService.Default` to the layer composition in `src/main.ts`
 
 ## Adding a New Error Type
 
@@ -349,6 +370,7 @@ const data = Option.getOrThrow(stored);
 | `GIGADRIVE_NETWORK_OAUTH_ISSUER_URL` | `https://idp.gigadrive.de`      | OIDC issuer URL                                                                                   |
 | `GIGADRIVE_NETWORK_OAUTH_CLIENT_ID`  | `0195c11c-…000001` (seeded CLI) | First-party CLI OAuth client ID. Default matches the seeded dev client; override per environment. |
 | `GIGADRIVE_API_BASE_URL`             | `https://api.gigadrive.network` | Gigadrive Network API base URL (used by `ApiClientService`)                                       |
+| `GIGADRIVE_CACHE_DIR`                | `~/.gigadrive`                  | Where the OIDC discovery document is cached (`oidc-discovery.json`)                               |
 
 All read via `Config.string()` with defaults — never accessed via `process.env`.
 

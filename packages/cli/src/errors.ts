@@ -340,3 +340,16 @@ export class LocalFileError extends Schema.TaggedError<LocalFileError>()('LocalF
 export class TerminalRequiredError extends Schema.TaggedError<TerminalRequiredError>()('TerminalRequiredError', {
   message: Schema.String,
 }) {}
+
+/**
+ * A microVM or snapshot did not end where the command needed it: a create
+ * that failed, a pause or resume that did not take, a snapshot that failed,
+ * or a wait that ran out of time.
+ */
+export class MicroVmStateError extends Schema.TaggedError<MicroVmStateError>()('MicroVmStateError', {
+  message: Schema.String,
+  /** The microVM or snapshot the command acted on. */
+  resourceId: Schema.String,
+  /** The status it ended in, such as `failed` or `pending` after a timeout. */
+  status: Schema.String,
+}) {}

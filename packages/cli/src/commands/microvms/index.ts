@@ -1,26 +1,32 @@
 import { Args, Command, Options } from '@effect/cli';
 import { FileSystem, Path } from '@effect/platform';
 import {
+  type CreatedMicroVmInfo,
   type CreateMicroVmInput,
   durationToMs,
   type FileEntry,
   type GigadriveClient,
   MicroVM,
   MICROVM_MAX_TIMEOUT_MS,
+  MICROVM_TRANSITIONAL_STATUSES,
   type MicroVmDuration,
   type MicroVmImage,
+  type MicroVmInfo,
   type MicroVmInjectRule,
   type MicroVmMetrics,
+  type MicroVmSnapshot,
   type MicroVmStatus,
+  MicroVmTimeoutError,
   type MicroVmVolumeAttachment,
   type MicroVmWebhookEventType,
 } from '@gigadrive/sdk';
-import { Config, Console, Effect, Exit, Option } from 'effect';
+import { Config, Console, type Duration, Effect, Exit, Option, Schedule } from 'effect';
 import {
-  type ApiRequestError,
+  ApiRequestError,
   InvalidCopyTargetError,
   InvalidMicroVmOptionsError,
   LocalFileError,
+  MicroVmStateError,
   TerminalRequiredError,
 } from '../../errors';
 import {
@@ -31,6 +37,7 @@ import {
   formatDeliveryTable,
   formatImageTable,
   formatMicroVmTable,
+  formatSnapshotTable,
   formatVolumeTable,
   formatWebhookTable,
   parseCopyTarget,
@@ -40,6 +47,7 @@ import {
   relativeTo,
 } from '../../lib/microvm';
 import { attachCommand, nodeSessionIo, type SessionIo } from '../../lib/microvm-session';
+import { createProgress, type ProgressStream } from '../../lib/progress';
 import { ApiClientService, toApiRequestError } from '../../services/api-client';
 import { ProjectLinkService } from '../../services/project-link';
 
@@ -49,6 +57,9 @@ const MICROVM_STATUSES = [
   'pending',
   'starting',
   'running',
+  'pausing',
+  'paused',
+  'resuming',
   'stopping',
   'stopped',
   'failed',
@@ -102,6 +113,18 @@ export const errorMessage = (
     case 'NotAuthenticatedError':
       return 'You are not logged in. Run "gigadrive login" to authenticate.';
     case 'ApiRequestError':
+      if (/applicationId.+required/i.test(error.message)) {
+        return 'No application selected. Pass --app <id> or run "gigadrive link" in your project directory.';
+      }
+      if (/should be uuid|must be a valid uuid|format.+uuid/i.test(error.message)) {
+        return `Failed to ${action}: an ID is not in the right format. IDs look like 0197b2f1-2f4a-7a0b-8a2d-444444444444; list them with "gigadrive microvms ls".`;
+      }
+      if (error.code === 'microvm_paused') {
+        return `${error.message}\nThe microVM is paused. Run "gigadrive microvms resume <id>", then retry.`;
+      }
+      if (error.statusCode === 404) {
+        return `Failed to ${action}: ${error.message}. Check the ID with "gigadrive microvms ls" (or "gigadrive microvms snapshots ls" for a snapshot).`;
+      }
       if (error.code === 'microvm_not_running') {
         return `${error.message}\nThe microVM has stopped. Create a new one with "gigadrive microvms create".`;
       }
@@ -117,11 +140,33 @@ export const errorMessage = (
       if (error.code === 'image_not_ready') {
         return `${error.message}\nThe image is not built yet. Check it with "gigadrive microvms images ls".`;
       }
+      if (error.statusCode === 401) {
+        return `Failed to ${action}: your login expired. Run "gigadrive login".`;
+      }
+      if (error.statusCode === 403) {
+        return `Failed to ${action}: ${error.message}. Check that you can use this application, or log in again with "gigadrive login".`;
+      }
       return `Failed to ${action}: ${error.message}`;
     default:
       return error.message;
   }
 };
+
+/** A microVM, snapshot or volume ID. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Refuses an argument that cannot be a microVM or snapshot ID before any request is sent. */
+export const requireId = (kind: 'microVM' | 'snapshot', id: string) =>
+  UUID.test(id)
+    ? Effect.succeed(id)
+    : Effect.fail(
+        new InvalidMicroVmOptionsError({
+          message:
+            kind === 'microVM'
+              ? `${id} is not a microVM ID. List your microVMs with "gigadrive microvms ls".`
+              : `${id} is not a snapshot ID. List your snapshots with "gigadrive microvms snapshots ls".`,
+        })
+      );
 
 /** Prints what went wrong while keeping the typed error, so the command exits non-zero. */
 const reportErrors =
@@ -196,9 +241,6 @@ const signalOnInterrupt =
 // create
 // ---------------------------------------------------------------------------
 
-/** A volume ID, as opposed to a volume name in `--volume`. */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Flags of `microvms create`. */
 export interface CreateFlags {
   readonly app: Option.Option<string>;
@@ -207,7 +249,8 @@ export interface CreateFlags {
   readonly memory: Option.Option<number>;
   readonly disk: Option.Option<number>;
   readonly timeout: Option.Option<string>;
-  readonly ports: ReadonlyArray<number>;
+  /** `--port` values as typed; {@link createInput} checks each one. */
+  readonly ports: ReadonlyArray<string>;
   readonly env: ReadonlyArray<string>;
   readonly metadata: ReadonlyArray<string>;
   readonly denyEgress: boolean;
@@ -220,7 +263,32 @@ export interface CreateFlags {
   readonly volumes: ReadonlyArray<string>;
   readonly region: Option.Option<string>;
   readonly json: boolean;
+  /** `--no-wait`: return what the API answered, even when the microVM is still `pending`. */
+  readonly noWait?: boolean;
+  /** `--wait-timeout`: how long to wait for the microVM to run. Default 8 minutes. */
+  readonly waitTimeout?: Option.Option<string>;
+  /** Create from this snapshot instead of an image (`microvms fork`). */
+  readonly snapshotId?: string;
 }
+
+/**
+ * Parses `--port` values: whole numbers from 1 to 65535. They are read as
+ * text so a malformed value gets a clear message instead of being dropped.
+ */
+export const parsePorts = (values: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const ports: number[] = [];
+    for (const value of values) {
+      const port = /^\d{1,5}$/.test(value.trim()) ? Number(value.trim()) : Number.NaN;
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return yield* new InvalidMicroVmOptionsError({
+          message: `--port must be a whole number from 1 to 65535, such as --port 3000 (got "${value}").`,
+        });
+      }
+      if (!ports.includes(port)) ports.push(port);
+    }
+    return ports;
+  });
 
 /**
  * Parses `--volume VOLUME:PATH` (a volume ID or name, then an absolute mount
@@ -330,10 +398,7 @@ export const createInput = (flags: CreateFlags) =>
       onSome: (text) => parseLifetime('--timeout', text),
     });
     yield* checkEgressFlags(flags.denyEgress, flags.allowEgress);
-    const badPort = flags.ports.find((port) => !Number.isInteger(port) || port < 1 || port > 65535);
-    if (badPort !== undefined) {
-      return yield* new InvalidMicroVmOptionsError({ message: `--port must be between 1 and 65535 (got ${badPort}).` });
-    }
+    const ports = yield* parsePorts(flags.ports);
     const inject = yield* readInjectRules(flags.inject, flags.injectFile);
     if (inject.length > 0 && flags.denyEgress) {
       return yield* new InvalidMicroVmOptionsError({ message: '--inject cannot be combined with --deny-egress.' });
@@ -345,6 +410,7 @@ export const createInput = (flags: CreateFlags) =>
     const applicationId = yield* resolveApplicationId(flags.app);
     const input: CreateMicroVmInput = {
       ...(applicationId ? { applicationId } : {}),
+      ...(flags.snapshotId !== undefined ? { snapshotId: flags.snapshotId } : {}),
       ...Option.match(flags.image, { onNone: () => ({}), onSome: (image) => ({ image }) }),
       ...Option.match(flags.vcpus, {
         onNone: () => ({}),
@@ -355,7 +421,7 @@ export const createInput = (flags: CreateFlags) =>
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       ...(flags.pauseOnTimeout ? { onTimeout: 'pause' as const } : {}),
       ...(flags.autoResume ? { autoResume: true } : {}),
-      ...(flags.ports.length > 0 ? { ports: [...flags.ports] } : {}),
+      ...(ports.length > 0 ? { ports } : {}),
       ...(env ? { env } : {}),
       ...(metadata ? { metadata } : {}),
       ...(volumes.length > 0 ? { volumes } : {}),
@@ -374,8 +440,128 @@ export const createInput = (flags: CreateFlags) =>
     return input;
   });
 
-/** Creates a microVM and prints it. */
-export const createMicroVm = (flags: CreateFlags) =>
+/** How long a command waits for a microVM or snapshot to settle by default: the API's longest capacity wait. */
+const DEFAULT_WAIT_TIMEOUT = '8m';
+
+const waitTimeoutOption = Options.text('wait-timeout').pipe(
+  Options.withDescription('Give up waiting after this long, such as 2m or 15m (default: 8m)'),
+  Options.optional
+);
+
+/** The progress line for a microVM in a status that changes on its own. */
+const waitingMessage = (status: MicroVmStatus) => {
+  switch (status) {
+    case 'pending':
+      return 'Waiting for capacity...';
+    case 'starting':
+      return 'Starting...';
+    case 'pausing':
+      return 'Pausing...';
+    case 'resuming':
+      return 'Resuming...';
+    case 'stopping':
+      return 'Stopping...';
+    default:
+      return `${status}...`;
+  }
+};
+
+/** Where waits report progress and how often they poll; tests shorten both. */
+export interface WaitIo {
+  /** Default stderr. */
+  readonly stream?: ProgressStream;
+  /** Default 1s. */
+  readonly pollInterval?: MicroVmDuration;
+}
+
+/**
+ * Runs an SDK wait, which may take minutes: interrupting the command (Ctrl-C)
+ * aborts it, and running out of time becomes a {@link MicroVmStateError} that
+ * says what to do next.
+ */
+const runWait = <A>(
+  run: (client: GigadriveClient, signal: AbortSignal) => Promise<A>,
+  onTimeout: () => MicroVmStateError
+) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    const client = yield* apiClient.getClient;
+    return yield* Effect.tryPromise({
+      try: (signal) => run(client, signal),
+      catch: (error) => (error instanceof MicroVmTimeoutError ? onTimeout() : toApiRequestError(error)),
+    });
+  });
+
+/** Checks `--wait-timeout` before any request, so a typo never leaves a microVM half done. */
+const checkWaitTimeout = (waitTimeout: Option.Option<string> | undefined) =>
+  parseDuration(
+    '--wait-timeout',
+    Option.getOrElse(waitTimeout ?? Option.none(), () => DEFAULT_WAIT_TIMEOUT)
+  );
+
+/**
+ * Polls a microVM until its status stops changing on its own (`pending`,
+ * `starting`, `pausing`, `resuming`, `stopping`), with a progress line on
+ * stderr. A microVM that already settled is returned as is.
+ */
+export const settleMicroVm = (vm: MicroVmInfo, waitTimeout: Option.Option<string>, io: WaitIo = {}) =>
+  Effect.gen(function* () {
+    if (!MICROVM_TRANSITIONAL_STATUSES.includes(vm.status)) return vm;
+    const timeoutText = Option.getOrElse(waitTimeout, () => DEFAULT_WAIT_TIMEOUT);
+    const timeout = yield* parseDuration('--wait-timeout', timeoutText);
+    const progress = createProgress(io.stream);
+    let last = vm;
+    progress.update(waitingMessage(vm.status), 0);
+    return yield* runWait(
+      (client, signal) =>
+        client.microvms.waitUntilSettled(vm.id, {
+          timeout,
+          interval: io.pollInterval ?? '1s',
+          signal,
+          onPoll: (current, elapsedMs) => {
+            last = current;
+            progress.update(waitingMessage(current.status), elapsedMs);
+          },
+        }),
+      () =>
+        new MicroVmStateError({
+          message: `The microVM ${vm.id} is still ${last.status} after ${timeoutText}. It keeps going in the background: check it with "gigadrive microvms get ${vm.id}", or delete it with "gigadrive microvms rm ${vm.id}".`,
+          resourceId: vm.id,
+          status: last.status,
+        })
+    ).pipe(Effect.ensuring(Effect.sync(() => progress.done())));
+  });
+
+/** Polls a snapshot until it is no longer `creating`, with a progress line on stderr. */
+export const settleSnapshot = (snapshot: MicroVmSnapshot, waitTimeout: Option.Option<string>, io: WaitIo = {}) =>
+  Effect.gen(function* () {
+    if (snapshot.status !== 'creating') return snapshot;
+    const timeoutText = Option.getOrElse(waitTimeout, () => DEFAULT_WAIT_TIMEOUT);
+    const timeout = yield* parseDuration('--wait-timeout', timeoutText);
+    const progress = createProgress(io.stream);
+    progress.update('Taking the snapshot...', 0);
+    return yield* runWait(
+      (client, signal) =>
+        client.microvms.snapshots.waitUntilSettled(snapshot.id, {
+          timeout,
+          interval: io.pollInterval ?? '1s',
+          signal,
+          onPoll: (_current, elapsedMs) => progress.update('Taking the snapshot...', elapsedMs),
+        }),
+      () =>
+        new MicroVmStateError({
+          message: `The snapshot ${snapshot.id} is still being created after ${timeoutText}. Check it with "gigadrive microvms snapshots get ${snapshot.id}".`,
+          resourceId: snapshot.id,
+          status: 'creating',
+        })
+    ).pipe(Effect.ensuring(Effect.sync(() => progress.done())));
+  });
+
+/**
+ * Creates a microVM, waits until it runs (unless `--no-wait`) and prints it.
+ * A microVM that failed to start fails the command with its stop reason.
+ */
+export const createMicroVm = (flags: CreateFlags, io: WaitIo = {}) =>
   Effect.gen(function* () {
     const apiClient = yield* ApiClientService;
     const parsed = yield* createInput(flags);
@@ -402,13 +588,47 @@ export const createMicroVm = (flags: CreateFlags) =>
       volumes.push({ volumeId: match.id, mountPath: volume.mountPath });
     }
     const input: CreateMicroVmInput = volumes.length > 0 ? { ...parsed, volumes } : parsed;
-    if (!flags.json) yield* Console.error(`Creating a microVM from ${input.image ?? 'node22'}...`);
-    const vm = yield* apiClient.request((client) => client.microvms.create(input));
-    if (flags.json) {
-      yield* Console.log(JSON.stringify(vm, null, 2));
-      return vm;
+    if (flags.noWait !== true) yield* checkWaitTimeout(flags.waitTimeout);
+    if (!flags.json) {
+      yield* Console.error(
+        input.snapshotId !== undefined
+          ? `Creating a microVM from snapshot ${input.snapshotId}...`
+          : `Creating a microVM from ${input.image ?? 'node22'}...`
+      );
     }
+    // The API answers within about 25 seconds: `running`, or `pending` while it
+    // still waits for capacity (202). Wait for the rest here.
+    const created = yield* apiClient.request((client) => client.microvms.create(input));
+    const settled =
+      flags.noWait === true
+        ? created
+        : yield* settleMicroVm(created, flags.waitTimeout ?? Option.none(), io).pipe(
+            // The microVM exists even when the wait fails: print what the API
+            // answered, with the preview token it shows only once.
+            Effect.tapError(() =>
+              flags.json
+                ? Console.log(JSON.stringify(created, null, 2))
+                : created.previewToken
+                  ? Console.log(`Preview token of ${created.id} (shown only now): ${created.previewToken}`)
+                  : Effect.void
+            )
+          );
+    const vm: CreatedMicroVmInfo = created.previewToken ? { ...settled, previewToken: created.previewToken } : settled;
+    if (flags.json) yield* Console.log(JSON.stringify(vm, null, 2));
+    if (vm.status === 'failed' || vm.status === 'stopped') {
+      return yield* new MicroVmStateError({
+        message: `The microVM ${vm.id} ${vm.status === 'failed' ? 'failed to start' : 'stopped before it ran'}${
+          vm.stopReason ? `: ${vm.stopReason}` : ''
+        }. Try again, or pick another --region.`,
+        resourceId: vm.id,
+        status: vm.status,
+      });
+    }
+    if (flags.json) return vm;
     for (const line of describeMicroVm(vm)) yield* Console.log(line);
+    if (vm.status !== 'running') {
+      yield* Console.log(`\nIt is still ${vm.status}. Check it with "gigadrive microvms get ${vm.id}".`);
+    }
     if (vm.previewToken) {
       yield* Console.log(`\nPreview token: ${vm.previewToken}`);
       yield* Console.log(
@@ -420,80 +640,83 @@ export const createMicroVm = (flags: CreateFlags) =>
     return vm;
   });
 
-const createCommand = Command.make(
-  'create',
-  {
-    app: appOption,
-    image: Options.text('image').pipe(
-      Options.withAlias('i'),
-      Options.withDescription(
-        'Image name or ID: node22, node24, python3.13, python3.12, bun1, debian12, ubuntu24.04, or a custom image (default: node22)'
-      ),
-      Options.optional
+/** Options of `microvms create`; `microvms fork` takes those that make sense for a snapshot. */
+const createOptions = {
+  app: appOption,
+  image: Options.text('image').pipe(
+    Options.withAlias('i'),
+    Options.withDescription(
+      'Image name or ID: node22, node24, python3.13, python3.12, bun1, debian12, ubuntu24.04, or a custom image (default: node22)'
     ),
-    vcpus: Options.choice('vcpus', ['1', '2', '4'] as const).pipe(
-      Options.withDescription('Number of vCPUs (default: 1)'),
-      Options.optional
+    Options.optional
+  ),
+  vcpus: Options.choice('vcpus', ['1', '2', '4'] as const).pipe(
+    Options.withDescription('Number of vCPUs (default: 1)'),
+    Options.optional
+  ),
+  memory: Options.integer('memory').pipe(Options.withDescription('Memory in MiB (default: 2048)'), Options.optional),
+  disk: Options.integer('disk').pipe(Options.withDescription('Disk in MiB (default: 10240)'), Options.optional),
+  timeout: Options.text('timeout').pipe(
+    Options.withAlias('t'),
+    Options.withDescription('Lifetime before it stops automatically, such as 30m or 2h (default: 5m)'),
+    Options.optional
+  ),
+  ports: Options.text('port').pipe(
+    Options.withAlias('p'),
+    Options.withDescription('Port to expose on a preview URL, 1 to 65535 (repeatable, up to 8)'),
+    Options.repeated
+  ),
+  env: envOption,
+  metadata: Options.text('metadata').pipe(
+    Options.withAlias('m'),
+    Options.withDescription('Metadata as KEY=VALUE (repeatable)'),
+    Options.repeated
+  ),
+  denyEgress: Options.boolean('deny-egress').pipe(Options.withDescription('Block all outbound network traffic')),
+  privatePreviews: Options.boolean('private-previews').pipe(
+    Options.withDescription('Answer preview URLs only to requests that carry the preview token printed at create')
+  ),
+  allowEgress: Options.text('allow-egress').pipe(
+    Options.withDescription(
+      'Only reach this domain name (api.openai.com, *.github.com for every subdomain) or public IPv4 network (140.82.112.0/20) (repeatable, up to 32)'
     ),
-    memory: Options.integer('memory').pipe(Options.withDescription('Memory in MiB (default: 2048)'), Options.optional),
-    disk: Options.integer('disk').pipe(Options.withDescription('Disk in MiB (default: 10240)'), Options.optional),
-    timeout: Options.text('timeout').pipe(
-      Options.withAlias('t'),
-      Options.withDescription('Lifetime before it stops automatically, such as 30m or 2h (default: 5m)'),
-      Options.optional
+    Options.repeated
+  ),
+  inject: Options.text('inject').pipe(
+    Options.withDescription(
+      'Add a header to HTTPS requests to a domain, as DOMAIN:HEADER=VALUE (repeatable, up to 8 domains); the value never enters the microVM'
     ),
-    ports: Options.integer('port').pipe(
-      Options.withAlias('p'),
-      Options.withDescription('Port to expose on a preview URL (repeatable, up to 8)'),
-      Options.repeated
+    Options.repeated
+  ),
+  injectFile: Options.text('inject-file').pipe(
+    Options.withDescription(
+      'Read --inject rules from a file, one DOMAIN:HEADER=VALUE per line (/dev/stdin for a pipe), so the values stay out of the command line'
     ),
-    env: envOption,
-    metadata: Options.text('metadata').pipe(
-      Options.withAlias('m'),
-      Options.withDescription('Metadata as KEY=VALUE (repeatable)'),
-      Options.repeated
+    Options.optional
+  ),
+  pauseOnTimeout: Options.boolean('pause-on-timeout').pipe(
+    Options.withDescription('Pause the microVM when its timeout ends instead of stopping it')
+  ),
+  autoResume: Options.boolean('auto-resume').pipe(
+    Options.withDescription('Resume the paused microVM when a command, file call or public preview request reaches it')
+  ),
+  volumes: Options.text('volume').pipe(
+    Options.withAlias('v'),
+    Options.withDescription(
+      'Attach a volume as VOLUME:PATH, by ID or name, such as cache:/cache (repeatable, up to 4; saved when the microVM stops)'
     ),
-    denyEgress: Options.boolean('deny-egress').pipe(Options.withDescription('Block all outbound network traffic')),
-    privatePreviews: Options.boolean('private-previews').pipe(
-      Options.withDescription('Answer preview URLs only to requests that carry the preview token printed at create')
-    ),
-    allowEgress: Options.text('allow-egress').pipe(
-      Options.withDescription(
-        'Only reach this domain name (api.openai.com, *.github.com for every subdomain) or public IPv4 network (140.82.112.0/20) (repeatable, up to 32)'
-      ),
-      Options.repeated
-    ),
-    inject: Options.text('inject').pipe(
-      Options.withDescription(
-        'Add a header to HTTPS requests to a domain, as DOMAIN:HEADER=VALUE (repeatable, up to 8 domains); the value never enters the microVM'
-      ),
-      Options.repeated
-    ),
-    injectFile: Options.text('inject-file').pipe(
-      Options.withDescription(
-        'Read --inject rules from a file, one DOMAIN:HEADER=VALUE per line (/dev/stdin for a pipe), so the values stay out of the command line'
-      ),
-      Options.optional
-    ),
-    pauseOnTimeout: Options.boolean('pause-on-timeout').pipe(
-      Options.withDescription('Pause the microVM when its timeout ends instead of stopping it')
-    ),
-    autoResume: Options.boolean('auto-resume').pipe(
-      Options.withDescription(
-        'Resume the paused microVM when a command, file call or public preview request reaches it'
-      )
-    ),
-    volumes: Options.text('volume').pipe(
-      Options.withAlias('v'),
-      Options.withDescription(
-        'Attach a volume as VOLUME:PATH, by ID or name, such as cache:/cache (repeatable, up to 4; saved when the microVM stops)'
-      ),
-      Options.repeated
-    ),
-    region: Options.text('region').pipe(Options.withDescription('Region to place the microVM in'), Options.optional),
-    json: jsonOption,
-  },
-  (flags) => createMicroVm(flags).pipe(Effect.asVoid, reportErrors('create the microVM'))
+    Options.repeated
+  ),
+  region: Options.text('region').pipe(Options.withDescription('Region to place the microVM in'), Options.optional),
+  json: jsonOption,
+  noWait: Options.boolean('no-wait').pipe(
+    Options.withDescription('Return as soon as the API answers, even while the microVM still waits for capacity')
+  ),
+  waitTimeout: waitTimeoutOption,
+};
+
+const createCommand = Command.make('create', createOptions, (flags) =>
+  createMicroVm(flags).pipe(Effect.asVoid, reportErrors('create the microVM'))
 ).pipe(Command.withDescription('Create a microVM and wait until it runs'));
 
 // ---------------------------------------------------------------------------
@@ -555,6 +778,7 @@ const listCommand = Command.make(
 
 const getCommand = Command.make('get', { microvmId: microvmIdArg, json: jsonOption }, ({ microvmId, json }) =>
   Effect.gen(function* () {
+    yield* requireId('microVM', microvmId);
     const apiClient = yield* ApiClientService;
     const vm = yield* apiClient.request((client) => client.microvms.get(microvmId));
     if (json) return yield* Console.log(JSON.stringify(vm, null, 2));
@@ -593,6 +817,7 @@ const metricsCommand = Command.make(
   },
   ({ microvmId, window, json }) =>
     Effect.gen(function* () {
+      yield* requireId('microVM', microvmId);
       const apiClient = yield* ApiClientService;
       const windowMinutes = Option.getOrUndefined(window);
       const metrics = yield* apiClient.request((client) =>
@@ -685,7 +910,12 @@ const execCommand = Command.make(
       Options.withDescription('Forward local stdin to the command')
     ),
   },
-  (flags) => execInMicroVm(flags).pipe(Effect.flatMap(setExitCode), reportErrors('run the command'))
+  (flags) =>
+    requireId('microVM', flags.microvmId).pipe(
+      Effect.andThen(execInMicroVm(flags)),
+      Effect.flatMap(setExitCode),
+      reportErrors('run the command')
+    )
 ).pipe(Command.withDescription('Run a command in a microVM and exit with its exit code: exec <id> -- <command...>'));
 
 /** Flags of `microvms shell`. */
@@ -751,7 +981,12 @@ const shellCommand = Command.make(
     cwd: cwdOption,
     user: userOption,
   },
-  (flags) => openShell(flags).pipe(Effect.flatMap(setExitCode), reportErrors('open a shell'))
+  (flags) =>
+    requireId('microVM', flags.microvmId).pipe(
+      Effect.andThen(openShell(flags)),
+      Effect.flatMap(setExitCode),
+      reportErrors('open a shell')
+    )
 ).pipe(Command.withDescription('Open an interactive shell in a microVM'));
 
 // ---------------------------------------------------------------------------
@@ -766,6 +1001,79 @@ export interface CopyResult {
   readonly files: number;
   readonly bytes: number;
 }
+
+/** Options of {@link copyFiles}. */
+export interface CopyOptions {
+  /** Files in flight at once. Default 8. */
+  readonly concurrency?: number;
+  /** Where the progress line goes. Default stderr. */
+  readonly progress?: ProgressStream;
+  /** First delay before retrying a file that failed with a transient error. Default 250 ms, doubled per retry. */
+  readonly retryDelay?: Duration.DurationInput;
+}
+
+/** Default number of files `cp` transfers at once. */
+export const DEFAULT_COPY_CONCURRENCY = 8;
+
+/** How often `cp` retries one file after a transient error. */
+const COPY_RETRIES = 4;
+
+/** A failure worth retrying: no answer at all, a busy microVM, or a server error. */
+export const isTransientCopyError = (error: ApiRequestError | LocalFileError) =>
+  error._tag === 'ApiRequestError' &&
+  (error.statusCode === undefined || error.statusCode === 429 || error.statusCode >= 500);
+
+/**
+ * Retries one file's request on transient errors with jittered exponential
+ * backoff. Only the request is retried, never the local read, so a retry
+ * sends the same bytes as the first attempt.
+ */
+const retryTransient =
+  (options: CopyOptions) =>
+  <A, R>(request: Effect.Effect<A, ApiRequestError, R>) =>
+    request.pipe(
+      Effect.retry({
+        schedule: Schedule.exponential(options.retryDelay ?? '250 millis').pipe(
+          Schedule.jittered,
+          Schedule.intersect(Schedule.recurs(COPY_RETRIES))
+        ),
+        while: isTransientCopyError,
+      })
+    );
+
+/**
+ * Transfers files with at most `concurrency` requests in flight and reports
+ * progress on stderr for more than one file.
+ */
+const transferAll = <F, E extends ApiRequestError | LocalFileError, R>(
+  files: ReadonlyArray<F>,
+  verb: 'Uploaded' | 'Downloaded',
+  options: CopyOptions,
+  transfer: (file: F) => Effect.Effect<number, E, R>
+) =>
+  Effect.gen(function* () {
+    const progress = createProgress(options.progress ?? process.stderr);
+    const started = Date.now();
+    let done = 0;
+    let bytes = 0;
+    yield* Effect.forEach(
+      files,
+      (file) =>
+        transfer(file).pipe(
+          Effect.tap((size) =>
+            Effect.sync(() => {
+              done += 1;
+              bytes += size;
+              if (files.length > 1) {
+                progress.update(`${verb} ${done}/${files.length} files, ${formatBytes(bytes)}`, Date.now() - started);
+              }
+            })
+          )
+        ),
+      { concurrency: options.concurrency ?? DEFAULT_COPY_CONCURRENCY, discard: true }
+    ).pipe(Effect.ensuring(Effect.sync(() => progress.done())));
+    return { files: files.length, bytes };
+  });
 
 const parseTarget = (value: string) => {
   const target = parseCopyTarget(value);
@@ -784,7 +1092,12 @@ const remoteStat = (client: GigadriveClient, microvmId: string, path: string) =>
   );
 
 /** Copies a local file or directory into a microVM. */
-const upload = (client: GigadriveClient, source: string, target: Extract<CopyTarget, { kind: 'remote' }>) =>
+const upload = (
+  client: GigadriveClient,
+  source: string,
+  target: Extract<CopyTarget, { kind: 'remote' }>,
+  options: CopyOptions
+) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -808,20 +1121,25 @@ const upload = (client: GigadriveClient, source: string, target: Extract<CopyTar
       files.push({ local: source, remote: destination });
     }
 
-    let bytes = 0;
-    for (const file of files) {
-      const content = yield* fs.readFile(file.local).pipe(Effect.mapError(localError(file.local, 'read')));
-      const result = yield* Effect.tryPromise({
-        try: () => client.microvms.files.write(target.microvmId, file.remote, content),
-        catch: toApiRequestError,
-      });
-      bytes += result.bytes;
-    }
-    return { files: files.length, bytes };
+    return yield* transferAll(files, 'Uploaded', options, (file) =>
+      Effect.gen(function* () {
+        const content = yield* fs.readFile(file.local).pipe(Effect.mapError(localError(file.local, 'read')));
+        const result = yield* Effect.tryPromise({
+          try: (signal) => client.microvms.files.write(target.microvmId, file.remote, content, { signal }),
+          catch: toApiRequestError,
+        }).pipe(retryTransient(options));
+        return result.bytes;
+      })
+    );
   });
 
 /** Copies a file or directory out of a microVM. */
-const download = (client: GigadriveClient, source: Extract<CopyTarget, { kind: 'remote' }>, target: string) =>
+const download = (
+  client: GigadriveClient,
+  source: Extract<CopyTarget, { kind: 'remote' }>,
+  target: string,
+  options: CopyOptions
+) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -865,19 +1183,19 @@ const download = (client: GigadriveClient, source: Extract<CopyTarget, { kind: '
       files.push({ remote: entry.path, local: destination });
     }
 
-    let bytes = 0;
-    for (const file of files) {
-      const content = yield* Effect.tryPromise({
-        try: () => client.microvms.files.read(source.microvmId, file.remote),
-        catch: toApiRequestError,
-      });
-      yield* fs
-        .makeDirectory(path.dirname(file.local), { recursive: true })
-        .pipe(Effect.mapError(localError(file.local, 'create the directory of')));
-      yield* fs.writeFile(file.local, content).pipe(Effect.mapError(localError(file.local, 'write')));
-      bytes += content.length;
-    }
-    return { files: files.length, bytes };
+    return yield* transferAll(files, 'Downloaded', options, (file) =>
+      Effect.gen(function* () {
+        const content = yield* Effect.tryPromise({
+          try: (signal) => client.microvms.files.read(source.microvmId, file.remote, { signal }),
+          catch: toApiRequestError,
+        }).pipe(retryTransient(options));
+        yield* fs
+          .makeDirectory(path.dirname(file.local), { recursive: true })
+          .pipe(Effect.mapError(localError(file.local, 'create the directory of')));
+        yield* fs.writeFile(file.local, content).pipe(Effect.mapError(localError(file.local, 'write')));
+        return content.length;
+      })
+    );
   });
 
 /**
@@ -885,14 +1203,22 @@ const download = (client: GigadriveClient, source: Extract<CopyTarget, { kind: '
  * `vm:<id>:<path>`. Directories are copied recursively; copying onto an
  * existing directory (or a path ending in `/`) puts the source inside it.
  */
-export const copyFiles = (sourceSpec: string, targetSpec: string) =>
+export const copyFiles = (sourceSpec: string, targetSpec: string, options: CopyOptions = {}) =>
   Effect.gen(function* () {
     const source = yield* parseTarget(sourceSpec);
     const target = yield* parseTarget(targetSpec);
+    const concurrency = options.concurrency ?? DEFAULT_COPY_CONCURRENCY;
+    if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 64) {
+      return yield* new InvalidMicroVmOptionsError({
+        message: `--concurrency must be a whole number from 1 to 64 (got ${concurrency}).`,
+      });
+    }
     const apiClient = yield* ApiClientService;
     const client = yield* apiClient.getClient;
-    if (source.kind === 'local' && target.kind === 'remote') return yield* upload(client, source.path, target);
-    if (source.kind === 'remote' && target.kind === 'local') return yield* download(client, source, target.path);
+    if (source.kind === 'local' && target.kind === 'remote') return yield* upload(client, source.path, target, options);
+    if (source.kind === 'remote' && target.kind === 'local') {
+      return yield* download(client, source, target.path, options);
+    }
     return yield* new InvalidCopyTargetError({
       message: 'One side must be local and the other vm:<id>:<path>, e.g. "gigadrive microvms cp ./app vm:<id>:/app".',
     });
@@ -903,9 +1229,13 @@ const copyCommand = Command.make(
   {
     source: Args.text({ name: 'source' }).pipe(Args.withDescription('Local path or vm:<id>:<path>')),
     target: Args.text({ name: 'target' }).pipe(Args.withDescription('Local path or vm:<id>:<path>')),
+    concurrency: Options.integer('concurrency').pipe(
+      Options.withDescription(`Files to copy at once, 1 to 64 (default: ${DEFAULT_COPY_CONCURRENCY})`),
+      Options.withDefault(DEFAULT_COPY_CONCURRENCY)
+    ),
   },
-  ({ source, target }) =>
-    copyFiles(source, target).pipe(
+  ({ source, target, concurrency }) =>
+    copyFiles(source, target, { concurrency }).pipe(
       Effect.flatMap((result) =>
         Console.log(`Copied ${result.files} file${result.files === 1 ? '' : 's'} (${formatBytes(result.bytes)}).`)
       ),
@@ -927,6 +1257,7 @@ const stopCommand = Command.make('stop', { microvmIds: microvmIdsArg }, ({ micro
     microvmIds,
     (microvmId) =>
       Effect.gen(function* () {
+        yield* requireId('microVM', microvmId);
         const apiClient = yield* ApiClientService;
         yield* apiClient.request((client) => client.microvms.stop(microvmId));
         yield* Console.log(`Stopped ${microvmId}.`);
@@ -940,6 +1271,7 @@ const removeCommand = Command.make('rm', { microvmIds: microvmIdsArg }, ({ micro
     microvmIds,
     (microvmId) =>
       Effect.gen(function* () {
+        yield* requireId('microVM', microvmId);
         const apiClient = yield* ApiClientService;
         yield* apiClient.request((client) => client.microvms.delete(microvmId));
         yield* Console.log(`Deleted ${microvmId}.`);
@@ -967,7 +1299,11 @@ const extendCommand = Command.make(
     ),
   },
   ({ microvmId, duration }) =>
-    extendMicroVm(microvmId, duration).pipe(Effect.asVoid, reportErrors('extend the microVM'))
+    requireId('microVM', microvmId).pipe(
+      Effect.andThen(extendMicroVm(microvmId, duration)),
+      Effect.asVoid,
+      reportErrors('extend the microVM')
+    )
 ).pipe(Command.withDescription('Set how long a microVM keeps running, counted from now'));
 
 /** Flags of `microvms network`. */
@@ -1057,10 +1393,307 @@ const networkCommand = Command.make(
     ),
   },
   ({ microvmId, ...flags }) =>
-    updateMicroVmNetwork(microvmId, flags).pipe(Effect.asVoid, reportErrors('update the microVM network'))
+    requireId('microVM', microvmId).pipe(
+      Effect.andThen(updateMicroVmNetwork(microvmId, flags)),
+      Effect.asVoid,
+      reportErrors('update the microVM network')
+    )
 ).pipe(
   Command.withDescription(
     'Change what a running or paused microVM may reach; connections the new rules no longer allow are closed'
+  )
+);
+
+// ---------------------------------------------------------------------------
+// pause / resume / snapshot / fork
+// ---------------------------------------------------------------------------
+
+/** Flags of `microvms pause` and `microvms resume`. */
+export interface LifecycleFlags {
+  readonly json: boolean;
+  readonly waitTimeout: Option.Option<string>;
+}
+
+/**
+ * Pauses a running microVM and waits until it is paused. The request asks
+ * the API not to hold the connection (`wait=false`, answered `202`), so a
+ * long capture never runs into a proxy timeout; this command polls instead.
+ */
+export const pauseMicroVm = (microvmId: string, flags: LifecycleFlags, io: WaitIo = {}) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    yield* checkWaitTimeout(flags.waitTimeout);
+    const answered = yield* apiClient.request((client) => client.microvms.pause(microvmId, { wait: false }));
+    const vm = yield* settleMicroVm(answered, flags.waitTimeout, io);
+    if (vm.status !== 'paused') {
+      return yield* new MicroVmStateError({
+        message:
+          vm.status === 'running'
+            ? `The microVM ${vm.id} could not be paused and keeps running. Try again in a moment.`
+            : `The microVM ${vm.id} is ${vm.status}, not paused${vm.stopReason ? ` (${vm.stopReason})` : ''}.`,
+        resourceId: vm.id,
+        status: vm.status,
+      });
+    }
+    if (flags.json) yield* Console.log(JSON.stringify(vm, null, 2));
+    else yield* Console.log(`Paused ${vm.id}. Resume it with "gigadrive microvms resume ${vm.id}".`);
+    return vm;
+  });
+
+/** Resumes a paused microVM and waits until it runs again. */
+export const resumeMicroVm = (microvmId: string, flags: LifecycleFlags, io: WaitIo = {}) =>
+  Effect.gen(function* () {
+    const apiClient = yield* ApiClientService;
+    yield* checkWaitTimeout(flags.waitTimeout);
+    const answered = yield* apiClient.request((client) => client.microvms.resume(microvmId, { wait: false }));
+    const vm = yield* settleMicroVm(answered, flags.waitTimeout, io);
+    if (vm.status !== 'running') {
+      return yield* new MicroVmStateError({
+        message:
+          vm.status === 'paused'
+            ? `The microVM ${vm.id} could not be resumed and is still paused. Try again with "gigadrive microvms resume ${vm.id}".`
+            : `The microVM ${vm.id} is ${vm.status}, not running${vm.stopReason ? ` (${vm.stopReason})` : ''}.`,
+        resourceId: vm.id,
+        status: vm.status,
+      });
+    }
+    if (flags.json) yield* Console.log(JSON.stringify(vm, null, 2));
+    else yield* Console.log(`Resumed ${vm.id}.`);
+    return vm;
+  });
+
+const lifecycleCommand = (name: 'pause' | 'resume') =>
+  Command.make(
+    name,
+    { microvmId: microvmIdArg, json: jsonOption, waitTimeout: waitTimeoutOption },
+    ({ microvmId, ...flags }) =>
+      requireId('microVM', microvmId).pipe(
+        Effect.andThen(name === 'pause' ? pauseMicroVm(microvmId, flags) : resumeMicroVm(microvmId, flags)),
+        Effect.asVoid,
+        reportErrors(name === 'pause' ? 'pause the microVM' : 'resume the microVM')
+      )
+  ).pipe(
+    Command.withDescription(
+      name === 'pause'
+        ? 'Pause a microVM with its memory, processes and files; it stops accruing CPU and memory until resumed'
+        : 'Resume a paused microVM where it left off'
+    )
+  );
+
+/** Flags of `microvms snapshot`. */
+export interface SnapshotFlags {
+  readonly name: Option.Option<string>;
+  readonly expires: Option.Option<string>;
+  readonly json: boolean;
+  readonly waitTimeout: Option.Option<string>;
+}
+
+/** Snapshots a running microVM and waits until the snapshot is ready. The microVM keeps running. */
+export const snapshotMicroVm = (microvmId: string, flags: SnapshotFlags, io: WaitIo = {}) =>
+  Effect.gen(function* () {
+    const expiresInMs = yield* optionalDuration('--expires', flags.expires);
+    if (expiresInMs !== undefined && expiresInMs < 60_000) {
+      return yield* new InvalidMicroVmOptionsError({ message: '--expires must be at least 1m.' });
+    }
+    yield* checkWaitTimeout(flags.waitTimeout);
+    const apiClient = yield* ApiClientService;
+    const answered = yield* apiClient.request((client) =>
+      client.microvms.snapshot(
+        microvmId,
+        {
+          ...Option.match(flags.name, { onNone: () => ({}), onSome: (name) => ({ name }) }),
+          ...(expiresInMs !== undefined ? { expiresInMs } : {}),
+        },
+        { wait: false }
+      )
+    );
+    const snapshot = yield* settleSnapshot(answered, flags.waitTimeout, io);
+    if (snapshot.status === 'failed') {
+      return yield* new MicroVmStateError({
+        message: `The snapshot ${snapshot.id} failed${snapshot.error ? `: ${snapshot.error}` : ''}. The microVM keeps running; try again.`,
+        resourceId: snapshot.id,
+        status: snapshot.status,
+      });
+    }
+    if (flags.json) {
+      yield* Console.log(JSON.stringify(snapshot, null, 2));
+    } else {
+      yield* Console.log(`Snapshot ${snapshot.id}${snapshot.name ? ` (${snapshot.name})` : ''} is ready.`);
+      yield* Console.log(`Create a microVM from it: gigadrive microvms fork ${snapshot.id}`);
+    }
+    return snapshot;
+  });
+
+const snapshotCommand = Command.make(
+  'snapshot',
+  {
+    microvmId: microvmIdArg,
+    name: Options.text('name').pipe(Options.withDescription('A label for the snapshot'), Options.optional),
+    expires: Options.text('expires').pipe(
+      Options.withDescription("Delete the snapshot after this long, such as 24h (default: the plan's retention)"),
+      Options.optional
+    ),
+    json: jsonOption,
+    waitTimeout: waitTimeoutOption,
+  },
+  ({ microvmId, ...flags }) =>
+    requireId('microVM', microvmId).pipe(
+      Effect.andThen(snapshotMicroVm(microvmId, flags)),
+      Effect.asVoid,
+      reportErrors('snapshot the microVM')
+    )
+).pipe(Command.withDescription('Capture a running microVM (memory, processes and files) to create new microVMs from'));
+
+/** Flags of `microvms snapshots ls`. */
+export interface ListSnapshotsFlags {
+  readonly app: Option.Option<string>;
+  readonly limit: number;
+  readonly json: boolean;
+}
+
+/** Lists the application's snapshots, newest first. */
+export const listSnapshots = (flags: ListSnapshotsFlags) =>
+  Effect.gen(function* () {
+    if (!Number.isInteger(flags.limit) || flags.limit < 1) {
+      return yield* new InvalidMicroVmOptionsError({ message: `--limit must be at least 1 (got ${flags.limit}).` });
+    }
+    const apiClient = yield* ApiClientService;
+    const applicationId = yield* resolveApplicationId(flags.app);
+    const snapshots = yield* apiClient.request(async (client) => {
+      const items: MicroVmSnapshot[] = [];
+      for await (const snapshot of client.microvms.snapshots.listAll({
+        applicationId,
+        limit: Math.min(flags.limit, 100),
+      })) {
+        items.push(snapshot);
+        if (items.length >= flags.limit) break;
+      }
+      return items;
+    });
+    if (flags.json) return yield* Console.log(JSON.stringify(snapshots, null, 2));
+    if (snapshots.length === 0) {
+      return yield* Console.log('No snapshots yet. Take one with "gigadrive microvms snapshot <microvm-id>".');
+    }
+    for (const line of formatSnapshotTable(snapshots)) yield* Console.log(line);
+  });
+
+const snapshotIdArg = Args.text({ name: 'snapshot-id' }).pipe(Args.withDescription('The snapshot ID'));
+
+const snapshotsListCommand = Command.make(
+  'ls',
+  {
+    app: appOption,
+    limit: Options.integer('limit').pipe(
+      Options.withDescription('Show at most this many (default: 50)'),
+      Options.withDefault(50)
+    ),
+    json: jsonOption,
+  },
+  (flags) => listSnapshots(flags).pipe(reportErrors('list snapshots'))
+).pipe(Command.withDescription("List the application's microVM snapshots"));
+
+const snapshotsGetCommand = Command.make(
+  'get',
+  { snapshotId: snapshotIdArg, json: jsonOption },
+  ({ snapshotId, json }) =>
+    Effect.gen(function* () {
+      yield* requireId('snapshot', snapshotId);
+      const apiClient = yield* ApiClientService;
+      const snapshot = yield* apiClient.request((client) => client.microvms.snapshots.get(snapshotId));
+      if (json) return yield* Console.log(JSON.stringify(snapshot, null, 2));
+      for (const line of formatSnapshotTable([snapshot])) yield* Console.log(line);
+      if (snapshot.error) yield* Console.log(`\nError: ${snapshot.error}`);
+    }).pipe(reportErrors('get the snapshot'))
+).pipe(Command.withDescription('Show a snapshot'));
+
+const snapshotsRemoveCommand = Command.make(
+  'rm',
+  {
+    snapshotIds: Args.text({ name: 'snapshot-id' }).pipe(
+      Args.withDescription('One or more snapshot IDs'),
+      Args.atLeast(1)
+    ),
+  },
+  ({ snapshotIds }) =>
+    Effect.forEach(
+      snapshotIds,
+      (snapshotId) =>
+        Effect.gen(function* () {
+          yield* requireId('snapshot', snapshotId);
+          const apiClient = yield* ApiClientService;
+          yield* apiClient.request((client) => client.microvms.snapshots.delete(snapshotId));
+          yield* Console.log(`Deleted snapshot ${snapshotId}.`);
+        }),
+      { discard: true }
+    ).pipe(reportErrors('delete the snapshot'))
+).pipe(Command.withDescription('Delete snapshots; microVMs created from them keep running'));
+
+const snapshotsCommand = Command.make('snapshots', {}, () => Effect.void).pipe(
+  Command.withDescription('Snapshots taken with "microvms snapshot", to fork new microVMs from'),
+  Command.withSubcommands([snapshotsListCommand, snapshotsGetCommand, snapshotsRemoveCommand])
+);
+
+/** Flags of `microvms fork`: the create flags that apply to a microVM made from a snapshot. */
+export type ForkFlags = Omit<CreateFlags, 'image' | 'vcpus' | 'memory' | 'volumes' | 'snapshotId'>;
+
+/**
+ * Creates a microVM from a snapshot, with its memory, processes and disk. The
+ * application defaults to `--app`, the linked one, then the snapshot's own.
+ */
+export const forkMicroVm = (snapshotId: string, flags: ForkFlags, io: WaitIo = {}) =>
+  Effect.gen(function* () {
+    const linked = yield* resolveApplicationId(flags.app);
+    const app =
+      linked !== undefined
+        ? Option.some(linked)
+        : Option.some(
+            (yield* (yield* ApiClientService).request((client) => client.microvms.snapshots.get(snapshotId)))
+              .applicationId
+          );
+    return yield* createMicroVm(
+      {
+        ...flags,
+        app,
+        image: Option.none(),
+        vcpus: Option.none(),
+        memory: Option.none(),
+        volumes: [],
+        snapshotId,
+      },
+      io
+    );
+  });
+
+/** The create options that apply to a fork: a snapshot fixes the image, vCPUs and memory, and forks take no volumes. */
+const forkOptions = {
+  app: createOptions.app,
+  disk: createOptions.disk,
+  timeout: createOptions.timeout,
+  ports: createOptions.ports,
+  env: createOptions.env,
+  metadata: createOptions.metadata,
+  denyEgress: createOptions.denyEgress,
+  privatePreviews: createOptions.privatePreviews,
+  allowEgress: createOptions.allowEgress,
+  inject: createOptions.inject,
+  injectFile: createOptions.injectFile,
+  pauseOnTimeout: createOptions.pauseOnTimeout,
+  autoResume: createOptions.autoResume,
+  region: createOptions.region,
+  json: createOptions.json,
+  noWait: createOptions.noWait,
+  waitTimeout: createOptions.waitTimeout,
+};
+
+const forkCommand = Command.make('fork', { snapshotId: snapshotIdArg, ...forkOptions }, ({ snapshotId, ...flags }) =>
+  requireId('snapshot', snapshotId).pipe(
+    Effect.andThen(forkMicroVm(snapshotId, flags)),
+    Effect.asVoid,
+    reportErrors('create the microVM from the snapshot')
+  )
+).pipe(
+  Command.withDescription(
+    "Create a microVM from a snapshot, with its memory, processes and files; it keeps the snapshot's image, vCPUs and memory, and --disk can only make the disk larger"
   )
 );
 
@@ -1439,6 +2072,11 @@ const SUBCOMMANDS = [
   removeCommand,
   extendCommand,
   networkCommand,
+  lifecycleCommand('pause'),
+  lifecycleCommand('resume'),
+  snapshotCommand,
+  snapshotsCommand,
+  forkCommand,
   imagesCommand,
   volumesCommand,
   webhooksCommand,
@@ -1446,7 +2084,7 @@ const SUBCOMMANDS = [
 
 /** `gigadrive microvms`: create microVMs, run commands and shells in them, copy files, manage images. */
 export const microvmsCommand = Command.make('microvms', {}, () => Effect.void).pipe(
-  Command.withDescription('Isolated Linux machines for running code: create, exec, shell, cp, stop'),
+  Command.withDescription('Isolated Linux machines for running code: create, exec, shell, cp, pause, snapshot, fork'),
   Command.withSubcommands(SUBCOMMANDS)
 );
 

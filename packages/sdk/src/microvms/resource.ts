@@ -1,6 +1,7 @@
 import type { HttpClient } from '../http-client';
 import { BaseResource } from '../resources/base-resource';
 import { parseSSEEvents } from '../streaming';
+import { commandDurationMs } from './command';
 import { abortReason, durationToMs, type MicroVmDuration, sleep } from './duration';
 import {
   MicroVmBusyError,
@@ -18,11 +19,13 @@ import type {
   CreatedMicroVmInfo,
   CreateMicroVmImageInput,
   CreateMicroVmInput,
+  CreateMicroVmSnapshotInput,
   CreateMicroVmVolumeInput,
   CreateMicroVmWebhookInput,
   FileEntry,
   FileListing,
   FileWriteResult,
+  ListMicroVmSnapshotsQuery,
   ListMicroVmsQuery,
   MicroVmEgressPolicy,
   MicroVmFileChange,
@@ -32,6 +35,9 @@ import type {
   MicroVmInfo,
   MicroVmMetrics,
   MicroVmPage,
+  MicroVmSnapshot,
+  MicroVmSnapshotPage,
+  MicroVmStatus,
   MicroVmVolume,
   MicroVmWebhook,
   MicroVmWebhookDelivery,
@@ -55,6 +61,84 @@ export interface GetMicroVmMetricsOptions extends MicroVmRequestOptions {
   /** How far back the CPU series reaches, in minutes: 1 to 1440, default 15. */
   windowMinutes?: number;
 }
+
+/** Options of a lifecycle call that the API may answer before it finished (`202`). */
+export interface MicroVmLifecycleOptions extends MicroVmRequestOptions {
+  /**
+   * `true` (the API default) asks the API to answer once the change finished,
+   * which it does for up to two minutes before it answers `202` anyway.
+   * `false` answers `202` at once. Either way, check the returned status and
+   * follow up with {@link MicroVmsResource.waitUntilSettled}.
+   */
+  wait?: boolean;
+}
+
+/** Options of a settle wait: {@link MicroVmsResource.waitUntilSettled} and {@link MicroVmSnapshotsResource.waitUntilSettled}. */
+export interface WaitUntilSettledOptions<T> extends MicroVmRequestOptions {
+  /** Give up after this long. Default `'10m'`. */
+  timeout?: MicroVmDuration;
+  /** Pause between polls. Default `'1s'`. */
+  interval?: MicroVmDuration;
+  /** Called after every poll with the current state and the time waited so far, to report progress. */
+  onPoll?: (current: T, elapsedMs: number) => void;
+}
+
+/**
+ * microVM statuses that change on their own: a microVM in one of them is on
+ * its way to another status. Every other status stays until someone acts.
+ */
+export const MICROVM_TRANSITIONAL_STATUSES: readonly MicroVmStatus[] = [
+  'pending',
+  'starting',
+  'pausing',
+  'resuming',
+  'stopping',
+];
+
+/**
+ * Polls `load` until `settled` holds, calling `onPoll` after every poll.
+ *
+ * @throws {@link MicroVmTimeoutError} with `describe(current)` when `timeout` passes first.
+ */
+const pollUntil = async <T>(
+  load: (signal?: AbortSignal) => Promise<T>,
+  settled: (current: T) => boolean,
+  describe: (current: T) => string,
+  options: WaitUntilSettledOptions<T>
+): Promise<T> => {
+  const started = Date.now();
+  const deadline = started + durationToMs(options.timeout ?? '10m');
+  const interval = durationToMs(options.interval ?? '1s');
+  // Aborts a poll that stalls past the deadline (with a second of grace for
+  // the last poll, sent at the deadline), as well as on the caller's signal.
+  const controller = new AbortController();
+  const timeoutReason = new Error('deadline');
+  const timer = setTimeout(() => controller.abort(timeoutReason), Math.max(0, deadline - started) + 1_000);
+  const forward = () => controller.abort(abortReason(options.signal));
+  options.signal?.addEventListener('abort', forward, { once: true });
+  let current: T | undefined;
+  try {
+    for (;;) {
+      if (options.signal?.aborted) throw abortReason(options.signal);
+      current = await load(controller.signal);
+      options.onPoll?.(current, Date.now() - started);
+      if (settled(current)) return current;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      await sleep(Math.min(interval, remaining), options.signal);
+    }
+  } catch (error) {
+    if (controller.signal.reason !== timeoutReason) throw error;
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', forward);
+  }
+  throw new MicroVmTimeoutError(
+    current === undefined
+      ? 'No answer before the wait timed out; gave up waiting.'
+      : `${describe(current)}; gave up waiting.`
+  );
+};
 
 const vmPath = (microvmId: string) => `/microvms/${encodeURIComponent(microvmId)}`;
 const commandPath = (microvmId: string, commandId: string) =>
@@ -84,6 +168,35 @@ const read = async <T>(run: () => Promise<T>, signal?: AbortSignal, filePath?: s
       await sleep(BUSY_RETRY_DELAYS_MS[attempt], signal);
     }
   }
+};
+
+/** Longest a single `POST .../wait` holds the request: the API answers within 45 seconds either way. */
+const COMMAND_WAIT_SLICE_MS = 45_000;
+
+/** Most output a run result carries per stream, like the synchronous answer. */
+const RUN_OUTPUT_LIMIT_BYTES = 1024 * 1024;
+
+/**
+ * Whether a synchronous run was answered `202` with the still-running command
+ * (it took longer than the API holds a request) instead of its result.
+ */
+const isStillRunning = (answer: unknown): answer is CommandInfo & { commandId?: string } => {
+  const value = answer as { status?: unknown; stdout?: unknown } | null;
+  return value !== null && typeof value === 'object' && value.status === 'running' && typeof value.stdout !== 'string';
+};
+
+/** Joins chunks and decodes them as UTF-8, keeping at most {@link RUN_OUTPUT_LIMIT_BYTES}. */
+const decodeOutput = (chunks: Uint8Array[]): { text: string; truncated: boolean } => {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const bytes = new Uint8Array(Math.min(total, RUN_OUTPUT_LIMIT_BYTES));
+  let offset = 0;
+  for (const chunk of chunks) {
+    if (offset >= bytes.length) break;
+    const part = chunk.subarray(0, bytes.length - offset);
+    bytes.set(part, offset);
+    offset += part.length;
+  }
+  return { text: new TextDecoder().decode(bytes), truncated: total > RUN_OUTPUT_LIMIT_BYTES };
 };
 
 /** Accepts `{ data }`, `{ items }` or a bare array, since list routes differ in their envelope. */
@@ -121,10 +234,53 @@ export class MicroVmCommandsResource extends BaseResource {
    * const { exitCode, stdout } = await client.microvms.commands.run(id, { cmd: 'node', args: ['-v'] });
    * ```
    */
-  run(microvmId: string, input: StartCommandInput, options: MicroVmRequestOptions = {}): Promise<CommandRunResult> {
-    return typed(
-      this.httpClient.post<CommandRunResult>(`${vmPath(microvmId)}/commands`, { ...input, wait: true }, options)
+  async run(
+    microvmId: string,
+    input: StartCommandInput,
+    options: MicroVmRequestOptions = {}
+  ): Promise<CommandRunResult> {
+    const answer = await typed(
+      this.httpClient.post<CommandRunResult | (CommandInfo & { commandId?: string })>(
+        `${vmPath(microvmId)}/commands`,
+        { ...input, wait: true },
+        options
+      )
     );
+    if (!isStillRunning(answer)) return answer;
+    // The API answers `202` with the running command when it takes longer
+    // than it holds a request (45 s). Keep waiting, then read the output.
+    return this.collectRun(microvmId, normalizeCommand(answer), options.signal);
+  }
+
+  /**
+   * Waits for a command a synchronous run answered `202` for, in slices of at
+   * most 45 seconds, then reads its output from the log, so the caller gets
+   * the same result as an answer that arrived in time.
+   */
+  private async collectRun(microvmId: string, command: CommandInfo, signal?: AbortSignal): Promise<CommandRunResult> {
+    let current = command;
+    while (current.status !== 'exited') {
+      if (signal?.aborted) throw abortReason(signal);
+      current = await this.wait(microvmId, command.id, { timeoutMs: COMMAND_WAIT_SLICE_MS, signal });
+    }
+    const chunks: Record<'stdout' | 'stderr', Uint8Array[]> = { stdout: [], stderr: [] };
+    let dropped = false;
+    for await (const event of this.logs(microvmId, command.id, { follow: false, signal })) {
+      if (event.type === 'output') chunks[event.stream].push(event.data);
+      else if (event.type === 'truncated') dropped = true;
+    }
+    const stdout = decodeOutput(chunks.stdout);
+    const stderr = decodeOutput(chunks.stderr);
+    return {
+      id: command.id,
+      exitCode: current.exitCode,
+      signal: current.signal,
+      timedOut: current.timedOut === true,
+      stdout: stdout.text,
+      stderr: stderr.text,
+      truncated: dropped || stdout.truncated || stderr.truncated,
+      durationMs: commandDurationMs(current) ?? 0,
+    };
   }
 
   /**
@@ -728,6 +884,85 @@ export class MicroVmVolumesResource extends BaseResource {
   }
 }
 
+const snapshotPath = (snapshotId: string) => `/microvm-snapshots/${encodeURIComponent(snapshotId)}`;
+
+/**
+ * microVM snapshots: `client.microvms.snapshots`. Take one with
+ * {@link MicroVmsResource.snapshot} and create (fork) new microVMs from it with
+ * `client.microvms.create({ snapshotId })`.
+ */
+export class MicroVmSnapshotsResource extends BaseResource {
+  private readonly defaultApplicationId: string | undefined;
+
+  constructor(httpClient: HttpClient, defaultApplicationId?: string) {
+    super(httpClient);
+    this.defaultApplicationId = defaultApplicationId || undefined;
+  }
+
+  /** List one page of the application's snapshots, newest first (`GET /microvm-snapshots`). */
+  async list(query: ListMicroVmSnapshotsQuery = {}, options: MicroVmRequestOptions = {}): Promise<MicroVmSnapshotPage> {
+    const body = await read(
+      () =>
+        this.httpClient.get<{
+          data?: MicroVmSnapshot[];
+          pagination?: { nextCursor?: string | null; hasMore?: boolean } | null;
+        }>('/microvm-snapshots', {
+          query: {
+            applicationId: query.applicationId ?? this.defaultApplicationId,
+            cursor: query.cursor,
+            limit: query.limit,
+          },
+          signal: options.signal,
+        }),
+      options.signal
+    );
+    const nextCursor = body.pagination?.nextCursor ?? undefined;
+    const hasMore = body.pagination?.hasMore === true && nextCursor !== undefined;
+    return { items: unwrapList<MicroVmSnapshot>(body), ...(hasMore ? { nextCursor } : {}), hasMore };
+  }
+
+  /** Iterate every snapshot across all pages. */
+  async *listAll(
+    query: Omit<ListMicroVmSnapshotsQuery, 'cursor'> = {},
+    options: MicroVmRequestOptions = {}
+  ): AsyncGenerator<MicroVmSnapshot> {
+    let cursor: string | undefined;
+    do {
+      const page = await this.list({ ...query, cursor }, options);
+      yield* page.items;
+      cursor = page.nextCursor;
+    } while (cursor);
+  }
+
+  /** Get one snapshot (`GET /microvm-snapshots/:id`). */
+  get(snapshotId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmSnapshot> {
+    return read(() => this.httpClient.get<MicroVmSnapshot>(snapshotPath(snapshotId), options), options.signal);
+  }
+
+  /** Delete a snapshot (`DELETE /microvm-snapshots/:id`). microVMs created from it keep running. */
+  async delete(snapshotId: string, options: MicroVmRequestOptions = {}): Promise<void> {
+    await typed(this.httpClient.delete<void>(snapshotPath(snapshotId), options));
+  }
+
+  /**
+   * Poll a snapshot until it is no longer `creating`, and return it: check
+   * `status` for `ready` or `failed` (with `error`).
+   *
+   * @throws {@link MicroVmTimeoutError} when it is still being created after `timeout`.
+   */
+  waitUntilSettled(
+    snapshotId: string,
+    options: WaitUntilSettledOptions<MicroVmSnapshot> = {}
+  ): Promise<MicroVmSnapshot> {
+    return pollUntil(
+      (signal) => this.get(snapshotId, { signal }),
+      (snapshot) => snapshot.status !== 'creating',
+      (snapshot) => `The snapshot ${snapshot.id} is still ${snapshot.status}`,
+      options
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // microVMs
 // ---------------------------------------------------------------------------
@@ -764,6 +999,8 @@ export class MicroVmsResource extends BaseResource {
   readonly webhooks: MicroVmWebhooksResource;
   /** Persistent volumes of an application. */
   readonly volumes: MicroVmVolumesResource;
+  /** Snapshots to create (fork) new microVMs from. */
+  readonly snapshots: MicroVmSnapshotsResource;
 
   private readonly defaultApplicationId: string | undefined;
 
@@ -775,11 +1012,15 @@ export class MicroVmsResource extends BaseResource {
     this.images = new MicroVmImagesResource(httpClient, defaultApplicationId);
     this.webhooks = new MicroVmWebhooksResource(httpClient, defaultApplicationId);
     this.volumes = new MicroVmVolumesResource(httpClient, defaultApplicationId);
+    this.snapshots = new MicroVmSnapshotsResource(httpClient, defaultApplicationId);
   }
 
   /**
-   * Create a microVM (`POST /microvms`). Resolves once it is `running`; with
-   * `wait: false` it resolves at once with a `starting` microVM.
+   * Create a microVM (`POST /microvms`). The API holds the request while the
+   * microVM boots, then answers `202` with a `pending` or `starting` one when
+   * that takes longer (no capacity yet); with `wait: false` it answers at
+   * once. Follow up with {@link waitUntilSettled}, or use `MicroVM.create`,
+   * which does.
    *
    * `applicationId` defaults to the client's `applicationId` or
    * `GIGADRIVE_APPLICATION_ID`, and may be omitted entirely with application
@@ -923,6 +1164,72 @@ export class MicroVmsResource extends BaseResource {
    */
   stop(microvmId: string, options: MicroVmRequestOptions = {}): Promise<MicroVmInfo> {
     return typed(this.httpClient.post<MicroVmInfo>(`${vmPath(microvmId)}/stop`, undefined, options));
+  }
+
+  /**
+   * Pause a running microVM with its memory, processes and disk
+   * (`POST /microvms/:id/pause`). The answer is `paused`, or `pausing` when
+   * the API answered before the capture finished (`202`): follow up with
+   * {@link waitUntilSettled}. If the capture fails the microVM keeps running.
+   */
+  pause(microvmId: string, options: MicroVmLifecycleOptions = {}): Promise<MicroVmInfo> {
+    return typed(
+      this.httpClient.post<MicroVmInfo>(`${vmPath(microvmId)}/pause`, undefined, {
+        query: { wait: options.wait },
+        signal: options.signal,
+      })
+    );
+  }
+
+  /**
+   * Resume a paused microVM (`POST /microvms/:id/resume`). The answer is
+   * `running`, or `resuming` when the API answered first (`202`): follow up
+   * with {@link waitUntilSettled}. If the resume fails it stays paused.
+   */
+  resume(microvmId: string, options: MicroVmLifecycleOptions = {}): Promise<MicroVmInfo> {
+    return typed(
+      this.httpClient.post<MicroVmInfo>(`${vmPath(microvmId)}/resume`, undefined, {
+        query: { wait: options.wait },
+        signal: options.signal,
+      })
+    );
+  }
+
+  /**
+   * Snapshot a running microVM, which keeps running
+   * (`POST /microvms/:id/snapshots`). The answer is `ready` (`201`), or
+   * `creating` when the API answered first (`202`): follow up with
+   * `client.microvms.snapshots.waitUntilSettled`.
+   */
+  snapshot(
+    microvmId: string,
+    input: CreateMicroVmSnapshotInput = {},
+    options: MicroVmLifecycleOptions = {}
+  ): Promise<MicroVmSnapshot> {
+    return typed(
+      this.httpClient.post<MicroVmSnapshot>(`${vmPath(microvmId)}/snapshots`, input, {
+        query: { wait: options.wait },
+        signal: options.signal,
+      })
+    );
+  }
+
+  /**
+   * Poll a microVM until its status no longer changes on its own (see
+   * {@link MICROVM_TRANSITIONAL_STATUSES}), and return it. Use it after a
+   * create, pause or resume the API answered with `202`, then check `status`:
+   * a pause that failed leaves the microVM `running`, a resume that failed
+   * leaves it `paused`, and a create ends `running` or `failed`.
+   *
+   * @throws {@link MicroVmTimeoutError} when it is still changing after `timeout`.
+   */
+  waitUntilSettled(microvmId: string, options: WaitUntilSettledOptions<MicroVmInfo> = {}): Promise<MicroVmInfo> {
+    return pollUntil(
+      (signal) => this.get(microvmId, { signal }),
+      (vm) => !MICROVM_TRANSITIONAL_STATUSES.includes(vm.status),
+      (vm) => `The microVM ${vm.id} is still ${vm.status}`,
+      options
+    );
   }
 
   /** Delete a microVM, stopping it first if needed (`DELETE /microvms/:id`). */

@@ -1,6 +1,7 @@
+import { FileSystem, Path } from '@effect/platform';
 import { ConfigProvider, Effect, Layer, Logger, LogLevel } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OAuthConfigService } from './oauth-config';
+import { DEFAULT_DISCOVERY_LIFETIME_MS, discoveryLifetimeMs, OAuthConfigService } from './oauth-config';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,10 +15,28 @@ const validDiscoveryDoc = {
   device_authorization_endpoint: 'https://idp.example.com/device_authorization',
 };
 
-const makeTestLayer = (envOverrides?: Record<string, string>) => {
+/** An in-memory file system holding the discovery cache. */
+const memoryFs = (files: Map<string, string>) =>
+  Layer.mergeAll(
+    Layer.succeed(FileSystem.FileSystem, {
+      readFileString: (path: string) =>
+        files.has(path) ? Effect.succeed(files.get(path)!) : Effect.fail({ _tag: 'SystemError', message: 'ENOENT' }),
+      writeFileString: (path: string, content: string) => Effect.sync(() => void files.set(path, content)),
+      makeDirectory: () => Effect.void,
+      remove: (path: string) => Effect.sync(() => void files.delete(path)),
+    } as unknown as FileSystem.FileSystem),
+    Layer.succeed(Path.Path, {
+      join: (...segments: string[]) => segments.join('/'),
+    } as unknown as Path.Path)
+  );
+
+const CACHE_FILE = '/cache/oidc-discovery.json';
+
+const makeTestLayer = (envOverrides?: Record<string, string>, files = new Map<string, string>()) => {
   const env = {
     GIGADRIVE_NETWORK_OAUTH_ISSUER_URL: 'https://idp.example.com',
     GIGADRIVE_NETWORK_OAUTH_CLIENT_ID: 'test-client-id',
+    GIGADRIVE_CACHE_DIR: '/cache',
     ...envOverrides,
   };
 
@@ -25,7 +44,7 @@ const makeTestLayer = (envOverrides?: Record<string, string>) => {
 
   // configLayer must wrap OAuthConfigService.Default so that Config.*
   // values resolved during layer construction see our overrides.
-  return Layer.provide(OAuthConfigService.Default, configLayer).pipe(
+  return Layer.provide(OAuthConfigService.Default, Layer.merge(configLayer, memoryFs(files))).pipe(
     Layer.provideMerge(Logger.minimumLogLevel(LogLevel.None))
   );
 };
@@ -256,5 +275,120 @@ describe('OAuthConfigService.getConfig', () => {
       _tag: 'caught',
       message: 'OIDC discovery returned incomplete endpoints',
     });
+  });
+});
+
+describe('OAuthConfigService discovery cache', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const respond = (headers: Record<string, string> = {}) =>
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers(headers),
+      json: () => Promise.resolve(validDiscoveryDoc),
+    });
+
+  it('reuses the document across runs while the cache headers allow it', async () => {
+    const files = new Map<string, string>();
+    globalThis.fetch = respond({ 'cache-control': 'public, max-age=300' });
+
+    await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, makeTestLayer({}, files)));
+    // A second run builds a new service, as a new CLI process would.
+    const second = await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, makeTestLayer({}, files)));
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(second.tokenUrl).toBe('https://idp.example.com/token');
+    const entry = JSON.parse(files.get(CACHE_FILE)!) as { expiresAt: number; issuer: string };
+    expect(entry.issuer).toBe('https://idp.example.com');
+    expect(entry.expiresAt - Date.now()).toBeLessThanOrEqual(300_000);
+    expect(entry.expiresAt - Date.now()).toBeGreaterThan(290_000);
+  });
+
+  it('fetches again once the cached copy expired, and for another issuer', async () => {
+    const files = new Map<string, string>([
+      [CACHE_FILE, JSON.stringify({ issuer: 'https://idp.example.com', expiresAt: Date.now() - 1, document: {} })],
+    ]);
+    globalThis.fetch = respond();
+
+    await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, makeTestLayer({}, files)));
+    await Effect.runPromise(
+      Effect.provide(
+        OAuthConfigService.getConfig,
+        makeTestLayer({ GIGADRIVE_NETWORK_OAUTH_ISSUER_URL: 'https://other.example.com' }, files)
+      )
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses a stale copy when the IDP cannot be reached', async () => {
+    const files = new Map<string, string>([
+      [
+        CACHE_FILE,
+        JSON.stringify({ issuer: 'https://idp.example.com', expiresAt: Date.now() - 1, document: validDiscoveryDoc }),
+      ],
+    ]);
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('offline'));
+
+    const config = await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, makeTestLayer({}, files)));
+
+    expect(config.userinfoUrl).toBe('https://idp.example.com/userinfo');
+  });
+
+  it('does not use a stale copy the IDP marked must-revalidate', async () => {
+    const files = new Map<string, string>([
+      [
+        CACHE_FILE,
+        JSON.stringify({
+          issuer: 'https://idp.example.com',
+          expiresAt: Date.now() - 1,
+          mustRevalidate: true,
+          document: validDiscoveryDoc,
+        }),
+      ],
+    ]);
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('offline'));
+
+    const result = await Effect.runPromise(
+      Effect.either(Effect.provide(OAuthConfigService.getConfig, makeTestLayer({}, files)))
+    );
+
+    expect(result._tag).toBe('Left');
+  });
+
+  it('records must-revalidate with the document', async () => {
+    const files = new Map<string, string>();
+    globalThis.fetch = respond({ 'cache-control': 'max-age=60, must-revalidate' });
+
+    await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, makeTestLayer({}, files)));
+
+    expect(JSON.parse(files.get(CACHE_FILE)!)).toMatchObject({ mustRevalidate: true });
+  });
+
+  it('drops an older copy when the IDP marks the new document no-store', async () => {
+    const files = new Map<string, string>([
+      [CACHE_FILE, JSON.stringify({ issuer: 'https://idp.example.com', expiresAt: Date.now() - 1, document: {} })],
+    ]);
+    globalThis.fetch = respond({ 'cache-control': 'no-store' });
+
+    await Effect.runPromise(Effect.provide(OAuthConfigService.getConfig, makeTestLayer({}, files)));
+
+    expect(files.has(CACHE_FILE)).toBe(false);
+  });
+
+  it('reads the lifetime from Cache-Control, Expires, or falls back to 24 hours', () => {
+    const now = Date.parse('2026-11-23T12:00:00Z');
+    expect(discoveryLifetimeMs(new Headers({ 'cache-control': 'public, max-age=300' }), now)).toBe(300_000);
+    expect(discoveryLifetimeMs(new Headers({ 'cache-control': 'x-max-age=86400, max-age=60' }), now)).toBe(60_000);
+    expect(discoveryLifetimeMs(new Headers({ 'cache-control': 'max-age=12abc' }), now)).toBe(0);
+    expect(discoveryLifetimeMs(new Headers({ 'cache-control': 'no-cache' }), now)).toBe(0);
+    expect(discoveryLifetimeMs(new Headers({ expires: 'Mon, 23 Nov 2026 13:00:00 GMT' }), now)).toBe(3_600_000);
+    expect(discoveryLifetimeMs(new Headers({ expires: 'garbage' }), now)).toBe(0);
+    expect(discoveryLifetimeMs(new Headers(), now)).toBe(DEFAULT_DISCOVERY_LIFETIME_MS);
+    expect(discoveryLifetimeMs(undefined, now)).toBe(DEFAULT_DISCOVERY_LIFETIME_MS);
   });
 });

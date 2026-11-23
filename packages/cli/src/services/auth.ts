@@ -30,6 +30,15 @@ const DEFAULT_POLL_INTERVAL_SECONDS = 5;
  */
 const REQUEST_TIMEOUT_SECONDS = 30;
 
+/**
+ * An access token this close to its expiry is refreshed before use, so a
+ * request never leaves with a token that expires on the way.
+ */
+export const TOKEN_REFRESH_MARGIN_MS = 30_000;
+
+/** Whether a token that expires at `expiresAt` (epoch ms) can still be sent. */
+const usable = (expiresAt: number) => Date.now() < expiresAt - TOKEN_REFRESH_MARGIN_MS;
+
 // ---------------------------------------------------------------------------
 // AuthService
 // ---------------------------------------------------------------------------
@@ -45,12 +54,15 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
     // In-memory token cache
     let accessToken: string | null = null;
     let tokenExpirationTime = 0;
+    // One refresh at a time: parallel requests (a concurrent `cp`) would
+    // otherwise each spend the same refresh token, and the IDP rotates it.
+    const refreshLock = yield* Effect.makeSemaphore(1);
 
     const logout = Effect.gen(function* () {
       accessToken = null;
       tokenExpirationTime = 0;
       yield* storage.remove;
-      yield* Effect.log('Logged out');
+      yield* Effect.logDebug('Logged out');
     });
 
     // Step 1 (RFC 8628 §3.1): request a device_code / user_code pair.
@@ -282,11 +294,11 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
         tokenExpirationTime,
       });
 
-      yield* Effect.log('Login successful');
+      yield* Effect.logDebug('Login successful');
       return true as const;
     });
 
-    const refreshAccessToken: Effect.Effect<true, TokenRefreshError> = Effect.gen(function* () {
+    const refreshUnlocked: Effect.Effect<true, TokenRefreshError> = Effect.gen(function* () {
       const stored: Option.Option<StoredAuthData> = yield* storage.load.pipe(
         Effect.catchTag('AuthStorageReadError', (err) => Effect.fail(new TokenRefreshError({ message: err.message })))
       );
@@ -321,7 +333,12 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
 
       if (!response.ok) {
         if (response.status === 400) {
-          yield* logout.pipe(Effect.catchAll(() => Effect.void));
+          // Log out only if nobody saved a newer refresh token meanwhile (another
+          // CLI process may have refreshed first).
+          const current = yield* storage.load.pipe(Effect.orElseSucceed(() => Option.none<StoredAuthData>()));
+          if (Option.isSome(current) && current.value.refreshToken === authData.refreshToken) {
+            yield* logout.pipe(Effect.catchAll(() => Effect.void));
+          }
           return yield* Effect.fail(
             new TokenRefreshError({
               message: 'Refresh token is invalid or expired. Please log in again.',
@@ -358,13 +375,15 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
         })
         .pipe(Effect.catchAll(() => Effect.void));
 
-      yield* Effect.log('Access token refreshed successfully');
+      yield* Effect.logDebug('Access token refreshed');
       return true as const;
     });
 
-    const getAccessToken = Effect.gen(function* () {
-      // Check in-memory cache
-      if (accessToken && Date.now() < tokenExpirationTime) {
+    const refreshAccessToken = refreshLock.withPermits(1)(refreshUnlocked);
+
+    const loadOrRefresh = Effect.gen(function* () {
+      // Another caller may have refreshed while this one waited for the lock.
+      if (accessToken && usable(tokenExpirationTime)) {
         return accessToken;
       }
 
@@ -375,20 +394,20 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
       Option.match(stored, {
         onNone: () => {},
         onSome: (data: StoredAuthData) => {
-          if (data.accessToken && data.tokenExpirationTime && Date.now() < data.tokenExpirationTime) {
+          if (data.accessToken && data.tokenExpirationTime && usable(data.tokenExpirationTime)) {
             accessToken = data.accessToken;
             tokenExpirationTime = data.tokenExpirationTime;
           }
         },
       });
 
-      if (accessToken && Date.now() < tokenExpirationTime) {
+      if (accessToken && usable(tokenExpirationTime)) {
         return accessToken;
       }
 
       // Try refresh
-      yield* Effect.log('Access token expired or not available. Attempting to refresh...');
-      yield* refreshAccessToken.pipe(
+      yield* Effect.logDebug('Access token expired, expiring or not available. Refreshing it.');
+      yield* refreshUnlocked.pipe(
         Effect.catchTag('TokenRefreshError', (err) => Effect.fail(new NotAuthenticatedError({ message: err.message })))
       );
 
@@ -400,6 +419,12 @@ export class AuthService extends Effect.Service<AuthService>()('AuthService', {
 
       return accessToken;
     });
+
+    const getAccessToken = Effect.suspend(() =>
+      accessToken && usable(tokenExpirationTime)
+        ? Effect.succeed(accessToken)
+        : refreshLock.withPermits(1)(loadOrRefresh)
+    );
 
     const getUserInfo = Effect.gen(function* () {
       const config = yield* oauthConfig.getConfig;

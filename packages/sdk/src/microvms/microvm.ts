@@ -1,4 +1,5 @@
 import { GigadriveClient, type GigadriveClientConfig } from '../client';
+import { GigadriveError } from '../errors';
 import { Command, commandDurationMs, type CommandOutputCallback } from './command';
 import { abortReason, durationToMs, type MicroVmDuration, microvmTimeoutMs, sleep } from './duration';
 import {
@@ -12,17 +13,19 @@ import {
   MicroVmStartError,
   MicroVmTimeoutError,
 } from './errors';
-import type {
-  MicroVmCommandsResource,
-  MicroVmFileContent,
-  MicroVmFilesResource,
-  MicroVmsResource,
-  ReadFileOptions,
-  WatchDirectoryOptions,
-  WriteFileOptions,
+import {
+  MICROVM_TRANSITIONAL_STATUSES,
+  type MicroVmCommandsResource,
+  type MicroVmFileContent,
+  type MicroVmFilesResource,
+  type MicroVmsResource,
+  type ReadFileOptions,
+  type WatchDirectoryOptions,
+  type WriteFileOptions,
 } from './resource';
 import type {
   CreateMicroVmInput,
+  CreateMicroVmSnapshotInput,
   FileEntry,
   FileWriteResult,
   ListMicroVmsQuery,
@@ -33,6 +36,7 @@ import type {
   MicroVmMetrics,
   MicroVmNetworkPolicy,
   MicroVmPreviewAccess,
+  MicroVmSnapshot,
   MicroVmStatus,
   PtySize,
   StartCommandInput,
@@ -817,6 +821,75 @@ export class MicroVM {
   async saveVolumes(options: { signal?: AbortSignal } = {}): Promise<MicroVmInfo> {
     this.current = await this.resource.saveVolumes(this.id, { signal: options.signal });
     return this.current;
+  }
+
+  /**
+   * Pause the microVM with its memory, processes and files, and wait until it
+   * is paused. It accrues no CPU or memory until {@link resume}.
+   *
+   * @throws {@link MicroVmStartError} when it ends anywhere but `paused` (a failed capture leaves it `running`).
+   * @throws {@link MicroVmTimeoutError} when it is still pausing after `timeout` (default 10 minutes).
+   */
+  async pause(options: { timeout?: MicroVmDuration; signal?: AbortSignal } = {}): Promise<this> {
+    return this.settle(await this.resource.pause(this.id, { wait: false, signal: options.signal }), 'paused', options);
+  }
+
+  /**
+   * Resume a paused microVM and wait until it runs again.
+   *
+   * @throws {@link MicroVmStartError} when it ends anywhere but `running` (a failed resume leaves it `paused`).
+   * @throws {@link MicroVmTimeoutError} when it is still resuming after `timeout` (default 10 minutes).
+   */
+  async resume(options: { timeout?: MicroVmDuration; signal?: AbortSignal } = {}): Promise<this> {
+    return this.settle(
+      await this.resource.resume(this.id, { wait: false, signal: options.signal }),
+      'running',
+      options
+    );
+  }
+
+  /**
+   * Snapshot the running microVM, which keeps running, and wait until the
+   * snapshot is ready. Create microVMs from it with `MicroVM.create({ snapshotId })`.
+   *
+   * @throws {@link MicroVmTimeoutError} when it is still being created after `timeout` (default 10 minutes).
+   * @throws {@link GigadriveError} when the snapshot failed.
+   */
+  async snapshot(
+    input: CreateMicroVmSnapshotInput = {},
+    options: { timeout?: MicroVmDuration; signal?: AbortSignal } = {}
+  ): Promise<MicroVmSnapshot> {
+    const created = await this.resource.snapshot(this.id, input, { wait: false, signal: options.signal });
+    const snapshot =
+      created.status === 'creating'
+        ? await this.resource.snapshots.waitUntilSettled(created.id, {
+            timeout: options.timeout,
+            signal: options.signal,
+          })
+        : created;
+    if (snapshot.status === 'failed') {
+      throw new GigadriveError(`The snapshot ${snapshot.id} failed${snapshot.error ? `: ${snapshot.error}` : ''}`);
+    }
+    return snapshot;
+  }
+
+  /** Polls after a lifecycle call the API may have answered `202`, until the microVM settles in `expected`. */
+  private async settle(
+    answer: MicroVmInfo,
+    expected: MicroVmStatus,
+    options: { timeout?: MicroVmDuration; signal?: AbortSignal }
+  ): Promise<this> {
+    this.current = answer;
+    if (MICROVM_TRANSITIONAL_STATUSES.includes(this.current.status)) {
+      this.current = await this.resource.waitUntilSettled(this.id, {
+        timeout: options.timeout,
+        signal: options.signal,
+      });
+    }
+    if (this.current.status !== expected) {
+      throw new MicroVmStartError(this.id, this.current.status, this.current.stopReason);
+    }
+    return this;
   }
 
   /** Delete the microVM, stopping it first if needed. */

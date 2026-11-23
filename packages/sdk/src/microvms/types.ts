@@ -155,8 +155,15 @@ export interface CreateMicroVmInput {
    * `applicationId` or `GIGADRIVE_APPLICATION_ID`.
    */
   applicationId?: string;
-  /** Built-in image name (`node22`, `python3.13`, ...), custom image name, or image id. Default `node22`. */
+  /** Built-in image name (`node22`, `python3.13`, ...), custom image name, or image id. Default `node22`. Not with `snapshotId`. */
   image?: string;
+  /**
+   * Create the microVM from this snapshot (a fork) instead of an image: its
+   * memory, running processes and disk. It keeps the snapshot's image, vCPUs
+   * and memory; `diskMb` may be larger than the snapshot's. Not with `image`
+   * or `volumes`.
+   */
+  snapshotId?: string;
   /** Default 1. */
   vcpus?: MicroVmVcpus;
   /** Memory in MiB, 512 to 8192. Default 2048. */
@@ -233,6 +240,57 @@ export interface CreateMicroVmVolumeInput {
   name: string;
   /** 1024 to 51200. Default 10240. */
   sizeMb?: number;
+}
+
+/** Build state of a snapshot. New microVMs can be created from a `ready` one. */
+export type MicroVmSnapshotStatus = 'creating' | 'ready' | 'failed';
+
+/** A snapshot of a microVM: its memory and disk, ready to create new microVMs from. */
+export interface MicroVmSnapshot {
+  id: string;
+  /** Your label, or `null`. */
+  name: string | null;
+  applicationId: string;
+  organizationId: string;
+  /** The microVM the snapshot was taken of. */
+  sourceMicrovmId: string | null;
+  status: MicroVmSnapshotStatus;
+  image: { id: string; name: string };
+  vcpus: number;
+  memoryMb: number;
+  diskMb: number;
+  /** Stored size, billed as snapshot storage; `null` until ready. */
+  sizeBytes: number | null;
+  /** Why the snapshot failed. */
+  error: string | null;
+  /** ISO 8601 time the snapshot is deleted. */
+  expiresAt: string | null;
+  createdAt: string;
+  readyAt: string | null;
+}
+
+/** Body of `POST /microvms/:id/snapshots`. */
+export interface CreateMicroVmSnapshotInput {
+  /** Your label, 1 to 64 characters. */
+  name?: string;
+  /** Delete the snapshot after this many milliseconds (at least 60000). Default and maximum: the plan retention. */
+  expiresInMs?: number;
+}
+
+/** Query of `GET /microvm-snapshots`. */
+export interface ListMicroVmSnapshotsQuery {
+  applicationId?: string;
+  cursor?: string;
+  /** Page size, 1 to 100. */
+  limit?: number;
+}
+
+/** One page of snapshots. */
+export interface MicroVmSnapshotPage {
+  items: MicroVmSnapshot[];
+  /** Pass to the next `list` call to continue; absent on the last page. */
+  nextCursor?: string;
+  hasMore: boolean;
 }
 
 /** Query of `GET /microvms`. */

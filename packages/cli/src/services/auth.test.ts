@@ -71,7 +71,9 @@ const makeAuthTestLayer = (stored: Option.Option<StoredAuthData>) => {
 
   // Build: AuthStorageService from platform layer, OAuthConfig from mock, then AuthService
   const authStorageLive = Layer.provide(AuthStorageService.Default, platformLayer);
-  const depsLayer = Layer.mergeAll(mockOAuthConfig, authStorageLive);
+  // The OAuthConfigService baked into AuthService.Default caches discovery on
+  // the (in-memory) file system too.
+  const depsLayer = Layer.mergeAll(mockOAuthConfig, authStorageLive, platformLayer);
 
   return Layer.provide(AuthService.Default, depsLayer).pipe(Layer.provideMerge(Logger.minimumLogLevel(LogLevel.None)));
 };
@@ -402,5 +404,71 @@ describe('AuthService.login (device flow)', () => {
     } finally {
       Object.assign(stdin, saved);
     }
+  });
+});
+
+describe('AuthService.getAccessToken refresh margin', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('refreshes a stored token that expires within 30 seconds instead of sending it', async () => {
+    const fetchMock = stubFetch([jsonResponse(200, { access_token: 'fresh-token', expires_in: 300 })]);
+    const testLayer = makeAuthTestLayer(
+      Option.some<StoredAuthData>({
+        refreshToken: 'rt-123',
+        accessToken: 'expiring-token',
+        tokenExpirationTime: Date.now() + 10_000,
+      })
+    );
+
+    const token = await Effect.runPromise(Effect.provide(AuthService.getAccessToken, testLayer));
+
+    expect(token).toBe('fresh-token');
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/token'))).toHaveLength(1);
+  });
+
+  it('keeps using a stored token with more than 30 seconds left, without any request', async () => {
+    const fetchMock = stubFetch([]);
+    const testLayer = makeAuthTestLayer(
+      Option.some<StoredAuthData>({
+        refreshToken: 'rt-123',
+        accessToken: 'valid-token',
+        tokenExpirationTime: Date.now() + 120_000,
+      })
+    );
+
+    const token = await Effect.runPromise(Effect.provide(AuthService.getAccessToken, testLayer));
+
+    expect(token).toBe('valid-token');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.getAccessToken concurrency', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('refreshes once for parallel callers, so a rotated refresh token is never spent twice', async () => {
+    const fetchMock = stubFetch([
+      jsonResponse(200, { access_token: 'fresh-token', refresh_token: 'rt-2', expires_in: 300 }),
+    ]);
+    const testLayer = makeAuthTestLayer(
+      Option.some<StoredAuthData>({ refreshToken: 'rt-1', accessToken: 'old', tokenExpirationTime: Date.now() - 1 })
+    );
+
+    const tokens = await Effect.runPromise(
+      Effect.provide(
+        Effect.all(
+          Array.from({ length: 8 }, () => AuthService.getAccessToken),
+          { concurrency: 'unbounded' }
+        ),
+        testLayer
+      )
+    );
+
+    expect(new Set(tokens)).toEqual(new Set(['fresh-token']));
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/token'))).toHaveLength(1);
   });
 });
