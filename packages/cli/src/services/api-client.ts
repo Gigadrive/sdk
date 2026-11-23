@@ -50,7 +50,7 @@ export class ApiClientService extends Effect.Service<ApiClientService>()('ApiCli
      */
     const fetchWithFreshToken: typeof globalThis.fetch = async (input, init) => {
       if (!new Headers(init?.headers).has('Authorization')) return globalThis.fetch(input, init);
-      const authorization = `Bearer ${await runPromise(authService.getAccessToken)}`;
+      const authorization = `Bearer ${await runPromise(authService.getAccessToken, { signal: init?.signal ?? undefined })}`;
       const headers = init?.headers;
       // The SDK sends a plain object; keep that shape and replace only the token.
       if (headers && !(headers instanceof Headers) && !Array.isArray(headers)) {

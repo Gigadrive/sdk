@@ -444,3 +444,31 @@ describe('AuthService.getAccessToken refresh margin', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('AuthService.getAccessToken concurrency', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('refreshes once for parallel callers, so a rotated refresh token is never spent twice', async () => {
+    const fetchMock = stubFetch([
+      jsonResponse(200, { access_token: 'fresh-token', refresh_token: 'rt-2', expires_in: 300 }),
+    ]);
+    const testLayer = makeAuthTestLayer(
+      Option.some<StoredAuthData>({ refreshToken: 'rt-1', accessToken: 'old', tokenExpirationTime: Date.now() - 1 })
+    );
+
+    const tokens = await Effect.runPromise(
+      Effect.provide(
+        Effect.all(
+          Array.from({ length: 8 }, () => AuthService.getAccessToken),
+          { concurrency: 'unbounded' }
+        ),
+        testLayer
+      )
+    );
+
+    expect(new Set(tokens)).toEqual(new Set(['fresh-token']));
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/token'))).toHaveLength(1);
+  });
+});

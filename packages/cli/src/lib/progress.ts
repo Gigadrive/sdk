@@ -6,6 +6,8 @@
 /** Where progress goes: `process.stderr`, or a fake in tests. */
 export interface ProgressStream {
   readonly isTTY?: boolean;
+  /** Terminal width; a line is cut to fit so rewriting it in place never leaves a wrapped half behind. */
+  readonly columns?: number;
   write(text: string): unknown;
 }
 
@@ -34,7 +36,8 @@ export const createProgress = (stream: ProgressStream = process.stderr) => {
     update(message: string, elapsedMs: number) {
       const line = `${message} (${formatElapsed(elapsedMs)})`;
       if (tty) {
-        stream.write(`\r\u001b[2K${line}`);
+        const width = stream.columns ?? 0;
+        stream.write(`\r\u001b[2K${width > 1 && line.length >= width ? `${line.slice(0, width - 2)}…` : line}`);
         open = true;
       } else if (message !== lastMessage || elapsedMs - lastPrintedAt >= REPEAT_EVERY_MS) {
         stream.write(`${line}\n`);

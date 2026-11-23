@@ -1383,12 +1383,32 @@ describe('createMicroVm waiting', () => {
     expect(Either.isLeft(result) && result.left.message).toContain('gigadrive microvms rm vm-1');
   });
 
+  it('still prints the one-time preview token when the wait fails', async () => {
+    const api = fakeApi(
+      route('POST', '/microvms', () => json({ ...vmInfo({ status: 'pending' }), previewToken: 'tok_123' }, 202)),
+      statuses({ status: 'pending' })
+    );
+
+    const result = await run(
+      createMicroVm(createFlags({ json: false, waitTimeout: Option.some('5ms') }), {
+        stream: fakeStream().stream,
+        pollInterval: 10,
+      }),
+      api.layer
+    );
+
+    expect(Either.isLeft(result)).toBe(true);
+    expect(logSpy.mock.calls.map((call) => String(call[0])).join('\n')).toContain('tok_123');
+  });
+
   it('refuses a --wait-timeout without a unit', async () => {
     const api = fakeApi(route('POST', '/microvms', () => json(vmInfo({ status: 'pending' }), 202)));
 
     const result = await run(createMicroVm(createFlags({ waitTimeout: Option.some('10') })), api.layer);
 
     expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    // Checked before the create request, so no microVM is left behind.
+    expect(api.calls).toHaveLength(0);
   });
 });
 
@@ -1524,6 +1544,24 @@ describe('snapshot', () => {
     const result = await run(snapshotMicroVm(VM_ID, flags, io()), api.layer);
 
     expect(Either.isLeft(result) && result.left.message).toContain('capture failed');
+  });
+
+  it('refuses a bad --wait-timeout before pausing', async () => {
+    const api = fakeApi();
+
+    const result = await run(pauseMicroVm(VM_ID, { json: false, waitTimeout: Option.some('soon') }, io()), api.layer);
+
+    expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it('refuses a snapshot list limit under 1', async () => {
+    const api = fakeApi();
+
+    const result = await run(listSnapshots({ app: Option.none(), limit: 0, json: false }), api.layer);
+
+    expect(Either.isLeft(result) && result.left._tag).toBe('InvalidMicroVmOptionsError');
+    expect(api.calls).toHaveLength(0);
   });
 
   it('refuses an expiry under a minute or without a unit', async () => {

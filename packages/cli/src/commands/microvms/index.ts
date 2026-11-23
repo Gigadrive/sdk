@@ -492,6 +492,13 @@ const runWait = <A>(
     });
   });
 
+/** Checks `--wait-timeout` before any request, so a typo never leaves a microVM half done. */
+const checkWaitTimeout = (waitTimeout: Option.Option<string> | undefined) =>
+  parseDuration(
+    '--wait-timeout',
+    Option.getOrElse(waitTimeout ?? Option.none(), () => DEFAULT_WAIT_TIMEOUT)
+  );
+
 /**
  * Polls a microVM until its status stops changing on its own (`pending`,
  * `starting`, `pausing`, `resuming`, `stopping`), with a progress line on
@@ -581,6 +588,7 @@ export const createMicroVm = (flags: CreateFlags, io: WaitIo = {}) =>
       volumes.push({ volumeId: match.id, mountPath: volume.mountPath });
     }
     const input: CreateMicroVmInput = volumes.length > 0 ? { ...parsed, volumes } : parsed;
+    if (flags.noWait !== true) yield* checkWaitTimeout(flags.waitTimeout);
     if (!flags.json) {
       yield* Console.error(
         input.snapshotId !== undefined
@@ -592,7 +600,19 @@ export const createMicroVm = (flags: CreateFlags, io: WaitIo = {}) =>
     // still waits for capacity (202). Wait for the rest here.
     const created = yield* apiClient.request((client) => client.microvms.create(input));
     const settled =
-      flags.noWait === true ? created : yield* settleMicroVm(created, flags.waitTimeout ?? Option.none(), io);
+      flags.noWait === true
+        ? created
+        : yield* settleMicroVm(created, flags.waitTimeout ?? Option.none(), io).pipe(
+            // The microVM exists even when the wait fails: print what the API
+            // answered, with the preview token it shows only once.
+            Effect.tapError(() =>
+              flags.json
+                ? Console.log(JSON.stringify(created, null, 2))
+                : created.previewToken
+                  ? Console.log(`Preview token of ${created.id} (shown only now): ${created.previewToken}`)
+                  : Effect.void
+            )
+          );
     const vm: CreatedMicroVmInfo = created.previewToken ? { ...settled, previewToken: created.previewToken } : settled;
     if (flags.json) yield* Console.log(JSON.stringify(vm, null, 2));
     if (vm.status === 'failed' || vm.status === 'stopped') {
@@ -1004,8 +1024,25 @@ export const isTransientCopyError = (error: ApiRequestError | LocalFileError) =>
   (error.statusCode === undefined || error.statusCode === 429 || error.statusCode >= 500);
 
 /**
- * Transfers files with at most `concurrency` requests in flight, retrying
- * each file on transient errors with exponential backoff, and reports
+ * Retries one file's request on transient errors with jittered exponential
+ * backoff. Only the request is retried, never the local read, so a retry
+ * sends the same bytes as the first attempt.
+ */
+const retryTransient =
+  (options: CopyOptions) =>
+  <A, R>(request: Effect.Effect<A, ApiRequestError, R>) =>
+    request.pipe(
+      Effect.retry({
+        schedule: Schedule.exponential(options.retryDelay ?? '250 millis').pipe(
+          Schedule.jittered,
+          Schedule.intersect(Schedule.recurs(COPY_RETRIES))
+        ),
+        while: isTransientCopyError,
+      })
+    );
+
+/**
+ * Transfers files with at most `concurrency` requests in flight and reports
  * progress on stderr for more than one file.
  */
 const transferAll = <F, E extends ApiRequestError | LocalFileError, R>(
@@ -1019,15 +1056,10 @@ const transferAll = <F, E extends ApiRequestError | LocalFileError, R>(
     const started = Date.now();
     let done = 0;
     let bytes = 0;
-    const retry = Schedule.exponential(options.retryDelay ?? '250 millis').pipe(
-      Schedule.jittered,
-      Schedule.intersect(Schedule.recurs(COPY_RETRIES))
-    );
     yield* Effect.forEach(
       files,
       (file) =>
         transfer(file).pipe(
-          Effect.retry({ schedule: retry, while: isTransientCopyError }),
           Effect.tap((size) =>
             Effect.sync(() => {
               done += 1;
@@ -1095,7 +1127,7 @@ const upload = (
         const result = yield* Effect.tryPromise({
           try: (signal) => client.microvms.files.write(target.microvmId, file.remote, content, { signal }),
           catch: toApiRequestError,
-        });
+        }).pipe(retryTransient(options));
         return result.bytes;
       })
     );
@@ -1156,7 +1188,7 @@ const download = (
         const content = yield* Effect.tryPromise({
           try: (signal) => client.microvms.files.read(source.microvmId, file.remote, { signal }),
           catch: toApiRequestError,
-        });
+        }).pipe(retryTransient(options));
         yield* fs
           .makeDirectory(path.dirname(file.local), { recursive: true })
           .pipe(Effect.mapError(localError(file.local, 'create the directory of')));
@@ -1390,6 +1422,7 @@ export interface LifecycleFlags {
 export const pauseMicroVm = (microvmId: string, flags: LifecycleFlags, io: WaitIo = {}) =>
   Effect.gen(function* () {
     const apiClient = yield* ApiClientService;
+    yield* checkWaitTimeout(flags.waitTimeout);
     const answered = yield* apiClient.request((client) => client.microvms.pause(microvmId, { wait: false }));
     const vm = yield* settleMicroVm(answered, flags.waitTimeout, io);
     if (vm.status !== 'paused') {
@@ -1411,6 +1444,7 @@ export const pauseMicroVm = (microvmId: string, flags: LifecycleFlags, io: WaitI
 export const resumeMicroVm = (microvmId: string, flags: LifecycleFlags, io: WaitIo = {}) =>
   Effect.gen(function* () {
     const apiClient = yield* ApiClientService;
+    yield* checkWaitTimeout(flags.waitTimeout);
     const answered = yield* apiClient.request((client) => client.microvms.resume(microvmId, { wait: false }));
     const vm = yield* settleMicroVm(answered, flags.waitTimeout, io);
     if (vm.status !== 'running') {
@@ -1461,6 +1495,7 @@ export const snapshotMicroVm = (microvmId: string, flags: SnapshotFlags, io: Wai
     if (expiresInMs !== undefined && expiresInMs < 60_000) {
       return yield* new InvalidMicroVmOptionsError({ message: '--expires must be at least 1m.' });
     }
+    yield* checkWaitTimeout(flags.waitTimeout);
     const apiClient = yield* ApiClientService;
     const answered = yield* apiClient.request((client) =>
       client.microvms.snapshot(
@@ -1519,6 +1554,9 @@ export interface ListSnapshotsFlags {
 /** Lists the application's snapshots, newest first. */
 export const listSnapshots = (flags: ListSnapshotsFlags) =>
   Effect.gen(function* () {
+    if (!Number.isInteger(flags.limit) || flags.limit < 1) {
+      return yield* new InvalidMicroVmOptionsError({ message: `--limit must be at least 1 (got ${flags.limit}).` });
+    }
     const apiClient = yield* ApiClientService;
     const applicationId = yield* resolveApplicationId(flags.app);
     const snapshots = yield* apiClient.request(async (client) => {
@@ -1655,7 +1693,7 @@ const forkCommand = Command.make('fork', { snapshotId: snapshotIdArg, ...forkOpt
   )
 ).pipe(
   Command.withDescription(
-    "Create a microVM from a snapshot, with its memory, processes and files; it keeps the snapshot's image and size"
+    "Create a microVM from a snapshot, with its memory, processes and files; it keeps the snapshot's image, vCPUs and memory, and --disk can only make the disk larger"
   )
 );
 

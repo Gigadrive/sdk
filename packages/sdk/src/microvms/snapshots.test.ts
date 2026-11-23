@@ -110,6 +110,29 @@ describe('client.microvms.waitUntilSettled', () => {
     });
   });
 
+  it('gives up when a poll stalls past the timeout', async () => {
+    const { fetch, client } = setup();
+    fetch.mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        })
+    );
+
+    await expect(client.microvms.waitUntilSettled('vm-1', { timeout: 20 })).rejects.toBeInstanceOf(MicroVmTimeoutError);
+  });
+
+  it('polls until the deadline instead of giving up one interval early', async () => {
+    const { fetch, client } = setup();
+    fetch
+      .mockResolvedValueOnce(json(vmInfo({ status: 'pending' })))
+      .mockResolvedValueOnce(json(vmInfo({ status: 'running' })));
+
+    await expect(client.microvms.waitUntilSettled('vm-1', { timeout: 1_000, interval: 60_000 })).resolves.toMatchObject(
+      { status: 'running' }
+    );
+  });
+
   it('gives up after the timeout', async () => {
     const { fetch, client } = setup();
     fetch.mockImplementation(() => Promise.resolve(json(vmInfo({ status: 'pending' }))));

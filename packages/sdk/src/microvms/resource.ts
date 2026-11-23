@@ -109,14 +109,35 @@ const pollUntil = async <T>(
   const started = Date.now();
   const deadline = started + durationToMs(options.timeout ?? '10m');
   const interval = durationToMs(options.interval ?? '1s');
-  for (;;) {
-    if (options.signal?.aborted) throw abortReason(options.signal);
-    const current = await load(options.signal);
-    options.onPoll?.(current, Date.now() - started);
-    if (settled(current)) return current;
-    if (Date.now() + interval > deadline) throw new MicroVmTimeoutError(`${describe(current)}; gave up waiting.`);
-    await sleep(interval, options.signal);
+  // Aborts a poll that stalls past the deadline (with a second of grace for
+  // the last poll, sent at the deadline), as well as on the caller's signal.
+  const controller = new AbortController();
+  const timeoutReason = new Error('deadline');
+  const timer = setTimeout(() => controller.abort(timeoutReason), Math.max(0, deadline - started) + 1_000);
+  const forward = () => controller.abort(abortReason(options.signal));
+  options.signal?.addEventListener('abort', forward, { once: true });
+  let current: T | undefined;
+  try {
+    for (;;) {
+      if (options.signal?.aborted) throw abortReason(options.signal);
+      current = await load(controller.signal);
+      options.onPoll?.(current, Date.now() - started);
+      if (settled(current)) return current;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      await sleep(Math.min(interval, remaining), options.signal);
+    }
+  } catch (error) {
+    if (controller.signal.reason !== timeoutReason) throw error;
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', forward);
   }
+  throw new MicroVmTimeoutError(
+    current === undefined
+      ? 'No answer before the wait timed out; gave up waiting.'
+      : `${describe(current)}; gave up waiting.`
+  );
 };
 
 const vmPath = (microvmId: string) => `/microvms/${encodeURIComponent(microvmId)}`;

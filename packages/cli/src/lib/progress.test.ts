@@ -35,6 +35,15 @@ describe('createProgress', () => {
     ]);
   });
 
+  it('cuts a line to the terminal width so it never wraps', () => {
+    const out = { ...stream(true), columns: 12 };
+    const progress = createProgress(out);
+
+    progress.update('Waiting for capacity...', 0);
+
+    expect(out.writes).toEqual(['\r\u001b[2KWaiting fo…']);
+  });
+
   it('prints a line per change, and every 15 seconds otherwise, elsewhere', () => {
     const out = stream(false);
     const progress = createProgress(out);

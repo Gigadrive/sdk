@@ -28,10 +28,10 @@ export const DEFAULT_DISCOVERY_LIFETIME_MS = 24 * 60 * 60 * 1000;
  * {@link DEFAULT_DISCOVERY_LIFETIME_MS}.
  */
 export const discoveryLifetimeMs = (headers: { get(name: string): string | null } | undefined, now = Date.now()) => {
-  const cacheControl = headers?.get('cache-control')?.toLowerCase() ?? '';
-  if (/\bno-store\b|\bno-cache\b/.test(cacheControl)) return 0;
-  const maxAge = /\bmax-age=(\d+)/.exec(cacheControl);
-  if (maxAge) return Number(maxAge[1]) * 1000;
+  const directives = cacheDirectives(headers);
+  if (directives.has('no-store') || directives.has('no-cache')) return 0;
+  const maxAge = directives.get('max-age');
+  if (maxAge !== undefined) return /^\d+$/.test(maxAge) ? Number(maxAge) * 1000 : 0;
   const expires = headers?.get('expires');
   if (expires) {
     const at = Date.parse(expires);
@@ -40,10 +40,37 @@ export const discoveryLifetimeMs = (headers: { get(name: string): string | null 
   return DEFAULT_DISCOVERY_LIFETIME_MS;
 };
 
+/** `Cache-Control` directives by lowercase name, with their unquoted arguments (`''` when none). */
+const cacheDirectives = (headers: { get(name: string): string | null } | undefined) =>
+  new Map(
+    (headers?.get('cache-control') ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part !== '')
+      .map((part): [string, string] => {
+        const [name = '', ...value] = part.split('=');
+        return [
+          name.trim().toLowerCase(),
+          value
+            .join('=')
+            .trim()
+            .replace(/^"(.*)"$/, '$1'),
+        ];
+      })
+  );
+
+/** Whether a response forbids serving it stale, even when the IDP cannot be reached. */
+export const mustRevalidate = (headers: { get(name: string): string | null } | undefined) => {
+  const directives = cacheDirectives(headers);
+  return directives.has('must-revalidate') || directives.has('proxy-revalidate');
+};
+
 /** The discovery cache file: the document of one issuer and when it goes stale. */
 const DiscoveryCacheFile = Schema.Struct({
   issuer: Schema.String,
   expiresAt: Schema.Number,
+  /** The IDP said not to use the document once it is stale. */
+  mustRevalidate: Schema.optional(Schema.Boolean),
   document: Schema.Unknown,
 });
 
@@ -127,18 +154,25 @@ export class OAuthConfigService extends Effect.Service<OAuthConfigService>()('OA
     );
 
     /** Best effort: a CLI that cannot write its cache still works, it just fetches again next time. */
-    const writeCache = (document: unknown, lifetimeMs: number) =>
-      fs
-        .makeDirectory(cacheDir, { recursive: true })
-        .pipe(
-          Effect.andThen(
-            fs.writeFileString(
-              cacheFile,
-              JSON.stringify({ issuer: issuerBase, expiresAt: Date.now() + lifetimeMs, document })
-            )
-          ),
-          Effect.ignore
-        );
+    const writeCache = (document: unknown, lifetimeMs: number, revalidate: boolean) =>
+      lifetimeMs > 0
+        ? fs.makeDirectory(cacheDir, { recursive: true }).pipe(
+            Effect.andThen(
+              fs.writeFileString(
+                cacheFile,
+                JSON.stringify({
+                  issuer: issuerBase,
+                  expiresAt: Date.now() + lifetimeMs,
+                  ...(revalidate ? { mustRevalidate: true } : {}),
+                  document,
+                })
+              )
+            ),
+            Effect.ignore
+          )
+        : // A document that must not be stored replaces any older copy: drop it,
+          // so a later outage cannot bring back endpoints the IDP changed.
+          fs.remove(cacheFile).pipe(Effect.ignore);
 
     /** Turns a discovery document into the client config, or fails when it lacks an endpoint. */
     const toConfig = (json: unknown) =>
@@ -204,7 +238,12 @@ export class OAuthConfigService extends Effect.Service<OAuthConfigService>()('OA
             message: 'Failed to parse OIDC discovery JSON',
           }),
       });
-      return { json, lifetimeMs: discoveryLifetimeMs(response.headers) };
+      return {
+        json,
+        lifetimeMs: discoveryLifetimeMs(response.headers),
+        revalidate: mustRevalidate(response.headers),
+        fetched: true,
+      };
     });
 
     /**
@@ -228,17 +267,20 @@ export class OAuthConfigService extends Effect.Service<OAuthConfigService>()('OA
 
       const fetched = yield* fetchDocument.pipe(
         Effect.catchAll((error) =>
-          Option.match(entry, {
-            onNone: () => Effect.fail(error),
-            onSome: (stale) =>
-              Effect.logDebug('Using a stale OIDC discovery document', { reason: error.message }).pipe(
-                Effect.as({ json: stale.document, lifetimeMs: 0 })
-              ),
-          })
+          Option.match(
+            Option.filter(entry, (stale) => stale.mustRevalidate !== true),
+            {
+              onNone: () => Effect.fail(error),
+              onSome: (stale) =>
+                Effect.logDebug('Using a stale OIDC discovery document', { reason: error.message }).pipe(
+                  Effect.as({ json: stale.document, lifetimeMs: 0, revalidate: false, fetched: false })
+                ),
+            }
+          )
         )
       );
       const config = yield* toConfig(fetched.json);
-      if (fetched.lifetimeMs > 0) yield* writeCache(fetched.json, fetched.lifetimeMs);
+      if (fetched.fetched) yield* writeCache(fetched.json, fetched.lifetimeMs, fetched.revalidate);
 
       cached = config;
       yield* Effect.logDebug('OIDC discovery completed', { issuer: config.issuer });
